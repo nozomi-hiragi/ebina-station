@@ -55,6 +55,8 @@ userRouter.post('/login', (req, res) => {
       }
       if (bcrypt.compareSync(pass, row.pass)) {
         const tokens = generateToken({ id: id })
+        res.cookie('kumasan', tokens?.token, { httpOnly: true })
+        res.cookie('sirokuma', tokens?.refreshToken, { httpOnly: true })
         res.status(200).json(tokens)
       } else {
         res.sendStatus(400)
@@ -66,7 +68,7 @@ userRouter.post('/login', (req, res) => {
 })
 
 userRouter.post('/refresh', (req, res) => {
-  const { token }: { token: string } = req.body
+  const token: string = req.cookies?.sirokuma
   if (!token) { return res.sendStatus(400) }
   const payload = jwt.decode(token)
   if (!payload) { return res.sendStatus(404) }
@@ -85,13 +87,15 @@ userRouter.post('/refresh', (req, res) => {
         return res.sendStatus(401)
       }
       const tokens = generateToken({ id: id })
+      res.cookie('kumasan', tokens?.token, { httpOnly: true })
+      res.cookie('sirokuma', tokens?.refreshToken, { httpOnly: true })
       res.status(200).json(tokens)
     })
   })
 })
 
 userRouter.post('/verify', (req, res) => {
-  const { token }: { token: string } = req.body
+  const token: string = req.cookies?.kumasan
   if (!token) {
     return res.sendStatus(400)
   }
