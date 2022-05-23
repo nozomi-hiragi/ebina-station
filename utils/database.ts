@@ -29,12 +29,25 @@ export const insertUser = ({ id, name, pass }: User) => {
   db.run(`INSERT INTO users(id, name, pass) VALUES(\
   '${id.replaceAll(/[=']/g, '')}',\
   '${name.replaceAll(/[=']/g, '')}',\
-  '${pass.replaceAll(/[=']/g, '')}\
-  ');`)
+  '${pass.replaceAll(/[=']/g, '')}'\
+  );`)
 }
 
-export const findIdFronUserTable = (id: string, callback?: (err: Error | null, user?: User) => void) => {
+export const findUserFronUserTable = (id: string, callback?: (err: Error | null, user?: User) => void) => {
+  db.get(`SELECT id, name, updated_at, created_at FROM users WHERE id = '${id.replaceAll(/[=']/g, '')}'`, callback ? (err, row) => callback(err, row) : undefined)
+}
+
+export const getUsersFromUserTable = (callback?: (err: Error | null, users?: User[]) => void) => {
+  db.all(`SELECT id, name, updated_at, created_at FROM users`, callback ? (err, rows) => callback(err, rows) : undefined)
+}
+
+export const findPassFronUserTable = (id: string, callback?: (err: Error | null, user?: User) => void) => {
   db.get(`SELECT * FROM users WHERE id = '${id.replaceAll(/[=']/g, '')}'`, callback ? (err, row) => callback(err, row) : undefined)
+}
+
+export const deleteUsers = (ids: string[], callback?: (err: Error | null) => void) => {
+  ids = ids.map(id => `'${id.replaceAll(/[=']/g, '')}'`)
+  db.run(`DELETE FROM users WHERE id in (${ids.join()});`, callback)
 }
 
 // tokens table
