@@ -4,6 +4,8 @@ import * as database from "./database"
 
 export type JwtPayload = {
   id: string,
+  exp?: number,
+  iat?: number,
 }
 
 export const generateJwtToken = (payload: JwtPayload) => {
@@ -18,6 +20,16 @@ export const generateJwtToken = (payload: JwtPayload) => {
     { algorithm: "HS512", expiresIn: "30d" }
   )
   return { token: token, refreshToken: refreshToken }
+}
+
+export const deleteRefreshToken = (res: express.Response, id: string, callback: (isOk: boolean) => void) => {
+  database.deleteRefreshToken(id, (isOk) => {
+    if (isOk) {
+      res.clearCookie('kumasan')
+      res.clearCookie('sirokuma')
+    }
+    callback(isOk)
+  })
 }
 
 export const decodeJwtToken = (token: string) => {
@@ -48,8 +60,10 @@ const verifyRefreshToken = (token: string, callback: (err: VerifyErrors | Error 
 export const generateToken = (res: express.Response, id: string) => {
   const tokens = generateJwtToken({ id: id })
   database.replaceRefreshToken(id, tokens.refreshToken)
-  res.cookie('kumasan', tokens?.token, { httpOnly: true })
-  res.cookie('sirokuma', tokens?.refreshToken, { httpOnly: true })
+  const tokenExp = (decodeJwtToken(tokens.token)!.exp ?? 1) * 1000
+  const refreshTokenExp = (decodeJwtToken(tokens.refreshToken)!.exp ?? 1) * 1000
+  res.cookie('kumasan', tokens.token, { httpOnly: true, expires: new Date(tokenExp) })
+  res.cookie('sirokuma', tokens.refreshToken, { httpOnly: true, expires: new Date(refreshTokenExp) })
   return tokens
 }
 

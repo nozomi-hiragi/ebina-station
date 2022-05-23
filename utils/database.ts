@@ -69,5 +69,12 @@ export const findRefreshTokenFronTokenTable = (id: string, callback?: (err: Erro
   db.get(`SELECT * FROM tokens WHERE id = '${id.replaceAll(/[=']/g, '')}'`, callback ? (err, row) => callback(err, row) : undefined)
 }
 
+export const deleteRefreshToken = (id: string, callback: (isOk: boolean) => void) => {
+  db.run(`DELETE FROM tokens WHERE id ='${id.replaceAll(/[=']/g, '')}';`, (err) => {
+    if (err) { console.log(err) }
+    callback(!err)
+  })
+}
+
 initUsersTable()
 initTokensTable()

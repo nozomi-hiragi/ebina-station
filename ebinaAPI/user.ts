@@ -2,7 +2,7 @@ import "dotenv/config"
 import express from "express"
 import bcrypt from "bcrypt"
 import * as database from "../utils/database"
-import { decodeJwtToken, authKumasan, authSirokuma, generateToken } from "../utils/auth"
+import { decodeJwtToken, authKumasan, authSirokuma, generateToken, deleteRefreshToken } from "../utils/auth"
 
 const userRouter = express.Router()
 
@@ -38,15 +38,29 @@ userRouter.post('/login', (req, res) => {
   })
 })
 
+userRouter.post('/logout', authKumasan, (req, res) => {
+  const token: string = req.cookies.token
+  if (!token) { return res.sendStatus(400) }
+  const payload = decodeJwtToken(token)!
+  database.findIdFronUserTable(payload.id, (err, user) => {
+    if (err) {
+      console.log(err)
+      res.sendStatus(503)
+    } else {
+      deleteRefreshToken(res, payload.id, (isOk) => res.sendStatus(isOk ? 200 : 401))
+    }
+  })
+})
+
 userRouter.post('/refresh', authSirokuma, (req, res) => {
   const token: string = req.cookies.token
-  const payload = decodeJwtToken(token)
-  database.findRefreshTokenFronTokenTable(payload!.id, (err, tokenRow) => {
+  const payload = decodeJwtToken(token)!
+  database.findRefreshTokenFronTokenTable(payload.id, (err, tokenRow) => {
     if (err) {
       console.log(err)
       res.sendStatus(503)
     } else if (tokenRow?.refresh_token === token) {
-      res.status(200).json(generateToken(res, payload!.id))
+      res.status(200).json(generateToken(res, payload.id))
     } else {
       res.sendStatus(401)
     }
