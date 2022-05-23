@@ -5,16 +5,18 @@ const db = new sqllite.Database('./db.db')
 // users table
 
 const initUsersTable = () => {
-  db.run("CREATE TABLE IF NOT EXISTS users(\
-    id TEXT NOT NULL PRIMARY KEY,\
-    name TEXT NOT NULL,\
-    pass TEXT NOT NULL,\
-    updated_at TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),\
-    created_at TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')));\
-    CREATE TRIGGER users_updated_at AFTER UPDATE ON users\
-    BEGIN\
-    UPDATE users SET updated_at = DATETIME('now', 'localtime') WHERE rowid == NEW.rowid; \
-    END;")
+  db.serialize(() => {
+    db.run("CREATE TABLE IF NOT EXISTS users(\
+      id TEXT NOT NULL PRIMARY KEY,\
+      name TEXT NOT NULL,\
+      pass TEXT NOT NULL,\
+      updated_at TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),\
+      created_at TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')));")
+    db.run("CREATE TRIGGER IF NOT EXISTS users_updated_at AFTER UPDATE ON users\
+      BEGIN\
+      UPDATE users SET updated_at = DATETIME('now', 'localtime') WHERE rowid == NEW.rowid; \
+      END;")
+  })
 }
 
 export type User = {
@@ -53,15 +55,17 @@ export const deleteUsers = (ids: string[], callback?: (err: Error | null) => voi
 // tokens table
 
 const initTokensTable = () => {
-  db.run("CREATE TABLE IF NOT EXISTS tokens(\
+  db.serialize(() => {
+    db.run("CREATE TABLE IF NOT EXISTS tokens(\
     id TEXT NOT NULL PRIMARY KEY,\
     refresh_token TEXT NOT NULL,\
     updated_at TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),\
-    created_at TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')));\
-    CREATE TRIGGER tokens_updated_at AFTER UPDATE ON tokens\
+    created_at TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')));")
+    db.run("CREATE TRIGGER IF NOT EXISTS tokens_updated_at AFTER UPDATE ON tokens\
     BEGIN\
     UPDATE tokens SET updated_at = DATETIME('now', 'localtime') WHERE rowid == NEW.rowid; \
     END;")
+  })
 }
 
 export type Token = {

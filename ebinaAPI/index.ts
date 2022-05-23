@@ -1,4 +1,5 @@
 import express from "express"
+import apiRouter from "./api"
 import userRouter from "./user"
 import usersRouter from "./users"
 
@@ -6,5 +7,6 @@ const ebinaRouter = express.Router()
 
 ebinaRouter.use('/user', userRouter)
 ebinaRouter.use('/users', usersRouter)
+ebinaRouter.use('/api', apiRouter)
 
 export default ebinaRouter
