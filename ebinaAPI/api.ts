@@ -67,6 +67,22 @@ apiRouter.get('/apis', authKumasan, (req, res) => {
   })
 })
 
+apiRouter.get('/api', authKumasan, (req, res) => {
+  const path = (req.query.path as string)
+  if (!path) { return res.sendStatus(400) }
+  apidb.getAPI(path, (err, row) => {
+    if (err) {
+      console.log(err)
+      return res.sendStatus(500)
+    }
+    if (row) {
+      res.status(200).json(row)
+    } else {
+      res.sendStatus(400)
+    }
+  })
+})
+
 apiRouter.post('/path', authKumasan, (req, res) => {
   const { path, name, type, value } = req.body
   if (!path || !name || !type || !value) { return res.sendStatus(400) }
@@ -88,6 +104,14 @@ apiRouter.put('/path', authKumasan, (req, res) => {
       return res.sendStatus(400)
     }
     res.sendStatus(200)
+  })
+})
+
+apiRouter.delete('/path', authKumasan, (req, res) => {
+  const path = req.query.path as string
+  if (!path) { return res.sendStatus(400) }
+  apidb.deleteAPI(path, (isOk) => {
+    res.sendStatus(isOk ? 202 : 400)
   })
 })
 

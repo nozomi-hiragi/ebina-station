@@ -39,4 +39,15 @@ export const getAPIs = (callback?: (err: Error | null, rows: any[]) => void) => 
   db.all(`SELECT path, name, type, value, updated_at, created_at FROM api`, callback)
 }
 
+export const getAPI = (path: string, callback?: (err: Error | null, row: any) => void) => {
+  db.get(`SELECT path, name, type, value, updated_at, created_at FROM api WHERE path = '${path.replaceAll(/[=']/g, '')}'`, callback)
+}
+
+export const deleteAPI = (path: string, callback: (isOk: boolean) => void) => {
+  db.run(`DELETE FROM api WHERE path ='${path.replaceAll(/[=']/g, '')}';`, (err) => {
+    if (err) { console.log(err) }
+    callback(!err)
+  })
+}
+
 initAPITable()
