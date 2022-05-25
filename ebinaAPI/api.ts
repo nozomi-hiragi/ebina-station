@@ -1,7 +1,7 @@
 import express from "express"
 import child_process from "child_process"
 import { authKumasan } from "../utils/auth"
-import * as apidb from '../utils/apidb'
+import * as apidb from '../utils/APIDB'
 
 const apiRouter = express.Router()
 let entranceProc: child_process.ChildProcess | null = null
