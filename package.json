@@ -4,6 +4,7 @@
   "description": "API Server",
   "main": "index.js",
   "scripts": {
+    "build": "tsc --build",
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "ts-node-dev --respawn index.ts"
   },

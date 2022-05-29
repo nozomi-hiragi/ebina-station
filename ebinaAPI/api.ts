@@ -2,6 +2,9 @@ import express from "express"
 import child_process from "child_process"
 import { authKumasan } from "../utils/auth"
 import * as apidb from '../utils/database'
+import fs from 'fs'
+
+const BASE_PATH_FILE = './project/js/'
 
 const apiRouter = express.Router()
 let entranceProc: child_process.ChildProcess | null = null
@@ -27,6 +30,26 @@ apiRouter.post('/start', authKumasan, (req, res) => {
       entranceProc = null
       startedDate = null
     }
+
+    const files: string[] = []
+    let importStr = 'module.exports = {'
+
+    rows = rows.map((row) => {
+      switch (row.type) {
+        case 'JavaScript':
+          const arg = row.value.split('>')
+          const filename = arg[0]
+          if (!files.includes(filename)) {
+            files.push(arg[0])
+            importStr += `"${filename}": require("${BASE_PATH_FILE}${filename}"),`
+          }
+      }
+      return row
+    })
+    importStr += `}`
+
+    fs.writeFileSync('imports.js', importStr)
+
     entranceProc = child_process.fork('./entrance')
     startedDate = Date.now()
     entranceProc.on('message', (message) => {
