@@ -23,12 +23,13 @@ export const generateJwtToken = (payload: JwtPayload) => {
 }
 
 export const deleteRefreshToken = (res: express.Response, id: string, callback: (isOk: boolean) => void) => {
-  database.deleteRefreshToken(id, (isOk) => {
-    if (isOk) {
-      res.clearCookie('kumasan')
-      res.clearCookie('sirokuma')
-    }
-    callback(isOk)
+  database.deleteRefreshToken(id).then((token) => {
+    res.clearCookie('kumasan')
+    res.clearCookie('sirokuma')
+    callback(true)
+  }).catch((err) => {
+    console.log(err)
+    callback(false)
   })
 }
 
@@ -57,9 +58,9 @@ const verifyAuthToken = (token: string, callback: (err: VerifyErrors | Error | n
 const verifyRefreshToken = (token: string, callback: (err: VerifyErrors | Error | null, payload: JwtPayload | null) => void) =>
   verifyJwtToken(token, process.env.USER_REFRESH_SECRET!, callback)
 
-export const generateToken = (res: express.Response, id: string) => {
+export const generateToken = async (res: express.Response, id: string) => {
   const tokens = generateJwtToken({ id: id })
-  database.replaceRefreshToken(id, tokens.refreshToken)
+  await database.replaceRefreshToken(id, tokens.refreshToken)
   const tokenExp = (decodeJwtToken(tokens.token)!.exp ?? 1) * 1000
   const refreshTokenExp = (decodeJwtToken(tokens.refreshToken)!.exp ?? 1) * 1000
   res.cookie('kumasan', tokens.token, { httpOnly: true, expires: new Date(tokenExp) })
