@@ -33,11 +33,6 @@ export const deleteRefreshToken = (res: express.Response, id: string, callback: 
   })
 }
 
-export const decodeJwtToken = (token: string) => {
-  const payload = jwt.decode(token)
-  return payload && (typeof payload !== 'string') ? payload as JwtPayload : null
-}
-
 const verifyJwtToken = (token: string, secret: string, callback: (err: VerifyErrors | Error | null, payload: JwtPayload | null) => void) => {
   jwt.verify(token, secret, (err, payload) => {
     if (err) {
@@ -61,36 +56,40 @@ const verifyRefreshToken = (token: string, callback: (err: VerifyErrors | Error 
 export const generateToken = async (res: express.Response, id: string) => {
   const tokens = generateJwtToken({ id: id })
   await database.replaceRefreshToken(id, tokens.refreshToken)
-  const tokenExp = (decodeJwtToken(tokens.token)!.exp ?? 1) * 1000
-  const refreshTokenExp = (decodeJwtToken(tokens.refreshToken)!.exp ?? 1) * 1000
-  res.cookie('kumasan', tokens.token, { httpOnly: true, expires: new Date(tokenExp) })
-  res.cookie('sirokuma', tokens.refreshToken, { httpOnly: true, expires: new Date(refreshTokenExp) })
   return tokens
 }
 
-export const authKumasan = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const token: string = req.cookies?.kumasan
-  if (!token) { return res.sendStatus(400) }
+export const authToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const authHeader = req.headers["authorization"]
+  if (!authHeader) { return res.sendStatus(401) }
+  const tokenArray = authHeader.split(' ')
+  if (tokenArray[0] !== "Bearer") { return res.sendStatus(400) }
+  const token = tokenArray[1]
   verifyAuthToken(token, (err, payload) => {
     if (err) {
       console.log(err)
       res.sendStatus(401)
     } else {
-      req.cookies.token = token
+      res.locals.token = token
+      res.locals.payload = payload
       next()
     }
   })
 }
 
-export const authSirokuma = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const token: string = req.cookies?.sirokuma
-  if (!token) { return res.sendStatus(400) }
+export const authRefreshToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const authHeader = req.headers["authorization"]
+  if (!authHeader) { return res.sendStatus(401) }
+  const tokenArray = authHeader.split(' ')
+  if (tokenArray[0] !== "Bearer") { return res.sendStatus(400) }
+  const token = tokenArray[1]
   verifyRefreshToken(token, (err, payload) => {
     if (err) {
       console.log(err)
       res.sendStatus(401)
     } else {
-      req.cookies.token = token
+      res.locals.refreshToken = token
+      res.locals.payload = payload
       next()
     }
   })

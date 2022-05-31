@@ -2,7 +2,7 @@ import "dotenv/config"
 import express from "express"
 import bcrypt from "bcrypt"
 import * as database from "../utils/database"
-import { decodeJwtToken, authKumasan, authSirokuma, generateToken, deleteRefreshToken } from "../utils/auth"
+import { authToken, authRefreshToken, generateToken, deleteRefreshToken } from "../utils/auth"
 
 const userRouter = express.Router()
 
@@ -35,15 +35,7 @@ userRouter.post('/login', (req, res) => {
       res.sendStatus(503)
     } else if (bcrypt.compareSync(pass, user.pass ?? '')) {
       generateToken(res, id).then((tokens) => {
-        const payload = decodeJwtToken(tokens.token)!
-        res.status(200).json({
-          id: user.id,
-          name: user.name,
-          created_at: user.created_at,
-          updated_at: user.updated_at,
-          iat: payload.iat,
-          exp: payload.exp,
-        })
+        res.status(200).json({ user: { ...user, pass: undefined }, tokens })
       }).catch((err) => {
         console.log(err)
         res.sendStatus(400)
@@ -57,10 +49,8 @@ userRouter.post('/login', (req, res) => {
   })
 })
 
-userRouter.post('/logout', authKumasan, (req, res) => {
-  const token: string = req.cookies.token
-  if (!token) { return res.sendStatus(400) }
-  const payload = decodeJwtToken(token)!
+userRouter.post('/logout', authToken, (req, res) => {
+  const payload = res.locals.payload
   database.findRefreshTokenFronTokenTable(payload.id).then((token) => {
     deleteRefreshToken(res, payload.id, (isOk) => res.sendStatus(isOk ? 200 : 401))
   }).catch((err) => {
@@ -69,31 +59,27 @@ userRouter.post('/logout', authKumasan, (req, res) => {
   })
 })
 
-userRouter.post('/refresh', authSirokuma, (req, res) => {
-  const token: string = req.cookies.token
-  const payload = decodeJwtToken(token)!
+userRouter.post('/refresh', authRefreshToken, (req, res) => {
+  const payload = res.locals.payload
+  const refreshToken = res.locals.refreshToken
   database.findRefreshTokenFronTokenTable(payload.id).then((tokenRow) => {
-    if (tokenRow?.refresh_token === token) {
-      generateToken(res, payload.id).then((tokens) => {
-        res.status(200).json(tokens)
-      }).catch((err) => {
-        console.log(err)
-        res.sendStatus(400)
-      })
-    } else {
-      res.sendStatus(401)
-    }
+    if (tokenRow?.refresh_token !== refreshToken) { return res.sendStatus(401) }
+    generateToken(res, payload.id).then((tokens) => {
+      res.status(200).json(tokens)
+    }).catch((err) => {
+      console.log(err)
+      res.sendStatus(400)
+    })
   }).catch((err) => {
     console.log(err)
     res.sendStatus(503)
   })
 })
 
-userRouter.post('/verify', authKumasan, (req, res) => {
-  const token: string = req.cookies.token
-  if (!token) { return res.sendStatus(400) }
-  const payload = decodeJwtToken(token)
-  res.status(200).json(payload)
+userRouter.post('/verify', authToken, (req, res) => {
+  const payload = res.locals.payload
+  if (!payload) { return res.sendStatus(400) }
+  res.status(200).json(res.locals.payload)
 })
 
 export default userRouter

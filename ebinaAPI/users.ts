@@ -1,10 +1,10 @@
 import express from "express"
-import { authKumasan, decodeJwtToken } from "../utils/auth"
+import { authToken } from "../utils/auth"
 import * as database from "../utils/database"
 
 const usersRouter = express.Router()
 
-usersRouter.get('/users', authKumasan, (req, res) => {
+usersRouter.get('/users', authToken, (req, res) => {
   database.getUsers().then((users) => {
     res.status(200).json(users)
   }).catch((err) => {
@@ -15,11 +15,9 @@ usersRouter.get('/users', authKumasan, (req, res) => {
   })
 })
 
-usersRouter.delete('/users', authKumasan, (req, res) => {
-  const token: string = req.cookies.token
-  const payload = decodeJwtToken(token)!
+usersRouter.delete('/users', authToken, (req, res) => {
+  const payload = res.locals.payload
   const ids = (req.query.ids as string).split(',').filter(id => id !== payload.id)
-
   database.deleteUsers(ids).then((err) => {
     res.sendStatus(202)
   }).catch((err) => {
