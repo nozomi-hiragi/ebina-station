@@ -29,24 +29,6 @@ export const deleteUsers = (ids: string[]) => {
   return prisma.user.deleteMany({ where: { id: { in: ids } } })
 }
 
-// tokens table
-
-export const replaceRefreshToken = (id: string, token: string) => {
-  return prisma.token.upsert({
-    create: { id, refresh_token: token },
-    update: { refresh_token: token },
-    where: { id }
-  })
-}
-
-export const findRefreshTokenFronTokenTable = (id: string) => {
-  return prisma.token.findFirst({ where: { id } })
-}
-
-export const deleteRefreshToken = (id: string) => {
-  return prisma.token.delete({ where: { id } })
-}
-
 // api
 
 export const setAPI = (path: string, name: string, type: string, value: string) => {
