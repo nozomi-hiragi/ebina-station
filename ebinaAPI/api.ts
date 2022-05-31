@@ -1,6 +1,6 @@
 import express from "express"
 import child_process from "child_process"
-import { authKumasan } from "../utils/auth"
+import { authToken } from "../utils/auth"
 import * as apidb from '../utils/database'
 import fs from 'fs'
 
@@ -16,14 +16,14 @@ type ApiStatus = {
   status: string,
 }
 
-apiRouter.get('/status', authKumasan, (req, res) => {
+apiRouter.get('/status', authToken, (req, res) => {
   res.status(200).json({
     status: entranceProc ? 'started' : 'stop',
     started_at: entranceProc ? startedDate : undefined,
   } as ApiStatus)
 })
 
-apiRouter.post('/start', authKumasan, (req, res) => {
+apiRouter.post('/start', authToken, (req, res) => {
   apidb.getAPIs().then((rows) => {
     if (entranceProc) {
       entranceProc.kill('SIGINT')
@@ -67,7 +67,7 @@ apiRouter.post('/start', authKumasan, (req, res) => {
   })
 })
 
-apiRouter.post('/stop', authKumasan, (req, res) => {
+apiRouter.post('/stop', authToken, (req, res) => {
   if (entranceProc) {
     entranceProc.kill('SIGINT')
     entranceProc = null
@@ -78,7 +78,7 @@ apiRouter.post('/stop', authKumasan, (req, res) => {
   }
 })
 
-apiRouter.get('/apis', authKumasan, (req, res) => {
+apiRouter.get('/apis', authToken, (req, res) => {
   apidb.getAPIs().then((rows) => {
     res.status(200).json(rows)
   }).catch((err) => {
@@ -87,7 +87,7 @@ apiRouter.get('/apis', authKumasan, (req, res) => {
   })
 })
 
-apiRouter.get('/api', authKumasan, (req, res) => {
+apiRouter.get('/api', authToken, (req, res) => {
   const path = (req.query.path as string)
   if (!path) { return res.sendStatus(400) }
   apidb.getAPI(path).then((row) => {
@@ -102,7 +102,7 @@ apiRouter.get('/api', authKumasan, (req, res) => {
   })
 })
 
-apiRouter.post('/path', authKumasan, (req, res) => {
+apiRouter.post('/path', authToken, (req, res) => {
   const { path, name, type, value } = req.body
   if (!path || !name || !type || !value) { return res.sendStatus(400) }
   apidb.setAPI(path, name, type, value).then((_) => {
@@ -113,7 +113,7 @@ apiRouter.post('/path', authKumasan, (req, res) => {
   })
 })
 
-apiRouter.put('/path', authKumasan, (req, res) => {
+apiRouter.put('/path', authToken, (req, res) => {
   const { path, name, type, value } = req.body
   if (!path || !name || !type || !value) { return res.sendStatus(400) }
   apidb.updateAPI(path, name, type, value).then((_) => {
@@ -124,7 +124,7 @@ apiRouter.put('/path', authKumasan, (req, res) => {
   })
 })
 
-apiRouter.delete('/path', authKumasan, (req, res) => {
+apiRouter.delete('/path', authToken, (req, res) => {
   const path = req.query.path as string
   if (!path) { return res.sendStatus(400) }
   apidb.deleteAPI(path).then((_) => {
