@@ -24,8 +24,6 @@ export const generateJwtToken = (payload: JwtPayload) => {
 
 export const deleteRefreshToken = (res: express.Response, id: string, callback: (isOk: boolean) => void) => {
   database.deleteRefreshToken(id).then((token) => {
-    res.clearCookie('kumasan')
-    res.clearCookie('sirokuma')
     callback(true)
   }).catch((err) => {
     console.log(err)
@@ -60,7 +58,7 @@ export const generateToken = async (res: express.Response, id: string) => {
 }
 
 export const authToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const authHeader = req.headers["authorization"]
+  const authHeader = req.headers.authorization
   if (!authHeader) { return res.sendStatus(401) }
   const tokenArray = authHeader.split(' ')
   if (tokenArray[0] !== "Bearer") { return res.sendStatus(400) }
@@ -78,7 +76,7 @@ export const authToken = (req: express.Request, res: express.Response, next: exp
 }
 
 export const authRefreshToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const authHeader = req.headers["authorization"]
+  const authHeader = req.headers.authorization
   if (!authHeader) { return res.sendStatus(401) }
   const tokenArray = authHeader.split(' ')
   if (tokenArray[0] !== "Bearer") { return res.sendStatus(400) }
