@@ -7,13 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model token {
-  id            String @id
-  refresh_token String
-  updated_at    DateTime @default(now()) @updatedAt
-  created_at    DateTime @default(now())
-}
-
 model user {
   id         String @id
   name       String
