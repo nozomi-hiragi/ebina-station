@@ -20,6 +20,8 @@
   "homepage": "https://github.com/nozomi-hiragi/ebina-station#readme",
   "dependencies": {
     "@prisma/client": "^3.14.0",
+    "@simplewebauthn/server": "^5.2.1",
+    "base64url": "^3.0.1",
     "bcrypt": "^5.0.1",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
