@@ -2,6 +2,8 @@ import express from "express"
 import jwt, { VerifyErrors } from "jsonwebtoken"
 import * as database from "./database"
 
+const userTokens: { [key: string]: { token: string, refreshToken: string } } = {}
+
 export type JwtPayload = {
   id: string,
   exp?: number,
@@ -22,76 +24,56 @@ export const generateJwtToken = (payload: JwtPayload) => {
   return { token: token, refreshToken: refreshToken }
 }
 
-export const deleteRefreshToken = (res: express.Response, id: string, callback: (isOk: boolean) => void) => {
-  database.deleteRefreshToken(id).then((token) => {
-    res.clearCookie('kumasan')
-    res.clearCookie('sirokuma')
-    callback(true)
-  }).catch((err) => {
-    console.log(err)
-    callback(false)
-  })
-}
+const verifyAuthToken = (token: string) => jwt.verify(token, process.env.USER_AUTH_SECRET!)
+const verifyRefreshToken = (token: string) => jwt.verify(token, process.env.USER_REFRESH_SECRET!)
 
-export const decodeJwtToken = (token: string) => {
-  const payload = jwt.decode(token)
-  return payload && (typeof payload !== 'string') ? payload as JwtPayload : null
-}
-
-const verifyJwtToken = (token: string, secret: string, callback: (err: VerifyErrors | Error | null, payload: JwtPayload | null) => void) => {
-  jwt.verify(token, secret, (err, payload) => {
-    if (err) {
-      callback(err, null)
-      return
-    }
-    if (!payload || typeof payload === 'string') {
-      callback(Error("payload error"), null)
-      return
-    }
-    callback(err, payload as JwtPayload)
-  })
-}
-
-const verifyAuthToken = (token: string, callback: (err: VerifyErrors | Error | null, payload: JwtPayload | null) => void) =>
-  verifyJwtToken(token, process.env.USER_AUTH_SECRET!, callback)
-
-const verifyRefreshToken = (token: string, callback: (err: VerifyErrors | Error | null, payload: JwtPayload | null) => void) =>
-  verifyJwtToken(token, process.env.USER_REFRESH_SECRET!, callback)
-
-export const generateToken = async (res: express.Response, id: string) => {
+export const generateToken = (id: string) => {
   const tokens = generateJwtToken({ id: id })
-  await database.replaceRefreshToken(id, tokens.refreshToken)
-  const tokenExp = (decodeJwtToken(tokens.token)!.exp ?? 1) * 1000
-  const refreshTokenExp = (decodeJwtToken(tokens.refreshToken)!.exp ?? 1) * 1000
-  res.cookie('kumasan', tokens.token, { httpOnly: true, expires: new Date(tokenExp) })
-  res.cookie('sirokuma', tokens.refreshToken, { httpOnly: true, expires: new Date(refreshTokenExp) })
+  userTokens[id] = tokens
   return tokens
 }
 
-export const authKumasan = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const token: string = req.cookies?.kumasan
-  if (!token) { return res.sendStatus(400) }
-  verifyAuthToken(token, (err, payload) => {
-    if (err) {
-      console.log(err)
-      res.sendStatus(401)
-    } else {
-      req.cookies.token = token
-      next()
-    }
-  })
+export const removeToken = (id: string) => {
+  const isLogedin = userTokens[id] !== undefined
+  if (isLogedin) {
+    delete userTokens[id]
+  }
+  return isLogedin
 }
 
-export const authSirokuma = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const token: string = req.cookies?.sirokuma
-  if (!token) { return res.sendStatus(400) }
-  verifyRefreshToken(token, (err, payload) => {
-    if (err) {
-      console.log(err)
-      res.sendStatus(401)
+export const authToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const authHeader = req.headers.authorization
+  if (!authHeader) { return res.sendStatus(401) }
+  const tokenArray = authHeader.split(' ')
+  if (tokenArray[0] !== "Bearer") { return res.sendStatus(400) }
+  const token = tokenArray[1]
+  try {
+    const payload = verifyAuthToken(token)
+    if (typeof payload === 'string') {
+      new Error('payload error')
     } else {
-      req.cookies.token = token
+      res.locals.token = token
+      res.locals.payload = payload
       next()
     }
-  })
+  } catch (err) {
+    console.log(err)
+    res.sendStatus(401)
+  }
+}
+
+export const refreshTokens = (refreshToken: string) => {
+  try {
+    const payload = verifyRefreshToken(refreshToken) as JwtPayload
+    if (userTokens[payload.id]?.refreshToken === refreshToken) {
+      removeToken(payload.id)
+      return generateToken(payload.id)
+    } else {
+      new Error('not logedin the user')
+    }
+  } catch (err) {
+    console.log(err)
+    return null
+  }
+  return null
 }

@@ -2,13 +2,16 @@ import express from "express"
 import cors from "cors"
 import ebinaRouter from "./ebinaAPI/"
 import cookieParser from "cookie-parser"
+import { getSettings } from "./utils/settings"
 
-const port = process.env.PORT || 3456
+const settings = getSettings()
+
+const port = settings.getPort()
 const app = express()
 app.use(express.json())
 app.use(express.text())
 app.use(cookieParser())
-app.use(cors({ origin: 'http://localhost:3000', credentials: true }))
+if (settings.origins) app.use(cors({ origin: settings.origins, credentials: true }))
 
 app.use('/ebina', ebinaRouter)
 

@@ -1,6 +1,6 @@
 import express from "express"
 import fs from 'fs'
-import { authKumasan } from "../utils/auth"
+import { authToken } from "../utils/auth"
 
 const editRouter = express.Router()
 
@@ -10,7 +10,7 @@ const initFolder = () => {
   if (!fs.existsSync(BASE_PATH_FILE)) fs.mkdirSync(BASE_PATH_FILE, { recursive: true })
 }
 
-editRouter.post('/js/:path', authKumasan, (req, res) => {
+editRouter.post('/js/:path', authToken, (req, res) => {
   try {
     const { path } = req.params
     if (!path) return res.sendStatus(400)
@@ -32,7 +32,7 @@ editRouter.post('/js/:path', authKumasan, (req, res) => {
   }
 })
 
-editRouter.get('/js', authKumasan, (req, res) => {
+editRouter.get('/js', authToken, (req, res) => {
   try {
     initFolder()
     const dir = fs.readdirSync(BASE_PATH_FILE)
@@ -43,7 +43,7 @@ editRouter.get('/js', authKumasan, (req, res) => {
   }
 })
 
-editRouter.get('/js/:path', authKumasan, (req, res) => {
+editRouter.get('/js/:path', authToken, (req, res) => {
   try {
     const { path } = req.params
     if (!path) return res.sendStatus(400)
@@ -63,7 +63,7 @@ editRouter.get('/js/:path', authKumasan, (req, res) => {
   }
 })
 
-editRouter.patch('/js/:path', authKumasan, (req, res) => {
+editRouter.patch('/js/:path', authToken, (req, res) => {
   try {
     const { path } = req.params
     if (!path) return res.sendStatus(400)
@@ -86,7 +86,7 @@ editRouter.patch('/js/:path', authKumasan, (req, res) => {
   }
 })
 
-editRouter.delete('/js/:path', authKumasan, (req, res) => {
+editRouter.delete('/js/:path', authToken, (req, res) => {
   try {
     const { path } = req.params
     if (!path) return res.sendStatus(400)
