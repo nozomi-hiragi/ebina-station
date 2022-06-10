@@ -4,8 +4,8 @@ import bcrypt from "bcrypt"
 import base64url from "base64url"
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from '@simplewebauthn/server'
 import { authToken, generateToken, JwtPayload, refreshTokens, removeToken } from "../utils/auth"
-import { addMember, getMember, setMember, User, WebAuthn, WebAuthnAuthenticator, WebAuthnItem } from "../utils/members"
-import { getSettings, WebAuthnSetting } from "../utils/settings"
+import { addMember, getMember, setMember, User, WebAuthn, WebAuthnAuthenticator, WebAuthnItem } from "../data/members"
+import { getSettings, WebAuthnSetting } from "../data/settings"
 
 const userRouter = express.Router()
 

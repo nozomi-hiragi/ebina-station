@@ -8,6 +8,7 @@ process.on('SIGINT', () => {
 
 process.on('exit', () => {
   console.log('entrance: exit')
+  process.send && process.send('exit')
 })
 
 process.on('message', (message) => {
