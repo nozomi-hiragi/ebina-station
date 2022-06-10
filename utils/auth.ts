@@ -1,5 +1,5 @@
 import express from "express"
-import jwt, { VerifyErrors } from "jsonwebtoken"
+import jwt from "jsonwebtoken"
 
 const userTokens: { [key: string]: { token: string, refreshToken: string } } = {}
 
