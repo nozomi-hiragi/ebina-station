@@ -1,4 +1,3 @@
-import "dotenv/config"
 import express from "express"
 import bcrypt from "bcrypt"
 import base64url from "base64url"

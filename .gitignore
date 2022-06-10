@@ -69,7 +69,7 @@ typings/
 .yarn-integrity
 
 # dotenv environment variables file
-.env
+*.env
 .env.test
 
 # parcel-bundler cache (https://parceljs.org/)
@@ -105,6 +105,9 @@ dist
 
 # sqlite
 *.db
+
+# mongodb
+mongo_db
 
 #  Ebina project folder
 project
