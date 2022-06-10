@@ -1,5 +1,6 @@
 import express from "express"
 import jwt from "jsonwebtoken"
+import { logKoujou } from './log'
 
 const userTokens: { [key: string]: { token: string, refreshToken: string } } = {}
 
@@ -56,7 +57,7 @@ export const authToken = (req: express.Request, res: express.Response, next: exp
       next()
     }
   } catch (err) {
-    console.log(err)
+    logKoujou.info('authToken', err)
     res.sendStatus(401)
   }
 }
@@ -71,7 +72,7 @@ export const refreshTokens = (refreshToken: string) => {
       new Error('not logedin the user')
     }
   } catch (err) {
-    console.log(err)
+    logKoujou.info('refreshTokens', err)
     return null
   }
   return null

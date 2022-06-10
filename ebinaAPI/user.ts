@@ -5,6 +5,7 @@ import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthe
 import { authToken, generateToken, JwtPayload, refreshTokens, removeToken } from "../utils/auth"
 import { addMember, getMember, setMember, User, WebAuthn, WebAuthnAuthenticator, WebAuthnItem } from "../data/members"
 import { getSettings, WebAuthnSetting } from "../data/settings"
+import { logApi } from "../utils/log"
 
 const userRouter = express.Router()
 
@@ -30,7 +31,7 @@ userRouter.post('/regist', (req, res) => {
   const { id, pass, name }: { id: string, pass: string, name: string } = req.body
   if (!id || !pass || !name) { return res.sendStatus(400) }
   if (getMember(id)) {
-    console.log("already have this id")
+    logApi.info('user/regest', "already have this id", id)
     return res.sendStatus(406)
   }
   const passwordAuth = { hash: bcrypt.hashSync(pass, 9) }
@@ -106,7 +107,7 @@ userRouter.post('/webauthn/regist', authToken, async (req, res) => {
       expectedRPID: rpID,
     })
   } catch (err) {
-    console.error(err)
+    logApi.info('user/webauthn/regist', err)
     return res.sendStatus(400)
   }
   if (!verification.verified || !verification.registrationInfo) { return res.sendStatus(400) }
@@ -197,7 +198,7 @@ userRouter.post('/webauthn/verify', authToken, async (req, res) => {
       authenticator: webAuthnItem.authenticators[deviceName]!,
     })
   } catch (err) {
-    console.error(err);
+    logApi.info('user/webauthn/verify', err);
     return res.sendStatus(400)
   }
   if (!verification.verified || !verification.authenticationInfo) { return res.sendStatus(400) }
@@ -260,7 +261,10 @@ userRouter.post('/login', (req, res) => {
   const { id, pass }: { id: string, pass: string } = req.body
   if (!id || !pass) { return res.sendStatus(400) }
   const user = getMember(id)
-  if (user === undefined) { return res.sendStatus(404) }
+  if (user === undefined) {
+    logApi.info('post', 'user/login', 'not exist user', id)
+    return res.sendStatus(404)
+  }
   const passwordAuth = user.auth.password
   if (passwordAuth === undefined) { return res.sendStatus(500) }
   if (bcrypt.compareSync(pass, passwordAuth.hash ?? '')) {
