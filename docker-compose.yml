@@ -12,3 +12,15 @@ services:
       - ./project:/usr/src/app/project
     env_file:
       - .env
+
+  EbinaSstationDB:
+    image: mongo
+    container_name: EbinaSstationDB
+    command: mongod --port 27017
+    restart: always
+    env_file: db.env
+    ports:
+      - 27017:27017
+    volumes:
+      - ./mongo_db:/data/db
+      - ./initdb.d:/docker-entrypoint-initdb.d
