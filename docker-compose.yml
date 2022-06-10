@@ -1,0 +1,14 @@
+version: '3.7'
+
+services:
+  EbinaStationAPI:
+    build: .
+    image: ebina-station-api
+    container_name: EbinaStationAPI
+    ports:
+      - 3456:3456
+      - 1234:1234
+    volumes:
+      - ./project:/usr/src/app/project
+    env_file:
+      - .env
