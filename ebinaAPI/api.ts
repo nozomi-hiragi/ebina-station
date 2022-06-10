@@ -1,7 +1,7 @@
 import express from "express"
 import child_process from "child_process"
 import { authToken } from "../utils/auth"
-import * as apidb from '../utils/database'
+import { deleteAPI, getAPI, getAPIs, setAPI } from '../utils/apis'
 import fs from 'fs'
 
 const BASE_PATH_FILE = './project/js/'
@@ -24,47 +24,45 @@ apiRouter.get('/status', authToken, (req, res) => {
 })
 
 apiRouter.post('/start', authToken, (req, res) => {
-  apidb.getAPIs().then((rows) => {
-    if (entranceProc) {
-      entranceProc.kill('SIGINT')
-      entranceProc = null
-      startedDate = null
+
+  if (entranceProc) {
+    entranceProc.kill('SIGINT')
+    entranceProc = null
+    startedDate = null
+  }
+
+  const files: string[] = []
+  let importStr = 'module.exports = {'
+
+  const apis = getAPIs()
+  const apiList = Object.keys(apis).map((key) => {
+    const value = apis[key]
+    switch (value.type) {
+      case 'JavaScript':
+        const arg = value.value.split('>')
+        const filename = arg[0]
+        if (!files.includes(filename)) {
+          files.push(arg[0])
+          importStr += `"${filename}": require("${BASE_PATH_FILE}${filename}"),`
+        }
     }
-
-    const files: string[] = []
-    let importStr = 'module.exports = {'
-
-    rows = rows.map((row) => {
-      switch (row.type) {
-        case 'JavaScript':
-          const arg = row.value.split('>')
-          const filename = arg[0]
-          if (!files.includes(filename)) {
-            files.push(arg[0])
-            importStr += `"${filename}": require("${BASE_PATH_FILE}${filename}"),`
-          }
-      }
-      return row
-    })
-    importStr += `}`
-
-    fs.writeFileSync('imports.js', importStr)
-
-    entranceProc = child_process.fork('./entrance')
-    startedDate = Date.now()
-    entranceProc.on('message', (message) => {
-      if (message === 'start') { res.status(200).json("ok") }
-    })
-    const testObject = {
-      command: 'start',
-      port: undefined,
-      routs: rows
-    }
-    entranceProc.send(testObject)
-  }).catch((err) => {
-    console.log(err)
-    res.sendStatus(500)
+    return { ...value, name: key }
   })
+  importStr += `}`
+
+  fs.writeFileSync('imports.js', importStr)
+
+  entranceProc = child_process.fork('./entrance')
+  startedDate = Date.now()
+  entranceProc.on('message', (message) => {
+    if (message === 'start') { res.status(200).json("ok") }
+  })
+  const testObject = {
+    command: 'start',
+    port: undefined,
+    routs: apiList
+  }
+  entranceProc.send(testObject)
 })
 
 apiRouter.post('/stop', authToken, (req, res) => {
@@ -79,60 +77,44 @@ apiRouter.post('/stop', authToken, (req, res) => {
 })
 
 apiRouter.get('/apis', authToken, (req, res) => {
-  apidb.getAPIs().then((rows) => {
-    res.status(200).json(rows)
-  }).catch((err) => {
-    console.log(err)
-    res.sendStatus(500)
+  const apis = getAPIs()
+  const apiList = Object.keys(apis).map((key) => {
+    const api = apis[key]
+    return { ...api, name: key }
   })
+  res.status(200).json(apiList)
 })
 
 apiRouter.get('/api', authToken, (req, res) => {
-  const path = (req.query.path as string)
-  if (!path) { return res.sendStatus(400) }
-  apidb.getAPI(path).then((row) => {
-    if (row) {
-      res.status(200).json(row)
-    } else {
-      res.sendStatus(400)
-    }
-  }).catch((err) => {
-    console.log(err)
-    res.sendStatus(500)
-  })
+  const name = (req.query.name as string)
+  if (!name) { return res.sendStatus(400) }
+  const api = getAPI(name)
+  if (api) {
+    res.status(200).json({ ...api, name })
+  } else {
+    res.sendStatus(400)
+  }
 })
 
 apiRouter.post('/path', authToken, (req, res) => {
   const { path, name, type, value } = req.body
   if (!path || !name || !type || !value) { return res.sendStatus(400) }
-  apidb.setAPI(path, name, type, value).then((_) => {
-    res.sendStatus(200)
-  }).catch((err) => {
-    console.log(err)
-    res.sendStatus(400)
-  })
+  setAPI(name, { path, type, value })
+  res.sendStatus(200)
 })
 
 apiRouter.put('/path', authToken, (req, res) => {
   const { path, name, type, value } = req.body
   if (!path || !name || !type || !value) { return res.sendStatus(400) }
-  apidb.updateAPI(path, name, type, value).then((_) => {
-    res.sendStatus(200)
-  }).catch((err) => {
-    console.log(err)
-    res.sendStatus(400)
-  })
+  setAPI(name, { path, type, value })
+  res.sendStatus(200)
 })
 
 apiRouter.delete('/path', authToken, (req, res) => {
-  const path = req.query.path as string
-  if (!path) { return res.sendStatus(400) }
-  apidb.deleteAPI(path).then((_) => {
-    res.sendStatus(202)
-  }).catch((err) => {
-    console.log(err)
-    res.sendStatus(400)
-  })
+  const name = req.query.name as string
+  if (!name) { return res.sendStatus(400) }
+  deleteAPI(name)
+  res.sendStatus(202)
 })
 
 export default apiRouter

@@ -1,6 +1,5 @@
 import express from "express"
 import jwt, { VerifyErrors } from "jsonwebtoken"
-import * as database from "./database"
 
 const userTokens: { [key: string]: { token: string, refreshToken: string } } = {}
 
