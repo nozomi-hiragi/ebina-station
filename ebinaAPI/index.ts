@@ -8,11 +8,7 @@ const ebinaRouter = express.Router()
 
 ebinaRouter.use('/user', userRouter)
 ebinaRouter.use('/users', usersRouter)
-ebinaRouter.use('/:appName', (req, res, next) => {
-  if (!req.params.appName) return res.sendStatus(400)
-  res.locals.appName = req.params.appName
-  next()
-}, app)
-ebinaRouter.get('/applist', authToken, (req, res) => res.status(200).json(getAppList()))
+ebinaRouter.use('/app', app)
+ebinaRouter.get('/apps', authToken, (req, res) => res.status(200).json(getAppList()))
 
 export default ebinaRouter

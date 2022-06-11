@@ -1,4 +1,5 @@
 import fs from 'fs'
+import { APPS_DIR } from '../ebinaAPI/App'
 
 export type APIType = {
   path: string,
@@ -16,7 +17,7 @@ export class APIs {
   private apis: APIsType
 
   constructor(appName: string) {
-    this.jsonPath = `./project/${appName}/apis.json`
+    this.jsonPath = `${APPS_DIR}/${appName}/apis.json`
     if (fs.existsSync(this.jsonPath)) {
       this.apis = JSON.parse(fs.readFileSync(this.jsonPath, 'utf8'))
     } else {
