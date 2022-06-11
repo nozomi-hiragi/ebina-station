@@ -1,6 +1,6 @@
 import express from "express"
 import fs from 'fs'
-import { PROJECT_PATH } from "."
+import { APPS_DIR } from "."
 import { authToken } from "../../utils/auth"
 import { logApi } from "../../utils/log"
 import { mkdirIfNotExist } from "../../utils/utils"
@@ -8,7 +8,7 @@ import { mkdirIfNotExist } from "../../utils/utils"
 const editRouter = express.Router()
 
 const initFolder = (appName: string) => {
-  mkdirIfNotExist(`${PROJECT_PATH}/${appName}/js`)
+  mkdirIfNotExist(`${APPS_DIR}/${appName}/js`)
 }
 
 editRouter.post('/js/:path', authToken, (req, res) => {
@@ -18,7 +18,7 @@ editRouter.post('/js/:path', authToken, (req, res) => {
     const { path } = req.params
     if (!path) return res.sendStatus(400)
     initFolder(appName)
-    const fullPath = `${PROJECT_PATH}/${appName}/js/${path}`
+    const fullPath = `${APPS_DIR}/${appName}/js/${path}`
     if (fs.existsSync(fullPath)) return res.sendStatus(409)
     const body = req.body
     const isString = typeof body === 'string'
@@ -35,7 +35,7 @@ editRouter.get('/js', authToken, (req, res) => {
   if (!appName) return res.sendStatus(400)
   try {
     initFolder(appName)
-    const dir = fs.readdirSync(`${PROJECT_PATH}/${appName}/js`)
+    const dir = fs.readdirSync(`${APPS_DIR}/${appName}/js`)
     res.status(200).send(dir)
   } catch (err) {
     logApi.error('get', 'edit/js', err)
@@ -50,7 +50,7 @@ editRouter.get('/js/:path', authToken, (req, res) => {
     const { path } = req.params
     if (!path) return res.sendStatus(400)
     initFolder(appName)
-    const fullPath = `${PROJECT_PATH}/${appName}/js/${path}`
+    const fullPath = `${APPS_DIR}/${appName}/js/${path}`
     if (!fs.existsSync(fullPath)) return res.sendStatus(404)
     if (fs.statSync(fullPath).isDirectory()) {
       const dir = fs.readdirSync(fullPath)
@@ -75,7 +75,7 @@ editRouter.patch('/js/:path', authToken, (req, res) => {
     const isString = typeof body === 'string'
     if (!isString) return res.sendStatus(400)
     initFolder(appName)
-    const fullPath = `${PROJECT_PATH}/${appName}/js/${path}`
+    const fullPath = `${APPS_DIR}/${appName}/js/${path}`
     if (!fs.existsSync(fullPath)) return res.sendStatus(404)
     fs.writeFileSync(fullPath, body)
     res.sendStatus(200)
@@ -92,7 +92,7 @@ editRouter.delete('/js/:path', authToken, (req, res) => {
     const { path } = req.params
     if (!path) return res.sendStatus(400)
     initFolder(appName)
-    const fullPath = `${PROJECT_PATH}/${appName}/js/${path}`
+    const fullPath = `${APPS_DIR}/${appName}/js/${path}`
     if (!fs.existsSync(fullPath)) return res.sendStatus(404)
     fs.unlinkSync(fullPath)
     res.sendStatus(200)

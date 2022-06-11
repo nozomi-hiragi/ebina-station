@@ -1,7 +1,8 @@
 import fs from 'fs'
 import base64url from 'base64url'
+import { PROJECT_PATH } from '../ebinaAPI/App'
 
-const MEMBERS_FILE_PATH = './project/members.json'
+const MEMBERS_FILE_PATH = `${PROJECT_PATH}/members.json`
 
 export type User = {
   name: string,

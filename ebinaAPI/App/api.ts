@@ -3,7 +3,7 @@ import child_process, { SendHandle, Serializable } from "child_process"
 import { authToken } from "../../utils/auth"
 import { APIs } from '../../data/apis'
 import fs from 'fs'
-import { PROJECT_PATH } from "."
+import { APPS_DIR } from "."
 
 const apiRouter = express.Router()
 const entrances: {
@@ -60,7 +60,7 @@ apiRouter.post('/start', authToken, (req, res) => {
         const filename = arg[0]
         if (!files.includes(filename)) {
           files.push(arg[0])
-          importStr += `"${filename}": require("${PROJECT_PATH}/${appName}/js/${filename}"),`
+          importStr += `"${filename}": require("${APPS_DIR}/${appName}/js/${filename}"),`
         }
     }
     return { ...value, name: key }

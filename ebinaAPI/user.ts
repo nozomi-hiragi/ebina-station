@@ -270,7 +270,7 @@ userRouter.post('/login', (req, res) => {
   if (bcrypt.compareSync(pass, passwordAuth.hash ?? '')) {
     const tokens = generateToken(id)
     if (tokens) {
-      res.status(200).json({ user: { ...user, pass: undefined }, tokens })
+      res.status(200).json({ user: { ...user, auth: undefined }, tokens })
     } else {
       res.sendStatus(400)
     }
