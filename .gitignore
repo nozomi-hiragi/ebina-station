@@ -1,9 +1,5 @@
-# dotenv environment variables file
-*.env
-.env.test
-
-# mongodb
-mongo_db
+# certbot html
+html
 
 #  Ebina project folder
 project
