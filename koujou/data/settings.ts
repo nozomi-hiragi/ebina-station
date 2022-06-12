@@ -1,6 +1,7 @@
 import fs from "fs"
+import { PROJECT_PATH } from "../ebinaAPI/App"
 
-const SETTINGS_FILE_PATH = './project/setting.json'
+const SETTINGS_FILE_PATH = `${PROJECT_PATH}/setting.json`
 
 if (!fs.existsSync(SETTINGS_FILE_PATH)) {
   throw new Error('setting file is not exist')

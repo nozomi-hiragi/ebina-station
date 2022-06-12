@@ -1,14 +1,14 @@
 import express from "express"
-import apiRouter from "./api"
-import editRouter from "./edit"
+import { authToken } from "../utils/auth"
 import userRouter from "./user"
 import usersRouter from "./users"
+import app, { getAppList } from './App'
 
 const ebinaRouter = express.Router()
 
 ebinaRouter.use('/user', userRouter)
 ebinaRouter.use('/users', usersRouter)
-ebinaRouter.use('/api', apiRouter)
-ebinaRouter.use('/edit', editRouter)
+ebinaRouter.use('/app', app)
+ebinaRouter.get('/apps', authToken, (req, res) => res.status(200).json(getAppList()))
 
 export default ebinaRouter

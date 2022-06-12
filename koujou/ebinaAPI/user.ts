@@ -1,11 +1,11 @@
-import "dotenv/config"
 import express from "express"
 import bcrypt from "bcrypt"
 import base64url from "base64url"
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from '@simplewebauthn/server'
 import { authToken, generateToken, JwtPayload, refreshTokens, removeToken } from "../utils/auth"
-import { addMember, getMember, setMember, User, WebAuthn, WebAuthnAuthenticator, WebAuthnItem } from "../utils/members"
-import { getSettings, WebAuthnSetting } from "../utils/settings"
+import { addMember, getMember, setMember, User, WebAuthn, WebAuthnAuthenticator, WebAuthnItem } from "../data/members"
+import { getSettings, WebAuthnSetting } from "../data/settings"
+import { logApi } from "../utils/log"
 
 const userRouter = express.Router()
 
@@ -31,7 +31,7 @@ userRouter.post('/regist', (req, res) => {
   const { id, pass, name }: { id: string, pass: string, name: string } = req.body
   if (!id || !pass || !name) { return res.sendStatus(400) }
   if (getMember(id)) {
-    console.log("already have this id")
+    logApi.info('user/regest', "already have this id", id)
     return res.sendStatus(406)
   }
   const passwordAuth = { hash: bcrypt.hashSync(pass, 9) }
@@ -43,6 +43,7 @@ userRouter.post('/regist', (req, res) => {
 userRouter.get('/webauthn/regist', authToken, (req, res) => {
   const origin = req.get('origin')
   if (!origin) return res.sendStatus(400)
+  const originURL = new URL(origin)
   const payload: JwtPayload = res.locals.payload
   const user = getMember(payload.id)
   if (!user) return res.sendStatus(404)
@@ -51,7 +52,7 @@ userRouter.get('/webauthn/regist', authToken, (req, res) => {
   const webAuthnSetting = settings.WebAuthn
   if (!webAuthnSetting) return res.sendStatus(405)
 
-  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : req.hostname
+  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : originURL.hostname
   if (!rpID) return res.sendStatus(500)
 
   const userWebAuthn: WebAuthn = user.auth.webAuthn ?? {}
@@ -75,6 +76,7 @@ userRouter.get('/webauthn/regist', authToken, (req, res) => {
 userRouter.post('/webauthn/regist', authToken, async (req, res) => {
   const origin = req.get('origin')
   if (!origin) return res.sendStatus(400)
+  const originURL = new URL(origin)
   const payload: JwtPayload = res.locals.payload
   const user = getMember(payload.id)
   if (!user) return res.sendStatus(404)
@@ -91,7 +93,7 @@ userRouter.post('/webauthn/regist', authToken, async (req, res) => {
   const settings = getSettings()
   const webAuthnSetting = settings.WebAuthn
   if (!webAuthnSetting) return res.sendStatus(405)
-  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : req.hostname
+  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : originURL.hostname
   if (!rpID) return res.sendStatus(500)
 
   const userWebAuthn: WebAuthn = user.auth.webAuthn ?? {}
@@ -107,7 +109,7 @@ userRouter.post('/webauthn/regist', authToken, async (req, res) => {
       expectedRPID: rpID,
     })
   } catch (err) {
-    console.error(err)
+    logApi.info('user/webauthn/regist', err)
     return res.sendStatus(400)
   }
   if (!verification.verified || !verification.registrationInfo) { return res.sendStatus(400) }
@@ -123,6 +125,9 @@ userRouter.post('/webauthn/regist', authToken, async (req, res) => {
 })
 
 userRouter.get('/webauthn/verify', authToken, async (req, res) => {
+  const origin = req.get('origin')
+  if (!origin) return res.sendStatus(400)
+  const originURL = new URL(origin)
   const payload: JwtPayload = res.locals.payload
   const user = getMember(payload.id)
   if (!user) return res.sendStatus(404)
@@ -130,7 +135,7 @@ userRouter.get('/webauthn/verify', authToken, async (req, res) => {
   const settings = getSettings()
   const webAuthnSetting = settings.WebAuthn
   if (!webAuthnSetting) return res.sendStatus(405)
-  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : req.hostname
+  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : originURL.hostname
   if (!rpID) return res.sendStatus(500)
 
   const userWebAuthn: WebAuthn = user.auth.webAuthn ?? {}
@@ -161,6 +166,7 @@ userRouter.get('/webauthn/verify', authToken, async (req, res) => {
 userRouter.post('/webauthn/verify', authToken, async (req, res) => {
   const origin = req.get('origin')
   if (!origin) return res.sendStatus(400)
+  const originURL = new URL(origin)
   const payload: JwtPayload = res.locals.payload
   const user = getMember(payload.id)
   if (!user) return res.sendStatus(404)
@@ -175,7 +181,7 @@ userRouter.post('/webauthn/verify', authToken, async (req, res) => {
   const settings = getSettings()
   const webAuthnSetting = settings.WebAuthn
   if (!webAuthnSetting) return res.sendStatus(405)
-  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : req.hostname
+  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : originURL.hostname
   if (!rpID) return res.sendStatus(500)
 
   const userWebAuthn: WebAuthn = user.auth.webAuthn ?? {}
@@ -198,7 +204,7 @@ userRouter.post('/webauthn/verify', authToken, async (req, res) => {
       authenticator: webAuthnItem.authenticators[deviceName]!,
     })
   } catch (err) {
-    console.error(err);
+    logApi.info('user/webauthn/verify', err);
     return res.sendStatus(400)
   }
   if (!verification.verified || !verification.authenticationInfo) { return res.sendStatus(400) }
@@ -213,23 +219,33 @@ userRouter.post('/webauthn/verify', authToken, async (req, res) => {
 })
 
 userRouter.get('/webauthn/devices', authToken, async (req, res) => {
+  const origin = req.get('origin')
+  if (!origin) return res.sendStatus(400)
+  const originURL = new URL(origin)
   const payload: JwtPayload = res.locals.payload
   const user = getMember(payload.id)
-  if (!user) return res.sendStatus(404)
+  if (!user) {
+    logApi.info('get', 'user/webauthn/devices', 'user not found', user);
+    return res.sendStatus(404)
+  }
 
   const settings = getSettings()
   const webAuthnSetting = settings.WebAuthn
   if (!webAuthnSetting) return res.sendStatus(405)
-  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : req.hostname
+  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : originURL.hostname
   if (!rpID) return res.sendStatus(500)
 
   const userWebAuthn: WebAuthn = user.auth.webAuthn ?? {}
   const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID]
-  if (!webAuthnItem) return res.sendStatus(404)
+  if (!webAuthnItem) return res.status(200).json([])
   res.status(200).json(Object.keys(webAuthnItem.authenticators))
 })
 
 userRouter.delete('/webauthn/device/:deviceName', authToken, async (req, res) => {
+  const origin = req.get('origin')
+  if (!origin) return res.sendStatus(400)
+  const originURL = new URL(origin)
+
   const { deviceName } = req.params
 
   const payload: JwtPayload = res.locals.payload
@@ -239,7 +255,7 @@ userRouter.delete('/webauthn/device/:deviceName', authToken, async (req, res) =>
   const settings = getSettings()
   const webAuthnSetting = settings.WebAuthn
   if (!webAuthnSetting) return res.sendStatus(405)
-  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : req.hostname
+  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : originURL.hostname
   if (!rpID) return res.sendStatus(500)
 
   const userWebAuthn: WebAuthn = user.auth.webAuthn ?? {}
@@ -261,13 +277,16 @@ userRouter.post('/login', (req, res) => {
   const { id, pass }: { id: string, pass: string } = req.body
   if (!id || !pass) { return res.sendStatus(400) }
   const user = getMember(id)
-  if (user === undefined) { return res.sendStatus(404) }
+  if (user === undefined) {
+    logApi.info('post', 'user/login', 'not exist user', id)
+    return res.sendStatus(404)
+  }
   const passwordAuth = user.auth.password
   if (passwordAuth === undefined) { return res.sendStatus(500) }
   if (bcrypt.compareSync(pass, passwordAuth.hash ?? '')) {
     const tokens = generateToken(id)
     if (tokens) {
-      res.status(200).json({ user: { ...user, pass: undefined }, tokens })
+      res.status(200).json({ user: { ...user, auth: undefined }, tokens })
     } else {
       res.sendStatus(400)
     }

@@ -1,6 +1,6 @@
 import express from "express"
 import { authToken } from "../utils/auth"
-import { getMembers, removeMember } from "../utils/members"
+import { getMembers, removeMember } from "../data/members"
 
 const usersRouter = express.Router()
 

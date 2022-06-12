@@ -1,8 +1,10 @@
+import "dotenv/config"
 import express from "express"
 import cors from "cors"
-import ebinaRouter from "./ebinaAPI/"
+import ebinaRouter from "./ebinaAPI"
 import cookieParser from "cookie-parser"
-import { getSettings } from "./utils/settings"
+import { getSettings } from "./data/settings"
+import { logKoujou } from "./utils/log"
 
 const settings = getSettings()
 
@@ -16,5 +18,5 @@ if (settings.origins) app.use(cors({ origin: settings.origins, credentials: true
 app.use('/ebina', ebinaRouter)
 
 app.listen(port, () => {
-  console.log('lestening')
+  logKoujou.info(`EbinaStation Start lestening on ${port}`)
 })
