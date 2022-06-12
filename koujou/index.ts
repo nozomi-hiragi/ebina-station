@@ -1,7 +1,7 @@
 import "dotenv/config"
 import express from "express"
 import cors from "cors"
-import ebinaRouter from "./ebinaAPI/"
+import ebinaRouter from "./ebinaAPI"
 import cookieParser from "cookie-parser"
 import { getSettings } from "./data/settings"
 import { logKoujou } from "./utils/log"
