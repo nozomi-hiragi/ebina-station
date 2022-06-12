@@ -3,6 +3,7 @@ import { APPS_DIR } from '../ebinaAPI/App'
 
 export type APIType = {
   path: string,
+  method: 'get' | 'head' | 'post' | 'put' | 'delete' | 'options' | 'patch',
   type: "string" | "JavaScript",
   value: string,
 }
@@ -53,5 +54,10 @@ export class APIs {
 
   public getPort() {
     return this.apis.port
+  }
+
+  public setPort(port: number) {
+    this.apis.port = port
+    this.saveAPIsToFile()
   }
 }

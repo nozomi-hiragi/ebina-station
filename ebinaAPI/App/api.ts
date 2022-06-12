@@ -139,14 +139,32 @@ apiRouter.get('/api', authToken, (req, res) => {
   }
 })
 
+apiRouter.get('/port', authToken, (req, res) => {
+  const appName = res.locals.appName
+  if (!appName) return res.sendStatus(400)
+  let apisInstance = apisList[appName] ?? (apisList[appName] = new APIs(appName))
+  res.status(200).json({ port: apisInstance.getPort() })
+})
+
+apiRouter.put('/port', authToken, (req, res) => {
+  const appName = res.locals.appName
+  if (!appName) return res.sendStatus(400)
+  let apisInstance = apisList[appName] ?? (apisList[appName] = new APIs(appName))
+
+  const { port } = req.body
+  if (!port) { return res.sendStatus(400) }
+  apisInstance.setPort(port)
+  res.sendStatus(200)
+})
+
 apiRouter.post('/path', authToken, (req, res) => {
   const appName = res.locals.appName
   if (!appName) return res.sendStatus(400)
   let apisInstance = apisList[appName] ?? (apisList[appName] = new APIs(appName))
 
-  const { path, name, type, value } = req.body
-  if (!path || !name || !type || !value) { return res.sendStatus(400) }
-  apisInstance.setAPI(name, { path, type, value })
+  const { name, path, method, type, value } = req.body
+  if (!name || !path || !method || !type || !value) { return res.sendStatus(400) }
+  apisInstance.setAPI(name, { path, method, type, value })
   res.sendStatus(200)
 })
 
@@ -155,9 +173,9 @@ apiRouter.put('/path', authToken, (req, res) => {
   if (!appName) return res.sendStatus(400)
   let apisInstance = apisList[appName] ?? (apisList[appName] = new APIs(appName))
 
-  const { path, name, type, value } = req.body
-  if (!path || !name || !type || !value) { return res.sendStatus(400) }
-  apisInstance.setAPI(name, { path, type, value })
+  const { name, path, method, type, value } = req.body
+  if (!name || !path || !method || !type || !value) { return res.sendStatus(400) }
+  apisInstance.setAPI(name, { path, method, type, value })
   res.sendStatus(200)
 })
 
