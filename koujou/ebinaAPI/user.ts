@@ -43,6 +43,7 @@ userRouter.post('/regist', (req, res) => {
 userRouter.get('/webauthn/regist', authToken, (req, res) => {
   const origin = req.get('origin')
   if (!origin) return res.sendStatus(400)
+  const originURL = new URL(origin)
   const payload: JwtPayload = res.locals.payload
   const user = getMember(payload.id)
   if (!user) return res.sendStatus(404)
@@ -51,7 +52,7 @@ userRouter.get('/webauthn/regist', authToken, (req, res) => {
   const webAuthnSetting = settings.WebAuthn
   if (!webAuthnSetting) return res.sendStatus(405)
 
-  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : req.hostname
+  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : originURL.hostname
   if (!rpID) return res.sendStatus(500)
 
   const userWebAuthn: WebAuthn = user.auth.webAuthn ?? {}
@@ -75,6 +76,7 @@ userRouter.get('/webauthn/regist', authToken, (req, res) => {
 userRouter.post('/webauthn/regist', authToken, async (req, res) => {
   const origin = req.get('origin')
   if (!origin) return res.sendStatus(400)
+  const originURL = new URL(origin)
   const payload: JwtPayload = res.locals.payload
   const user = getMember(payload.id)
   if (!user) return res.sendStatus(404)
@@ -91,7 +93,7 @@ userRouter.post('/webauthn/regist', authToken, async (req, res) => {
   const settings = getSettings()
   const webAuthnSetting = settings.WebAuthn
   if (!webAuthnSetting) return res.sendStatus(405)
-  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : req.hostname
+  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : originURL.hostname
   if (!rpID) return res.sendStatus(500)
 
   const userWebAuthn: WebAuthn = user.auth.webAuthn ?? {}
@@ -123,6 +125,9 @@ userRouter.post('/webauthn/regist', authToken, async (req, res) => {
 })
 
 userRouter.get('/webauthn/verify', authToken, async (req, res) => {
+  const origin = req.get('origin')
+  if (!origin) return res.sendStatus(400)
+  const originURL = new URL(origin)
   const payload: JwtPayload = res.locals.payload
   const user = getMember(payload.id)
   if (!user) return res.sendStatus(404)
@@ -130,7 +135,7 @@ userRouter.get('/webauthn/verify', authToken, async (req, res) => {
   const settings = getSettings()
   const webAuthnSetting = settings.WebAuthn
   if (!webAuthnSetting) return res.sendStatus(405)
-  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : req.hostname
+  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : originURL.hostname
   if (!rpID) return res.sendStatus(500)
 
   const userWebAuthn: WebAuthn = user.auth.webAuthn ?? {}
@@ -161,6 +166,7 @@ userRouter.get('/webauthn/verify', authToken, async (req, res) => {
 userRouter.post('/webauthn/verify', authToken, async (req, res) => {
   const origin = req.get('origin')
   if (!origin) return res.sendStatus(400)
+  const originURL = new URL(origin)
   const payload: JwtPayload = res.locals.payload
   const user = getMember(payload.id)
   if (!user) return res.sendStatus(404)
@@ -175,7 +181,7 @@ userRouter.post('/webauthn/verify', authToken, async (req, res) => {
   const settings = getSettings()
   const webAuthnSetting = settings.WebAuthn
   if (!webAuthnSetting) return res.sendStatus(405)
-  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : req.hostname
+  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : originURL.hostname
   if (!rpID) return res.sendStatus(500)
 
   const userWebAuthn: WebAuthn = user.auth.webAuthn ?? {}
@@ -213,23 +219,33 @@ userRouter.post('/webauthn/verify', authToken, async (req, res) => {
 })
 
 userRouter.get('/webauthn/devices', authToken, async (req, res) => {
+  const origin = req.get('origin')
+  if (!origin) return res.sendStatus(400)
+  const originURL = new URL(origin)
   const payload: JwtPayload = res.locals.payload
   const user = getMember(payload.id)
-  if (!user) return res.sendStatus(404)
+  if (!user) {
+    logApi.info('get', 'user/webauthn/devices', 'user not found', user);
+    return res.sendStatus(404)
+  }
 
   const settings = getSettings()
   const webAuthnSetting = settings.WebAuthn
   if (!webAuthnSetting) return res.sendStatus(405)
-  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : req.hostname
+  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : originURL.hostname
   if (!rpID) return res.sendStatus(500)
 
   const userWebAuthn: WebAuthn = user.auth.webAuthn ?? {}
   const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID]
-  if (!webAuthnItem) return res.sendStatus(404)
+  if (!webAuthnItem) return res.status(200).json([])
   res.status(200).json(Object.keys(webAuthnItem.authenticators))
 })
 
 userRouter.delete('/webauthn/device/:deviceName', authToken, async (req, res) => {
+  const origin = req.get('origin')
+  if (!origin) return res.sendStatus(400)
+  const originURL = new URL(origin)
+
   const { deviceName } = req.params
 
   const payload: JwtPayload = res.locals.payload
@@ -239,7 +255,7 @@ userRouter.delete('/webauthn/device/:deviceName', authToken, async (req, res) =>
   const settings = getSettings()
   const webAuthnSetting = settings.WebAuthn
   if (!webAuthnSetting) return res.sendStatus(405)
-  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : req.hostname
+  const rpID = isRPIDStatic(webAuthnSetting) ? webAuthnSetting.rpID : originURL.hostname
   if (!rpID) return res.sendStatus(500)
 
   const userWebAuthn: WebAuthn = user.auth.webAuthn ?? {}
