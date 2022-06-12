@@ -2,7 +2,7 @@ version: '3.7'
 
 services:
   EbinaStationAPI:
-    build: .
+    build: ./koujou
     image: ebina-station-api
     container_name: EbinaStationAPI
     ports:
@@ -11,7 +11,7 @@ services:
     volumes:
       - ./project:/usr/src/app/project
     env_file:
-      - .env
+      - ./koujou/.env
 
   EbinaSstationDB:
     image: mongo
