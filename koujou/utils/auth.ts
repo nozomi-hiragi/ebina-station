@@ -24,13 +24,31 @@ export const generateJwtToken = (payload: JwtPayload) => {
   return { token: token, refreshToken: refreshToken }
 }
 
-const verifyAuthToken = (token: string) => jwt.verify(token, process.env.USER_AUTH_SECRET!)
-const verifyRefreshToken = (token: string) => jwt.verify(token, process.env.USER_REFRESH_SECRET!)
+const verifyAuthToken = (token: string) => {
+  try {
+    return jwt.verify(token, process.env.USER_AUTH_SECRET!) as JwtPayload
+  } catch (err) {
+    logKoujou.info('verifyAuthToken', token, err)
+  }
+}
 
-export const generateToken = (id: string) => {
+const verifyRefreshToken = (token: string) => {
+  try {
+    return jwt.verify(token, process.env.USER_REFRESH_SECRET!) as JwtPayload
+  } catch (err) {
+    logKoujou.info('verifyRefreshToken', token, err)
+  }
+}
+
+export const generateTokens = (id: string) => {
   const tokens = generateJwtToken({ id: id })
   userTokens[id] = tokens
   return tokens
+}
+
+export const isAvailableToken = (id: string, token: string) => {
+  const tokens = userTokens[id]
+  return tokens && tokens.token === token
 }
 
 export const removeToken = (id: string) => {
@@ -47,33 +65,31 @@ export const authToken = (req: express.Request, res: express.Response, next: exp
   const tokenArray = authHeader.split(' ')
   if (tokenArray[0] !== "Bearer") { return res.sendStatus(400) }
   const token = tokenArray[1]
-  try {
-    const payload = verifyAuthToken(token)
-    if (typeof payload === 'string') {
-      new Error('payload error')
-    } else {
-      res.locals.token = token
-      res.locals.payload = payload
-      next()
-    }
-  } catch (err) {
-    logKoujou.info('authToken', err)
+  const payload = verifyAuthToken(token)
+  if (payload) {
+    res.locals.token = token
+    res.locals.payload = payload
+    next()
+  } else {
     res.sendStatus(401)
   }
 }
 
-export const refreshTokens = (refreshToken: string) => {
-  try {
-    const payload = verifyRefreshToken(refreshToken) as JwtPayload
-    if (userTokens[payload.id]?.refreshToken === refreshToken) {
-      removeToken(payload.id)
-      return generateToken(payload.id)
-    } else {
-      new Error('not logedin the user')
-    }
-  } catch (err) {
-    logKoujou.info('refreshTokens', err)
-    return null
+export const refreshTokens = (refreshToken: string, id?: string) => {
+  const payload = verifyRefreshToken(refreshToken) as JwtPayload
+  if (!payload) return undefined
+
+  if (id && payload.id !== id) {
+    removeToken(payload.id)
+    logKoujou.info('refreshTokens', 'wrong user', id, payload)
+    return undefined
   }
-  return null
+
+  if (userTokens[payload.id]?.refreshToken === refreshToken) {
+    removeToken(payload.id)
+    return generateTokens(payload.id)
+  } else {
+    logKoujou.info('refreshTokens', 'not logedin this user', payload)
+    return undefined
+  }
 }

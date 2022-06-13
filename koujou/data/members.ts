@@ -1,6 +1,6 @@
 import fs from 'fs'
 import base64url from 'base64url'
-import { PROJECT_PATH } from '../ebinaAPI/App'
+import { PROJECT_PATH } from '../ebinaAPI/app'
 
 const MEMBERS_FILE_PATH = `${PROJECT_PATH}/members.json`
 
