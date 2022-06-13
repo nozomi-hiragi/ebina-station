@@ -2,7 +2,7 @@ import express from "express"
 import { authToken } from "../utils/auth"
 import userRouter from "./user"
 import usersRouter from "./users"
-import app, { getAppList } from './App'
+import app, { getAppList } from './app'
 
 const ebinaRouter = express.Router()
 

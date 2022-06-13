@@ -1,5 +1,5 @@
 import fs from "fs"
-import { PROJECT_PATH } from "../ebinaAPI/App"
+import { PROJECT_PATH } from "../ebinaAPI/app"
 
 const SETTINGS_FILE_PATH = `${PROJECT_PATH}/setting.json`
 

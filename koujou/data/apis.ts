@@ -1,5 +1,5 @@
 import fs from 'fs'
-import { APPS_DIR } from '../ebinaAPI/App'
+import { APPS_DIR } from '../ebinaAPI/app'
 
 export type APIType = {
   path: string,
