@@ -1,7 +1,7 @@
 import fs from 'fs'
-import express from 'express'
+import express, { NextFunction, Request, Response } from 'express'
 import apiRouter from './api'
-import editRouter from './edit'
+import jsRouter from './js'
 import { mkdirIfNotExist } from '../../utils/utils'
 import { authToken } from '../../utils/auth'
 import { logApi } from "../../utils/log"
@@ -11,7 +11,9 @@ export const PROJECT_PATH = './project'
 export const APPS_DIR = `${PROJECT_PATH}/apps`
 export const GOMI_DIR = `${PROJECT_PATH}/gomi`
 
-export const getAppList = () => {
+const appRouter = express.Router()
+
+const getAppList = () => {
   const appList = fs.readdirSync(APPS_DIR)
     .filter((name) =>
       fs.statSync(`${APPS_DIR}/${name}`)
@@ -23,32 +25,52 @@ export const getAppList = () => {
   return appList
 }
 
-const app = express.Router()
+// アプリ名とる
+// 400 ない
+const pickupAppName = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.params.appName) return res.sendStatus(400)
+  res.locals.appName = req.params.appName
+  next()
+}
 
-app.post('/:appName', authToken, (req, res) => {
-  const appName = req.params.appName
-  console.log(appName)
+// アプリ配列取得
+// 200 名前ら
+appRouter.get('/', authToken, (req, res) => res.status(200).json(getAppList()))
+
+// アプリ作成
+// 200 OK
+// 400 情報足らない
+appRouter.post('/:appName', authToken, pickupAppName, (req, res) => {
+  const appName = res.locals.appName
   const appList = getAppList()
   const found = appList.find((name) => name.toLowerCase() === appName.toLowerCase())
-  if (found) return res.sendStatus(400)
+  if (found) return res.status(400).json({ message: 'Already use this name' })
 
   mkdirIfNotExist(`${APPS_DIR}/${appName}`)
 
   res.sendStatus(200)
 })
 
-app.get('/:appName', authToken, (req, res) => {
-  const appName = req.params.appName
+// アプリ取得 実質有無確認
+// 200 あった
+// 400 情報足らない
+// 404 なかった
+appRouter.get('/:appName', authToken, pickupAppName, (req, res) => {
+  const appName = res.locals.appName
   const appList = getAppList()
   const found = appList.find((name) => name.toLowerCase() === appName.toLowerCase())
   res.sendStatus(found ? 200 : 404)
 })
 
-app.delete('/:appName', authToken, (req, res) => {
-  const appName = req.params.appName
+// アプリ削除 ゴミ箱に移動
+// 200 OK
+// 404 アプリない
+// 500 フォルダ移動ミスった
+appRouter.delete('/:appName', authToken, pickupAppName, (req, res) => {
+  const appName = res.locals.appName
   const appList = getAppList()
   const found = appList.find((name) => name.toLowerCase() === appName.toLowerCase())
-  if (!found) return res.sendStatus(400)
+  if (!found) return res.sendStatus(404)
 
   mkdirIfNotExist(GOMI_DIR)
 
@@ -61,16 +83,7 @@ app.delete('/:appName', authToken, (req, res) => {
   }
 })
 
-app.use('/:appName/api', (req, res, next) => {
-  if (!req.params.appName) return res.sendStatus(400)
-  res.locals.appName = req.params.appName
-  next()
-}, apiRouter)
+appRouter.use('/:appName/api', pickupAppName, apiRouter)
+appRouter.use('/:appName/js', pickupAppName, jsRouter)
 
-app.use('/:appName/edit', (req, res, next) => {
-  if (!req.params.appName) return res.sendStatus(400)
-  res.locals.appName = req.params.appName
-  next()
-}, editRouter)
-
-export default app
+export default appRouter

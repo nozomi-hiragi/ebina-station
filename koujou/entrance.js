@@ -57,28 +57,29 @@ process.on('message', (message) => {
           fnc = (req, res) => { res.sendStatus(404) }
           break;
       }
+      const path = `/${rout.path}`
       switch (rout.method) {
         default:
         case 'get':
-          app.get(rout.path, fnc)
+          app.get(path, fnc)
           break;
         case 'head':
-          app.head(rout.path, fnc)
+          app.head(path, fnc)
           break;
         case 'post':
-          app.post(rout.path, fnc)
+          app.post(path, fnc)
           break;
         case 'put':
-          app.put(rout.path, fnc)
+          app.put(path, fnc)
           break;
         case 'delete':
-          app.delete(rout.path, fnc)
+          app.delete(path, fnc)
           break;
         case 'options':
-          app.options(rout.path, fnc)
+          app.options(path, fnc)
           break;
         case 'patch':
-          app.patch(rout.path, fnc)
+          app.patch(path, fnc)
           break;
       }
     });
