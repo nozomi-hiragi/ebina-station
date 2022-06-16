@@ -177,13 +177,12 @@ webauthnRouter.get('/verify', authToken, async (req, res) => {
 // { ...credential }
 // 200 OK
 // 400 情報おかしい
+// 401 チャレンジ失敗
 // 404 ものがない
 // 405 パスワードが設定されてない
 // 409 チャレンジ控えがない
 // 410 チャレンジ古い
 // 500 WebAuthnの設定おかしい
-
-// 401 チャレンジ失敗
 webauthnRouter.post('/verify', authToken, async (req, res) => {
   const origin = req.get('origin')
   if (!origin) return res.sendStatus(400)
