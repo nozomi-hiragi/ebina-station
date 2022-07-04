@@ -1,8 +1,8 @@
 import fs from 'fs'
-import { APPS_DIR } from '../ebinaAPI/App'
+import { APPS_DIR } from '../ebinaAPI/app'
 
 export type APIType = {
-  path: string,
+  name: string,
   method: 'get' | 'head' | 'post' | 'put' | 'delete' | 'options' | 'patch',
   type: "string" | "JavaScript",
   value: string,
@@ -10,7 +10,7 @@ export type APIType = {
 
 export type APIsType = {
   port: number,
-  apis: { [key: string]: (APIType | undefined) }
+  apis: { [path: string]: (APIType | undefined) }
 }
 
 export class APIs {
@@ -36,18 +36,18 @@ export class APIs {
     return this.apis.apis
   }
 
-  public getAPI(name: string) {
-    return this.apis.apis[name]
+  public getAPI(path: string) {
+    return this.apis.apis[path]
   }
 
-  public setAPI(name: string, api: APIType) {
-    this.apis.apis[name] = api
+  public setAPI(path: string, api: APIType) {
+    this.apis.apis[path] = api
     this.saveAPIsToFile()
   }
 
-  public deleteAPI(name: string) {
-    if (!this.apis.apis[name]) return false
-    delete this.apis.apis[name]
+  public deleteAPI(path: string) {
+    if (!this.apis.apis[path]) return false
+    delete this.apis.apis[path]
     this.saveAPIsToFile()
     return true
   }
