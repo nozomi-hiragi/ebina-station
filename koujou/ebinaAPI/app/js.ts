@@ -1,46 +1,46 @@
-import express from "express"
-import fs from 'fs'
-import { APPS_DIR } from "."
-import { authToken } from "../../utils/auth"
-import { logApi } from "../../utils/log"
-import { mkdirIfNotExist } from "../../utils/utils"
+import { oak } from "../../deps.ts";
+import { APPS_DIR } from "./index.ts";
+import { authToken } from "../../utils/auth.ts";
+import { logApi } from "../../utils/log.ts";
+import { exist, mkdirIfNotExist } from "../../utils/utils.ts";
 
-const jsRouter = express.Router()
+const jsRouter = new oak.Router();
 
 const initFolder = (appName: string) => {
-  mkdirIfNotExist(`${APPS_DIR}/${appName}/js`)
-}
+  mkdirIfNotExist(`${APPS_DIR}/${appName}/js`);
+};
 
 // JSファイル一覧取得
 // 200 一覧
 // 500 ファイル読めなかった
-jsRouter.get('/', authToken, (req, res) => {
-  const appName = res.locals.appName
+jsRouter.get("/", authToken, (ctx) => {
+  const { appName } = ctx.params;
+  if (!appName) return ctx.response.status = 400;
 
   try {
-    initFolder(appName)
-    const baseDir = `${APPS_DIR}/${appName}/js`
+    initFolder(appName);
+    const baseDir = `${APPS_DIR}/${appName}/js`;
 
-    const files: string[] = []
+    const files: string[] = [];
     const exploringDir = (dirPath: string) => {
-      const names = fs.readdirSync(`${baseDir}/${dirPath}`)
-      names.forEach((name) => {
-        const relativePath = `${dirPath}/${name}`
-        if (fs.statSync(`${baseDir}/${relativePath}`).isDirectory()) {
-          exploringDir(`${relativePath}/`)
+      for (const name of Deno.readDirSync(`${baseDir}/${dirPath}`)) {
+        const relativePath = `${dirPath}/${name.name}`;
+        if (Deno.statSync(`${baseDir}/${relativePath}`).isDirectory) {
+          exploringDir(`${relativePath}/`);
         } else {
-          files.push(relativePath.substring(1))
+          files.push(relativePath.substring(1));
         }
-      })
-    }
-    exploringDir('')
+      }
+    };
+    exploringDir("");
 
-    res.status(200).json(files)
+    ctx.response.body = files;
   } catch (err) {
-    logApi.error('get', 'api/js', err)
-    res.sendStatus(500)
+    logApi.error(["get", "api/js", err]);
+    console.log(err);
+    ctx.response.status = 500;
   }
-})
+});
 
 // JSファイル作成
 // :path
@@ -49,24 +49,23 @@ jsRouter.get('/', authToken, (req, res) => {
 // 400 情報おかしい
 // 409 もうある
 // 500 ファイル関係ミスった
-jsRouter.post('/:path', authToken, (req, res) => {
-  const appName = res.locals.appName
-  const { path } = req.params
-  if (!path) return res.sendStatus(400)
+jsRouter.post("/:path", authToken, async (ctx) => {
+  const { appName, path } = ctx.params;
+  if (!appName) return ctx.response.status = 400;
 
   try {
-    initFolder(appName)
-    const fullPath = `${APPS_DIR}/${appName}/js/${path}`
-    if (fs.existsSync(fullPath)) return res.sendStatus(409)
-    const body = req.body
-    const isString = typeof body === 'string'
-    fs.writeFileSync(fullPath, isString ? body : '')
-    res.sendStatus(200)
+    initFolder(appName);
+    const fullPath = `${APPS_DIR}/${appName}/js/${path}`;
+    if (exist(fullPath)) return ctx.response.status = 409;
+    const body = await ctx.request.body({ type: "text" }).value;
+    Deno.writeTextFileSync(fullPath, body);
+    ctx.response.status = 200;
   } catch (err) {
-    logApi.error('post', 'api/js/:paht', err)
-    res.sendStatus(500)
+    console.log(err);
+    logApi.error(["post", "api/js/:paht", err]);
+    ctx.response.status = 500;
   }
-})
+});
 
 // JSファイル取得
 // :path
@@ -75,27 +74,30 @@ jsRouter.post('/:path', authToken, (req, res) => {
 // 404 ファイルない
 // 409 ディレクトリ
 // 500 ファイル関係ミスった
-jsRouter.get('/:path', authToken, (req, res) => {
-  const appName = res.locals.appName
-  const { path } = req.params
-  if (!path) return res.sendStatus(400)
+jsRouter.get("/:path", authToken, (ctx) => {
+  const { appName, path } = ctx.params;
+  if (!appName) return ctx.response.status = 400;
 
   try {
-    initFolder(appName)
-    const fullPath = `${APPS_DIR}/${appName}/js/${path}`
-    if (!fs.existsSync(fullPath)) return res.sendStatus(404)
-    if (fs.statSync(fullPath).isDirectory()) {
-      const dir = fs.readdirSync(fullPath)
-      res.status(409).json(dir)
+    initFolder(appName);
+    const fullPath = `${APPS_DIR}/${appName}/js/${path}`;
+    if (!exist(fullPath)) return ctx.response.status = 404;
+    if (Deno.statSync(fullPath).isDirectory) {
+      const dir = [];
+      for (const item of Deno.readDirSync(fullPath)) {
+        dir.push(item.name);
+      }
+      ctx.response.status = 409;
+      ctx.response.body = dir;
     } else {
-      const text = fs.readFileSync(fullPath)
-      res.status(200).send(text)
+      const text = Deno.readTextFileSync(fullPath);
+      ctx.response.body = text;
     }
   } catch (err) {
-    logApi.error('get', 'api/js/:path', err)
-    res.send(500)
+    logApi.error(["get", "api/js/:path", err]);
+    ctx.response.status = 500;
   }
-})
+});
 
 // JSファイル更新
 // :path
@@ -104,27 +106,24 @@ jsRouter.get('/:path', authToken, (req, res) => {
 // 404 ファイルない
 // 409 ディレクトリ
 // 500 ファイル関係ミスった
-jsRouter.patch('/:path', authToken, (req, res) => {
-  const appName = res.locals.appName
-  const { path } = req.params
-  if (!path) return res.sendStatus(400)
+jsRouter.patch("/:path", authToken, async (ctx) => {
+  const { appName, path } = ctx.params;
+  if (!appName) return ctx.response.status = 400;
 
   try {
-    initFolder(appName)
-    const fullPath = `${APPS_DIR}/${appName}/js/${path}`
-    if (!fs.existsSync(fullPath)) return res.sendStatus(404)
-    if (fs.statSync(fullPath).isDirectory()) return res.sendStatus(409)
+    initFolder(appName);
+    const fullPath = `${APPS_DIR}/${appName}/js/${path}`;
+    if (!exist(fullPath)) return ctx.response.status = 404;
+    if (Deno.statSync(fullPath).isDirectory) return ctx.response.status = 409;
 
-    const body = req.body
-    const isString = typeof body === 'string'
-    if (!isString) return res.sendStatus(400)
-    fs.writeFileSync(fullPath, body)
-    res.sendStatus(200)
+    const body = await ctx.request.body({ type: "text" }).value;
+    Deno.writeTextFileSync(fullPath, body);
+    ctx.response.status = 200;
   } catch (err) {
-    logApi.error('patch', 'api/js/:path', err)
-    res.send(500)
+    logApi.error(["patch", "api/js/:path", err]);
+    ctx.response.status = 500;
   }
-})
+});
 
 // JSファイル削除
 // :path
@@ -132,23 +131,22 @@ jsRouter.patch('/:path', authToken, (req, res) => {
 // 404 ファイルない
 // 409 ディレクトリ
 // 500 ファイル関係ミスった
-jsRouter.delete('/:path', authToken, (req, res) => {
-  const appName = res.locals.appName
-  const { path } = req.params
-  if (!path) return res.sendStatus(400)
+jsRouter.delete("/:path", authToken, (ctx) => {
+  const { appName, path } = ctx.params;
+  if (!appName) return ctx.response.status = 400;
 
   try {
-    initFolder(appName)
-    const fullPath = `${APPS_DIR}/${appName}/js/${path}`
-    if (!fs.existsSync(fullPath)) return res.sendStatus(404)
-    if (fs.statSync(fullPath).isDirectory()) return res.sendStatus(409)
+    initFolder(appName);
+    const fullPath = `${APPS_DIR}/${appName}/js/${path}`;
+    if (!exist(fullPath)) return ctx.response.status = 404;
+    if (Deno.statSync(fullPath).isDirectory) return ctx.response.status = 409;
 
-    fs.unlinkSync(fullPath)
-    res.sendStatus(200)
+    Deno.removeSync(fullPath);
+    ctx.response.status = 200;
   } catch (err) {
-    logApi.error('delete', 'api/js/:path', err)
-    res.send(500)
+    logApi.error(["delete", "api/js/:path", err]);
+    ctx.response.status = 500;
   }
-})
+});
 
-export default jsRouter
+export default jsRouter;

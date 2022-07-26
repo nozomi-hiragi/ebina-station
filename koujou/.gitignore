@@ -106,5 +106,6 @@ dist
 # sqlite
 *.db
 
-# Variable file
-imports.js
+# Token key
+token.key
+refreshtoken.key
