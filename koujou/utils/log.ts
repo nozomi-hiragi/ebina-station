@@ -1,37 +1,34 @@
-import Log4js from "log4js"
+import { log } from "../deps.ts";
 
-Log4js.configure({
-  "appenders": {
-    "Ebina": {
-      "type": "dateFile",
-      "filename": "./logs/ebina.log"
-    },
-    "EbinaAPI": {
-      "type": "dateFile",
-      "filename": "./logs/ebinaAPI.log"
-    }
+await log.setup({
+  handlers: {
+    Ebina: new log.handlers.FileHandler("INFO", {
+      filename: "./logs/ebina.log",
+      formatter: "{levelName} {msg}",
+      mode: "w",
+    }),
+    EbinaAPI: new log.handlers.FileHandler("INFO", {
+      filename: "./logs/ebinaAPI.log",
+      formatter: "{levelName} {msg}",
+      mode: "w",
+    }),
+    console: new log.handlers.ConsoleHandler("INFO"),
   },
-  "categories": {
-    "default": {
-      "appenders": [
-        "Ebina"
-      ],
-      "level": "info"
+  loggers: {
+    default: {
+      level: "INFO",
+      handlers: ["Ebina", "console"],
     },
-    "Koujou": {
-      "appenders": [
-        "Ebina"
-      ],
-      "level": "info"
+    Koujou: {
+      level: "INFO",
+      handlers: ["Ebina", "console"],
     },
-    "API": {
-      "appenders": [
-        "EbinaAPI"
-      ],
-      "level": "info"
-    }
-  }
-})
+    API: {
+      level: "INFO",
+      handlers: ["EbinaAPI", "console"],
+    },
+  },
+});
 
-export const logKoujou = Log4js.getLogger('Koujou')
-export const logApi = Log4js.getLogger('API')
+export const logKoujou = log.getLogger("Koujou");
+export const logApi = log.getLogger("API");

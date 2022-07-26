@@ -1,22 +1,27 @@
-import "dotenv/config"
-import express from "express"
-import cors from "cors"
-import ebinaRouter from "./ebinaAPI"
-import cookieParser from "cookie-parser"
-import { getSettings } from "./data/settings"
-import { logKoujou } from "./utils/log"
+import { config, oak, oakCors } from "./deps.ts";
+import ebinaRouter from "./ebinaAPI/index.ts";
+import { getSettings } from "./data/settings.ts";
+import { logKoujou } from "./utils/log.ts";
+import { JwtPayload } from "./utils/auth.ts";
 
-const settings = getSettings()
+export type States = {
+  token?: string;
+  payload?: JwtPayload;
+};
 
-const port = settings.getPort()
-const app = express()
-app.use(express.json())
-app.use(express.text())
-app.use(cookieParser())
-if (settings.origins) app.use(cors({ origin: settings.origins, credentials: true }))
+config();
 
-app.use('/ebina', ebinaRouter)
+const settings = getSettings();
 
-app.listen(port, () => {
-  logKoujou.info(`EbinaStation Start lestening on ${port}`)
-})
+const port = settings.getPort();
+const app = new oak.Application<States>();
+if (settings.origins) {
+  app.use(oakCors({ origin: settings.origins, credentials: true }));
+}
+
+const router = new oak.Router();
+router.use("/ebina", ebinaRouter.routes());
+app.use(router.routes(), router.allowedMethods());
+
+app.listen({ port });
+logKoujou.info(`EbinaStation Start lestening on ${port}`);
