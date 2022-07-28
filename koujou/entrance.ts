@@ -2,32 +2,34 @@ import * as oak from "https://deno.land/x/oak@v10.6.0/mod.ts";
 
 type Method = "get" | "head" | "post" | "put" | "delete" | "options" | "patch";
 type Type = "static" | "JavaScript";
+type OakAPIFunc = <
+  R extends string,
+  P extends oak.RouteParams<R> = oak.RouteParams<R>,
+  // deno-lint-ignore no-explicit-any
+  S extends oak.State = Record<string, any>,
+>(
+  context: oak.RouterContext<R, P, S>,
+  next: () => Promise<unknown>,
+) => Promise<unknown> | unknown;
 
-if (Deno.args.length) {
-  const apiDirPath = Deno.args[0];
-  const apiJsonPath = `${apiDirPath}/apis.json`;
-  console.log(apiJsonPath);
+const scriptsDir = "scripts";
+
+async function main(appDirPath: string) {
+  const apiJsonPath = `${appDirPath}/apis.json`;
+  try {
+    Deno.statSync(apiJsonPath);
+  } catch (err) {
+    console.error("API JSON Error", err);
+    return;
+  }
   const apisJson = JSON.parse(Deno.readTextFileSync(apiJsonPath));
 
-  const port = apisJson.port || 1234;
-
-  const app = new oak.Application();
   const router = new oak.Router();
-
   for (const apiKey of Object.keys(apisJson.apis)) {
     const api = apisJson.apis[apiKey];
     const apiPath = `/${apiKey}`;
 
-    let func: <
-      R extends string,
-      P extends oak.RouteParams<R> = oak.RouteParams<R>,
-      // deno-lint-ignore no-explicit-any
-      S extends oak.State = Record<string, any>,
-    >(
-      context: oak.RouterContext<R, P, S>,
-      next: () => Promise<unknown>,
-    ) => Promise<unknown> | unknown;
-
+    let func: OakAPIFunc;
     switch (api.type as Type) {
       case "static":
         func = (ctx) => {
@@ -36,15 +38,13 @@ if (Deno.args.length) {
         break;
       case "JavaScript": {
         const args = api.value.split(">");
-        const jspaht = `${apiDirPath}/js/${args[0]}`;
+        const jspaht = `${appDirPath}/${scriptsDir}/${args[0]}`;
         const module = await import(jspaht);
         func = module[args[1]];
         break;
       }
       default:
-        func = (ctx) => {
-          ctx.response.body = "ha";
-        };
+        func = (ctx) => ctx.response.status = 501;
     }
 
     switch (api.method as Method) {
@@ -71,7 +71,15 @@ if (Deno.args.length) {
         break;
     }
   }
+  const port = apisJson.port || 1234;
 
-  app.use(router.routes());
+  const app = new oak.Application();
+  app.use(router.routes(), router.allowedMethods());
   app.listen({ port });
+}
+
+if (Deno.args.length) {
+  main(Deno.args[0]);
+} else {
+  console.log("no args");
 }

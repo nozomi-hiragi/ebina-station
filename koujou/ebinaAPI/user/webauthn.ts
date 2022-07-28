@@ -1,5 +1,4 @@
-import { base64, oak } from "../../deps.ts";
-import { Fido2Lib } from "https://deno.land/x/fido2@3.2.4/dist/main.js";
+import { base64, Fido2Lib, oak } from "../../deps.ts";
 import {
   FMT,
   getMember,
