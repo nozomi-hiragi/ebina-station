@@ -1,7 +1,7 @@
 version: '3.7'
 
 services:
-  EbinaStationKoujou:
+  Koujou:
     build: ./koujou
     image: ebina-station-api
     container_name: EbinaStationKoujou
@@ -9,7 +9,7 @@ services:
       - 3456:3456
       - 1234:1234
     volumes:
-      - ./project:/usr/src/app/project
+      - ./project:/app/project
     env_file:
       - ./koujou/.env
 
@@ -25,7 +25,7 @@ services:
       - ./mongodb/mongo_db:/data/db
       - ./mongodb/initdb.d:/docker-entrypoint-initdb.d
 
-  EbinaStationJinji:
+  Jinji:
     image: nginx:latest
     container_name: EbinaStationJinji
     restart: always
