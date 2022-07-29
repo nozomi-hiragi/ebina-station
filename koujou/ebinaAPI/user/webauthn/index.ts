@@ -1,14 +1,14 @@
-import { oak } from "../../deps.ts";
-import { authToken, JwtPayload } from "../../utils/auth.ts";
-import { HttpExeption } from "../../utils/utils.ts";
+import { oak } from "../../../deps.ts";
+import { getMember } from "../../../project_data/members/members.ts";
+import { authToken, generateTokens, JwtPayload } from "../../../utils/auth.ts";
+import { HttpExeption } from "../../../utils/utils.ts";
 import {
   createLoginOptions,
   createRegistOptions,
-  deleteAuthenticators,
-  getAuthenticatorNames,
   verifyLoginChallenge,
   verifyRegistChallenge,
-} from "../../utils/webauthn/funcs.ts";
+} from "../../../utils/webauthn/funcs.ts";
+import deviceRouter from "./device.ts";
 
 const challenges: { [key: string]: string | undefined } = {};
 
@@ -90,14 +90,14 @@ webauthnRouter.get("/verify", authToken, async (ctx) => {
   const payload: JwtPayload = ctx.state.payload!;
   const memberId = payload.id;
 
-  const queryDeviceNames = ctx.request.url.searchParams
-    .get("deviceNames")?.split(",") ?? [];
+  const queryDeviceNames = ctx.request.url.searchParams.get("deviceNames") ??
+    "";
 
   try {
     const options = await createLoginOptions(
       origin,
       memberId,
-      queryDeviceNames,
+      queryDeviceNames === "" ? [] : queryDeviceNames.split(","),
     );
     challenges[memberId] = options.challenge;
     ctx.response.body = options;
@@ -132,7 +132,7 @@ webauthnRouter.post("/verify", authToken, async (ctx) => {
 
   const challengeItem = challenges[memberId];
   if (!challengeItem) return ctx.response.status = 409;
-  delete challenges[payload.id];
+  delete challenges[memberId];
 
   try {
     await verifyLoginChallenge(origin, memberId, challengeItem, body);
@@ -147,26 +147,30 @@ webauthnRouter.post("/verify", authToken, async (ctx) => {
   }
 });
 
-// デバイスら情報取得
+// ログイン用オプション取得
 // origin:
-// ?names
-// 200 空でも返す
+// ?names[]
+// 200 オプション
 // 400 情報足りない
+// 404 メンバーがない
 // 500 WebAuthnの設定おかしい
-webauthnRouter.get("/device", authToken, (ctx) => {
+webauthnRouter.get("/login/:id", async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
-  const payload: JwtPayload = ctx.state.payload!;
-  const memberId = payload.id;
+  const { id } = ctx.params;
+  if (!id) return ctx.response.status = 400;
 
-  const deviceNames: string[] =
-    ctx.request.url.searchParams.get("deviceNames")?.split(",") ?? [];
+  const queryDeviceNames = ctx.request.url.searchParams.get("deviceNames") ??
+    "";
 
   try {
-    const authenticatorNames = getAuthenticatorNames(origin, memberId);
-    ctx.response.body = deviceNames.length === 0
-      ? authenticatorNames
-      : authenticatorNames.filter((name) => deviceNames.includes(name));
+    const options = await createLoginOptions(
+      origin,
+      id,
+      queryDeviceNames === "" ? [] : queryDeviceNames.split(","),
+    );
+    challenges[id] = options.challenge;
+    ctx.response.body = options;
   } catch (err) {
     if (err instanceof HttpExeption) {
       ctx.response.status = err.status;
@@ -177,33 +181,34 @@ webauthnRouter.get("/device", authToken, (ctx) => {
   }
 });
 
-// デバイスら削除
+// ログイン
 // origin:
-// :deviceName
-// ?names
+// { ...credential }
 // 200 OK
-// 404 みつからない
+// 400 情報おかしい
+// 401 チャレンジ失敗
+// 404 ものがない
+// 405 パスワードが設定されてない
+// 409 チャレンジ控えがない
+// 410 チャレンジ古い
 // 500 WebAuthnの設定おかしい
-webauthnRouter.delete("/device", authToken, (ctx) => {
+webauthnRouter.post("/login/:id", async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
-  const payload: JwtPayload = ctx.state.payload!;
-  const memberId = payload.id;
+  const { id } = ctx.params;
+  if (!id) return ctx.response.status = 400;
 
-  const deviceNames = ctx.request.url.searchParams
-    .get("deviceNames")?.split(",") ?? [];
+  const body = await ctx.request.body({ type: "json" }).value;
+
+  const challengeItem = challenges[id];
+  if (!challengeItem) return ctx.response.status = 409;
+  delete challenges[id];
 
   try {
-    const failedNames = deleteAuthenticators(origin, memberId, deviceNames);
-    if (failedNames.length === 0) {
-      ctx.response.status = 200;
-    } else if (failedNames.length === deviceNames.length) {
-      ctx.response.status = 404;
-      ctx.response.body = { message: "Can't find all devices" };
-    } else {
-      ctx.response.status = 206;
-      ctx.response.body = { failedNames: failedNames };
-    }
+    await verifyLoginChallenge(origin, id, challengeItem, body);
+    const member = getMember(id);
+    const tokens = await generateTokens(id);
+    ctx.response.body = { user: { ...member, auth: undefined }, tokens };
   } catch (err) {
     if (err instanceof HttpExeption) {
       ctx.response.status = err.status;
@@ -214,69 +219,6 @@ webauthnRouter.delete("/device", authToken, (ctx) => {
   }
 });
 
-// デバイス情報取得
-// origin:
-// :deviceName
-// 200 空でも返す
-// 400 情報足りない
-// 404 みつからない
-// 500 WebAuthnの設定おかしい
-webauthnRouter.get("/device/:deviceName", authToken, (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  const payload = ctx.state.payload!;
-  const memberId = payload.id;
-
-  const { deviceName } = ctx.params;
-  if (!deviceName) return ctx.response.status = 400;
-
-  try {
-    const authenticatorNames = getAuthenticatorNames(origin, memberId);
-    if (authenticatorNames.includes(deviceName)) {
-      ctx.response.body = deviceName;
-    } else {
-      ctx.response.status = 404;
-    }
-  } catch (err) {
-    if (err instanceof HttpExeption) {
-      ctx.response.status = err.status;
-      ctx.response.body = err.message;
-    } else {
-      throw err;
-    }
-  }
-});
-
-// デバイス削除
-// origin:
-// :deviceName
-// 200 OK
-// 404 みつからない
-// 500 WebAuthnの設定おかしい
-webauthnRouter.delete("/device/:deviceName", authToken, (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  const payload = ctx.state.payload!;
-  const memberId = payload.id;
-
-  const { deviceName } = ctx.params;
-  if (!deviceName) return ctx.response.status = 400;
-
-  try {
-    const failedNames = deleteAuthenticators(origin, memberId, [deviceName]);
-    if (failedNames.length) {
-      ctx.response.status = 500;
-    } else {
-      ctx.response.status = 200;
-    }
-  } catch (err) {
-    if (err instanceof HttpExeption) {
-      ctx.response.status = err.status;
-      ctx.response.body = err.message;
-    } else {
-      throw err;
-    }
-  }
-});
+webauthnRouter.use("/device", deviceRouter.routes());
 
 export default webauthnRouter;

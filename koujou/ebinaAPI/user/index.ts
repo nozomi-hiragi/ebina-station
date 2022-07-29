@@ -13,7 +13,7 @@ import {
   removeMember,
 } from "../../project_data/members/members.ts";
 import { Member } from "../../project_data/members/member.ts";
-import webauthnRouter from "./webauthn.ts";
+import webauthnRouter from "./webauthn/index.ts";
 
 const userRouter = new oak.Router();
 
@@ -123,6 +123,11 @@ userRouter.post("/login", async (ctx) => {
   if (user === undefined) {
     logApi.info("post", "user/login", "not exist user", id);
     return ctx.response.status = 404;
+  }
+
+  if (user.auth.webAuthn) {
+    logApi.info("post", "user/login", "you have webauthn", id);
+    return ctx.response.status = 400;
   }
 
   const passwordAuth = user.auth.password;

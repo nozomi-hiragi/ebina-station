@@ -55,7 +55,11 @@ const getF2L = (hostname: string) => {
   return f2l;
 };
 
-export const createRegistOptions = async (origin: string, memberId: string) => {
+export const createRegistOptions = async (
+  origin: string,
+  memberId: string,
+  fource = false,
+) => {
   const originURL = new URL(origin);
   const member = getMember(memberId);
   if (!member) throw new HttpExeption(404, "wrong member id");
@@ -71,7 +75,7 @@ export const createRegistOptions = async (origin: string, memberId: string) => {
 
   const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
   const webAuthnItem: WebAuthnItem = userWebAuthn[rpID] ??
-    { authenticators: {} };
+    { authenticators: {}, enableDevices: [] };
   const f2l = getF2L(originURL.hostname);
   const options = await f2l
     .attestationOptions() as PublicKeyCredentialCreationOptions;
@@ -83,13 +87,13 @@ export const createRegistOptions = async (origin: string, memberId: string) => {
       displayName: member.name,
     },
     challenge: base64.encode(options.challenge),
-    excludeCredentials: Object.values(webAuthnItem.authenticators).filter((
-      authenticator,
-    ) => authenticator !== undefined).map((authenticator) => ({
-      type: authenticator!.credentialType,
-      id: authenticator!.credentialID,
-      transports: authenticator!.transports,
-    })),
+    excludeCredentials: Object.values(webAuthnItem.authenticators)
+      .filter((authenticator) => authenticator !== undefined && !fource)
+      .map((authenticator) => ({
+        type: authenticator!.credentialType,
+        id: authenticator!.credentialID,
+        transports: authenticator!.transports,
+      })),
   };
 
   return optionsJson;
@@ -122,7 +126,7 @@ export const verifyRegistChallenge = async (
 
   const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
   const webAuthnItem: WebAuthnItem = userWebAuthn[rpID] ??
-    { authenticators: {} };
+    { authenticators: {}, enableDevices: [] };
   if (webAuthnItem.authenticators[deviceName]) {
     throw new HttpExeption(400, "Already used this device name");
   }
@@ -151,6 +155,7 @@ export const verifyRegistChallenge = async (
     transports: result.authnrData!.get("transports"),
     credentialType: "public-key",
   };
+  webAuthnItem.enableDevices.push(deviceName);
   userWebAuthn[rpID] = webAuthnItem;
   member.auth.webAuthn = userWebAuthn;
   setMember(memberId, member);
@@ -180,12 +185,16 @@ export const createLoginOptions = async (
   }
 
   const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem = userWebAuthn[rpID] ??
-    { authenticators: {} };
+  const webAuthnItem = userWebAuthn[rpID];
+  if (!webAuthnItem) {
+    throw new HttpExeption(406, "no webauthn authenticator");
+  }
 
-  const targetDeviceNames = deviceNames.length
-    ? deviceNames
-    : Object.keys(webAuthnItem.authenticators);
+  const targetDeviceNames = deviceNames.length ? deviceNames : (
+    webAuthnItem.enableDevices.length
+      ? webAuthnItem.enableDevices
+      : [Object.keys(webAuthnItem.authenticators)[0]]
+  );
 
   const authenticators = targetDeviceNames
     .map((deviceName) => webAuthnItem.authenticators[deviceName])
@@ -342,4 +351,122 @@ export const deleteAuthenticators = (
   setMember(memberId, member);
 
   return failedNames;
+};
+
+export const getEnableAuthenticators = (origin: string, memberId: string) => {
+  const originURL = new URL(origin);
+  const member = getMember(memberId);
+  if (!member) throw new HttpExeption(404, "wrong member id");
+
+  const settings = getSettings();
+  const webAuthnSetting = settings.WebAuthn;
+  if (!webAuthnSetting) {
+    throw new HttpExeption(500, "No WebAuthn setting");
+  }
+
+  const rpID = settings.isRPIDStatic()
+    ? webAuthnSetting.rpID
+    : originURL.hostname;
+  if (!rpID) {
+    throw new HttpExeption(500, "No rpID value");
+  }
+
+  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
+  const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID];
+  const authenticatorNames = Object.keys(webAuthnItem?.authenticators ?? {});
+  if (!webAuthnItem || authenticatorNames.length === 0) {
+    throw new HttpExeption(404, "Disable WebAuthn on this account");
+  }
+
+  return webAuthnItem.enableDevices;
+};
+
+export const enableAuthenticator = (
+  origin: string,
+  memberId: string,
+  deviceName: string,
+) => {
+  const originURL = new URL(origin);
+  const member = getMember(memberId);
+  if (!member) throw new HttpExeption(404, "wrong member id");
+
+  const settings = getSettings();
+  const webAuthnSetting = settings.WebAuthn;
+  if (!webAuthnSetting) {
+    throw new HttpExeption(500, "No WebAuthn setting");
+  }
+
+  const rpID = settings.isRPIDStatic()
+    ? webAuthnSetting.rpID
+    : originURL.hostname;
+  if (!rpID) {
+    throw new HttpExeption(500, "No rpID value");
+  }
+
+  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
+  const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID];
+  const authenticatorNames = Object.keys(webAuthnItem?.authenticators ?? {});
+  if (!webAuthnItem || authenticatorNames.length === 0) {
+    throw new HttpExeption(404, "Disable WebAuthn on this account");
+  }
+
+  if (!Object.keys(webAuthnItem.authenticators).includes(deviceName)) {
+    throw new HttpExeption(404, "not found this device");
+  }
+  if (webAuthnItem.enableDevices.includes(deviceName)) {
+    return false;
+  } else {
+    webAuthnItem.enableDevices.push(deviceName);
+    userWebAuthn[rpID] = webAuthnItem;
+    member.auth.webAuthn = userWebAuthn;
+    setMember(memberId, member);
+    return true;
+  }
+};
+
+export const disableAuthenticator = (
+  origin: string,
+  memberId: string,
+  deviceName: string,
+) => {
+  const originURL = new URL(origin);
+  const member = getMember(memberId);
+  if (!member) throw new HttpExeption(404, "wrong member id");
+
+  const settings = getSettings();
+  const webAuthnSetting = settings.WebAuthn;
+  if (!webAuthnSetting) {
+    throw new HttpExeption(500, "No WebAuthn setting");
+  }
+
+  const rpID = settings.isRPIDStatic()
+    ? webAuthnSetting.rpID
+    : originURL.hostname;
+  if (!rpID) {
+    throw new HttpExeption(500, "No rpID value");
+  }
+
+  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
+  const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID];
+  const authenticatorNames = Object.keys(webAuthnItem?.authenticators ?? {});
+  if (!webAuthnItem || authenticatorNames.length === 0) {
+    throw new HttpExeption(404, "Disable WebAuthn on this account");
+  }
+
+  if (!Object.keys(webAuthnItem.authenticators).includes(deviceName)) {
+    throw new HttpExeption(404, "not found this device");
+  }
+  const include = webAuthnItem.enableDevices.includes(deviceName);
+
+  if (!include) {
+    return false;
+  } else {
+    webAuthnItem.enableDevices = webAuthnItem.enableDevices.filter((enable) =>
+      enable !== deviceName
+    );
+    userWebAuthn[rpID] = webAuthnItem;
+    member.auth.webAuthn = userWebAuthn;
+    setMember(memberId, member);
+    return true;
+  }
 };
