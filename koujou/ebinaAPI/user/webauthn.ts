@@ -1,39 +1,16 @@
-import { base64, Fido2Lib, oak } from "../../deps.ts";
-import {
-  FMT,
-  getMember,
-  setMember,
-  WebAuthn,
-  WebAuthnAuthenticator,
-  WebAuthnItem,
-} from "../../data/members.ts";
-import { getSettings, WebAuthnSetting } from "../../data/settings.ts";
+import { oak } from "../../deps.ts";
 import { authToken, JwtPayload } from "../../utils/auth.ts";
+import { HttpExeption } from "../../utils/utils.ts";
 import {
-  AssertionExpectations,
-  PublicKeyCredentialCreationOptions,
-  PublicKeyCredentialCreationOptionsJSON,
-  PublicKeyCredentialRequestOptions,
-  PublicKeyCredentialRequestOptionsJSON,
-} from "../../utils/webauthn.ts";
+  createLoginOptions,
+  createRegistOptions,
+  deleteAuthenticators,
+  getAuthenticatorNames,
+  verifyLoginChallenge,
+  verifyRegistChallenge,
+} from "../../utils/webauthn/funcs.ts";
 
-const challenges: {
-  [key: string]: {
-    challenge: string;
-    createdAt: number;
-  } | undefined;
-} = {};
-
-const isRPIDStatic = (webAuthnSetting: WebAuthnSetting) => {
-  switch (webAuthnSetting.rpIDType) {
-    case "variable":
-      return false;
-
-    default:
-    case "static":
-      return true;
-  }
-};
+const challenges: { [key: string]: string | undefined } = {};
 
 const webauthnRouter = new oak.Router();
 
@@ -46,63 +23,21 @@ const webauthnRouter = new oak.Router();
 webauthnRouter.get("/regist", authToken, async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
-  const originURL = new URL(origin);
-
   const payload: JwtPayload = ctx.state.payload!;
-  const member = getMember(payload.id);
-  if (!member) return ctx.response.status = 404;
+  const memberId = payload.id;
 
-  const settings = getSettings();
-  const webAuthnSetting = settings.WebAuthn;
-  if (!webAuthnSetting) {
-    ctx.response.status = 500;
-    return ctx.response.body = { message: "No WebAuthn setting" };
+  try {
+    const options = await createRegistOptions(origin, memberId);
+    challenges[memberId] = options.challenge;
+    ctx.response.body = options;
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
   }
-
-  const rpID = isRPIDStatic(webAuthnSetting)
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
-  if (!rpID) {
-    ctx.response.status = 500;
-    return ctx.response.body = { message: "No rpID value" };
-  }
-
-  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem = userWebAuthn[rpID] ??
-    { authenticators: {} };
-  const f2l = new Fido2Lib({
-    rpId: rpID,
-    rpName: webAuthnSetting.rpName,
-    challengeSize: 128,
-    attestation: webAuthnSetting.attestationType,
-    cryptoParams: [-7, -36, -37, -38, -39, -257, -258, -259],
-    authenticatorRequireResidentKey: false,
-    authenticatorUserVerification: "preferred",
-  });
-  const options = await f2l
-    .attestationOptions() as PublicKeyCredentialCreationOptions;
-  const optionsJson: PublicKeyCredentialCreationOptionsJSON = {
-    ...options,
-    user: {
-      id: payload.id,
-      name: member.name,
-      displayName: member.name,
-    },
-    challenge: base64.encode(options.challenge),
-    excludeCredentials: Object.values(webAuthnItem.authenticators).filter((
-      authenticator,
-    ) => authenticator !== undefined).map((authenticator) => ({
-      type: authenticator!.credentialType,
-      id: authenticator!.credentialID,
-      transports: authenticator!.transports,
-    })),
-  };
-
-  challenges[payload.id] = {
-    challenge: optionsJson.challenge,
-    createdAt: Date.now(),
-  };
-  ctx.response.body = optionsJson;
 });
 
 // 登録
@@ -118,87 +53,28 @@ webauthnRouter.get("/regist", authToken, async (ctx) => {
 webauthnRouter.post("/regist", authToken, async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
-  const originURL = new URL(origin);
+  const payload: JwtPayload = ctx.state.payload!;
+  const memberId = payload.id;
 
   const body = await ctx.request.body({ type: "json" }).value;
   const { deviceName } = body;
   if (!deviceName) return ctx.response.status = 400;
 
-  const payload: JwtPayload = ctx.state.payload!;
-  const member = getMember(payload.id);
-  if (!member) return ctx.response.status = 404;
+  const challenge = challenges[memberId];
+  if (!challenge) return ctx.response.status = 409;
+  delete challenges[memberId];
 
-  const settings = getSettings();
-  const webAuthnSetting = settings.WebAuthn;
-  if (!webAuthnSetting) {
-    ctx.response.status = 500;
-    return ctx.response.body = { message: "No WebAuthn setting" };
+  try {
+    await verifyRegistChallenge(origin, memberId, deviceName, challenge, body);
+    ctx.response.status = 200;
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
   }
-
-  const rpID = isRPIDStatic(webAuthnSetting)
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
-  if (!rpID) {
-    ctx.response.status = 500;
-    return ctx.response.body = { message: "No rpID value" };
-  }
-
-  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem = userWebAuthn[rpID] ??
-    { authenticators: {} };
-  if (webAuthnItem.authenticators[deviceName]) {
-    ctx.response.status = 400;
-    return ctx.response.body = { message: "Already used this device name" };
-  }
-
-  const challengeItem = challenges[payload.id];
-  if (!challengeItem) return ctx.response.status = 409;
-  delete challenges[payload.id];
-  if ((Date.now() - challengeItem.createdAt) > (1000 * 60)) {
-    return ctx.response.status = 410;
-  }
-
-  const f2l = new Fido2Lib({
-    rpId: rpID,
-    rpName: webAuthnSetting.rpName,
-    challengeSize: 128,
-    attestation: webAuthnSetting.attestationType,
-    cryptoParams: [-7, -36, -37, -38, -39, -257, -258, -259],
-    authenticatorRequireResidentKey: false,
-    authenticatorUserVerification: "preferred",
-  });
-
-  body.response.attestationObject = base64.decode(
-    body.response.attestationObject,
-  ).buffer;
-  body.rawId = base64.decode(body.rawId).buffer;
-
-  const attestationExpectations = {
-    challenge: challengeItem.challenge,
-    origin,
-    factor: "either",
-  };
-  const verification = await f2l.attestationResult(
-    body,
-    attestationExpectations,
-  );
-  ctx.response.body = verification;
-
-  webAuthnItem.authenticators[deviceName] = {
-    fmt: verification.authnrData!.get("fmt") as FMT,
-    alg: verification.authnrData!.get("alg"),
-    counter: verification.authnrData!.get("counter"),
-    aaguid: base64.encode(verification.authnrData!.get("aaguid")),
-    credentialID: base64.encode(verification.authnrData!.get("credId")),
-    credentialPublicKey: verification.authnrData!.get("credentialPublicKeyPem"),
-    transports: verification.authnrData!.get("transports"),
-    credentialType: "public-key",
-  };
-  userWebAuthn[rpID] = webAuthnItem;
-  member.auth.webAuthn = userWebAuthn;
-  setMember(payload.id, member);
-
-  ctx.response.status = 200;
 });
 
 // 確認用オプション取得
@@ -211,69 +87,28 @@ webauthnRouter.post("/regist", authToken, async (ctx) => {
 webauthnRouter.get("/verify", authToken, async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
-  const originURL = new URL(origin);
-
   const payload: JwtPayload = ctx.state.payload!;
-  const member = getMember(payload.id);
-  if (!member) return ctx.response.status = 404;
-
-  const settings = getSettings();
-  const webAuthnSetting = settings.WebAuthn;
-  if (!webAuthnSetting) {
-    ctx.response.status = 500;
-    return ctx.response.body = { message: "No WebAuthn setting" };
-  }
-
-  const rpID = isRPIDStatic(webAuthnSetting)
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
-  if (!rpID) {
-    ctx.response.status = 500;
-    return ctx.response.body = { message: "No rpID value" };
-  }
-
-  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem = userWebAuthn[rpID] ??
-    { authenticators: {} };
+  const memberId = payload.id;
 
   const queryDeviceNames = ctx.request.url.searchParams
-    .get("names")?.split(",") ?? [];
-  const deviceNames = queryDeviceNames.length
-    ? queryDeviceNames
-    : Object.keys(webAuthnItem.authenticators);
+    .get("deviceNames")?.split(",") ?? [];
 
-  const authenticators = deviceNames
-    .map((deviceNames) => webAuthnItem.authenticators[deviceNames])
-    .filter((a) => a) as WebAuthnAuthenticator[];
-
-  const f2l = new Fido2Lib({
-    rpId: rpID,
-    rpName: webAuthnSetting.rpName,
-    challengeSize: 128,
-    attestation: webAuthnSetting.attestationType,
-    cryptoParams: [-7, -36, -37, -38, -39, -257, -258, -259],
-    authenticatorRequireResidentKey: false,
-    authenticatorUserVerification: "preferred",
-  });
-  const option = await f2l
-    .assertionOptions() as PublicKeyCredentialRequestOptions;
-  const optionsJson: PublicKeyCredentialRequestOptionsJSON = {
-    challenge: base64.encode(option.challenge),
-    extensions: option.extensions,
-    rpId: option.rpId,
-    timeout: option.timeout,
-    userVerification: option.userVerification,
-    allowCredentials: authenticators.map((authenticator) => ({
-      id: authenticator.credentialID,
-      type: authenticator.credentialType,
-      transports: authenticator.transports,
-    })),
-  };
-  challenges[payload.id] = {
-    challenge: optionsJson.challenge,
-    createdAt: Date.now(),
-  };
-  ctx.response.body = optionsJson;
+  try {
+    const options = await createLoginOptions(
+      origin,
+      memberId,
+      queryDeviceNames,
+    );
+    challenges[memberId] = options.challenge;
+    ctx.response.body = options;
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
 });
 
 // 認証
@@ -290,86 +125,26 @@ webauthnRouter.get("/verify", authToken, async (ctx) => {
 webauthnRouter.post("/verify", authToken, async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
-  const originURL = new URL(origin);
+  const payload: JwtPayload = ctx.state.payload!;
+  const memberId = payload.id;
+
   const body = await ctx.request.body({ type: "json" }).value;
 
-  const payload: JwtPayload = ctx.state.payload!;
-  const member = getMember(payload.id);
-  if (!member) return ctx.response.status = 404;
-
-  const settings = getSettings();
-  const webAuthnSetting = settings.WebAuthn;
-  if (!webAuthnSetting) {
-    ctx.response.status = 500;
-    return ctx.response.body = { message: "No WebAuthn setting" };
-  }
-
-  const rpID = isRPIDStatic(webAuthnSetting)
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
-  if (!rpID) {
-    ctx.response.status = 500;
-    return ctx.response.body = { message: "No rpID value" };
-  }
-
-  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID];
-  if (!webAuthnItem) return ctx.response.status = 400;
-
-  const challengeItem = challenges[payload.id];
+  const challengeItem = challenges[memberId];
   if (!challengeItem) return ctx.response.status = 409;
   delete challenges[payload.id];
-  if ((Date.now() - challengeItem.createdAt) > (1000 * 60)) {
-    return ctx.response.status = 410;
+
+  try {
+    await verifyLoginChallenge(origin, memberId, challengeItem, body);
+    ctx.response.status = 200;
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
   }
-
-  const deviceName = Object.keys(webAuthnItem.authenticators).find(
-    (deviceName) => {
-      const authenticator = webAuthnItem.authenticators[deviceName];
-      if (!authenticator) return false;
-      return authenticator.credentialID === body.id;
-    },
-  );
-  if (!deviceName) {
-    ctx.response.status = 404;
-    return ctx.response.body = {
-      message: "Can't find device from this credential id",
-    };
-  }
-
-  body.rawId = base64.decode(body.rawId).buffer;
-  body.response.userHandle = body.rawId;
-  const f2l = new Fido2Lib({
-    rpId: rpID,
-    rpName: webAuthnSetting.rpName,
-    challengeSize: 128,
-    attestation: webAuthnSetting.attestationType,
-    cryptoParams: [-7, -36, -37, -38, -39, -257, -258, -259],
-    authenticatorRequireResidentKey: false,
-    authenticatorUserVerification: "preferred",
-  });
-  const authenticator = webAuthnItem.authenticators[deviceName]!;
-  const assertionExpectations: AssertionExpectations = {
-    challenge: challengeItem.challenge,
-    origin,
-    factor: "either",
-    publicKey: authenticator.credentialPublicKey,
-    prevCounter: authenticator.counter,
-    userHandle: authenticator.credentialID,
-  };
-  const verification = await f2l.assertionResult(body, assertionExpectations);
-
-  if (!verification) {
-    return ctx.response.status = 401;
-  }
-
-  webAuthnItem.authenticators[deviceName]!.counter = verification.authnrData
-    ?.get("counter");
-  userWebAuthn[rpID] = webAuthnItem;
-  member.auth.webAuthn = userWebAuthn;
-  setMember(payload.id, member);
-
-  ctx.response.status = 200;
 });
 
 // デバイスら情報取得
@@ -381,33 +156,25 @@ webauthnRouter.post("/verify", authToken, async (ctx) => {
 webauthnRouter.get("/device", authToken, (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
-  const originURL = new URL(origin);
+  const payload: JwtPayload = ctx.state.payload!;
+  const memberId = payload.id;
 
   const deviceNames: string[] =
-    ctx.request.url.searchParams.get("names")?.split(",") ?? [];
+    ctx.request.url.searchParams.get("deviceNames")?.split(",") ?? [];
 
-  const payload: JwtPayload = ctx.state.payload!;
-  const member = getMember(payload.id);
-  if (!member) return ctx.response.status = 404;
-
-  const settings = getSettings();
-  const webAuthnSetting = settings.WebAuthn;
-  if (!webAuthnSetting) return ctx.response.status = 500;
-
-  const rpID = isRPIDStatic(webAuthnSetting)
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
-  if (!rpID) return ctx.response.status = 500;
-
-  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID];
-  const authenticatorNames = webAuthnItem
-    ? Object.keys(webAuthnItem.authenticators)
-    : [];
-
-  ctx.response.body = deviceNames.length === 0
-    ? authenticatorNames
-    : authenticatorNames.filter((name) => deviceNames.includes(name));
+  try {
+    const authenticatorNames = getAuthenticatorNames(origin, memberId);
+    ctx.response.body = deviceNames.length === 0
+      ? authenticatorNames
+      : authenticatorNames.filter((name) => deviceNames.includes(name));
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
 });
 
 // デバイスら削除
@@ -420,55 +187,30 @@ webauthnRouter.get("/device", authToken, (ctx) => {
 webauthnRouter.delete("/device", authToken, (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
-  const originURL = new URL(origin);
+  const payload: JwtPayload = ctx.state.payload!;
+  const memberId = payload.id;
 
   const deviceNames = ctx.request.url.searchParams
-    .get("names")?.split(",") ?? [];
+    .get("deviceNames")?.split(",") ?? [];
 
-  const payload: JwtPayload = ctx.state.payload!;
-  const user = getMember(payload.id);
-  if (!user) return ctx.response.status = 404;
-
-  const settings = getSettings();
-  const webAuthnSetting = settings.WebAuthn;
-  if (!webAuthnSetting) return ctx.response.status = 500;
-
-  const rpID = isRPIDStatic(webAuthnSetting)
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
-  if (!rpID) return ctx.response.status = 500;
-
-  const userWebAuthn: WebAuthn = user.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID];
-  const authenticatorNames = Object.keys(webAuthnItem?.authenticators ?? {});
-  if (!webAuthnItem || authenticatorNames.length === 0) {
-    ctx.response.status = 404;
-    return ctx.response.body = { message: "Disable WebAuthn on this account" };
-  }
-
-  const failedNames: string[] = [];
-  authenticatorNames.forEach((name) => {
-    const isTarget = deviceNames ? deviceNames.includes(name) : true;
-    if (!isTarget) return;
-    if (webAuthnItem.authenticators[name]) {
-      delete webAuthnItem.authenticators[name];
+  try {
+    const failedNames = deleteAuthenticators(origin, memberId, deviceNames);
+    if (failedNames.length === 0) {
+      ctx.response.status = 200;
+    } else if (failedNames.length === deviceNames.length) {
+      ctx.response.status = 404;
+      ctx.response.body = { message: "Can't find all devices" };
     } else {
-      failedNames.push(name);
+      ctx.response.status = 206;
+      ctx.response.body = { failedNames: failedNames };
     }
-  });
-
-  userWebAuthn[rpID] = webAuthnItem;
-  user.auth.webAuthn = userWebAuthn;
-  setMember(payload.id, user);
-
-  if (failedNames.length === 0) {
-    ctx.response.status = 200;
-  } else if (failedNames.length === deviceNames.length) {
-    ctx.response.status = 404;
-    ctx.response.body = { message: "Can't find all devices" };
-  } else {
-    ctx.response.status = 206;
-    ctx.response.body = { failedNames: failedNames };
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
   }
 });
 
@@ -482,32 +224,26 @@ webauthnRouter.delete("/device", authToken, (ctx) => {
 webauthnRouter.get("/device/:deviceName", authToken, (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
-  const originURL = new URL(origin);
+  const payload = ctx.state.payload!;
+  const memberId = payload.id;
 
   const { deviceName } = ctx.params;
   if (!deviceName) return ctx.response.status = 400;
 
-  const payload = ctx.state.payload!;
-  const member = getMember(payload.id);
-  if (!member) return ctx.response.status = 404;
-
-  const settings = getSettings();
-  const webAuthnSetting = settings.WebAuthn;
-  if (!webAuthnSetting) return ctx.response.status = 500;
-
-  const rpID = isRPIDStatic(webAuthnSetting)
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
-  if (!rpID) return ctx.response.status = 500;
-
-  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID];
-
-  const device = webAuthnItem?.authenticators[deviceName];
-  if (device) {
-    ctx.response.body = deviceName;
-  } else {
-    ctx.response.status = 404;
+  try {
+    const authenticatorNames = getAuthenticatorNames(origin, memberId);
+    if (authenticatorNames.includes(deviceName)) {
+      ctx.response.body = deviceName;
+    } else {
+      ctx.response.status = 404;
+    }
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
   }
 });
 
@@ -520,45 +256,27 @@ webauthnRouter.get("/device/:deviceName", authToken, (ctx) => {
 webauthnRouter.delete("/device/:deviceName", authToken, (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
-  const originURL = new URL(origin);
+  const payload = ctx.state.payload!;
+  const memberId = payload.id;
 
   const { deviceName } = ctx.params;
   if (!deviceName) return ctx.response.status = 400;
 
-  const payload = ctx.state.payload!;
-  const user = getMember(payload.id);
-  if (!user) return ctx.response.status = 404;
-
-  const settings = getSettings();
-  const webAuthnSetting = settings.WebAuthn;
-  if (!webAuthnSetting) return ctx.response.status = 500;
-
-  const rpID = isRPIDStatic(webAuthnSetting)
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
-  if (!rpID) return ctx.response.status = 500;
-
-  const userWebAuthn: WebAuthn = user.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID];
-  if (!webAuthnItem) {
-    ctx.response.status = 404;
-    return ctx.response.body = {
-      message: "Disable WebAuthn on this account",
-    };
+  try {
+    const failedNames = deleteAuthenticators(origin, memberId, [deviceName]);
+    if (failedNames.length) {
+      ctx.response.status = 500;
+    } else {
+      ctx.response.status = 200;
+    }
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
   }
-
-  const authenticator = webAuthnItem.authenticators[deviceName];
-  if (!authenticator) {
-    ctx.response.status = 404;
-    return ctx.response.body = { message: "Can't find this device" };
-  }
-
-  delete webAuthnItem.authenticators[deviceName];
-  userWebAuthn[rpID] = webAuthnItem;
-  user.auth.webAuthn = userWebAuthn;
-  setMember(payload.id, user);
-
-  ctx.response.status = 200;
 });
 
 export default webauthnRouter;

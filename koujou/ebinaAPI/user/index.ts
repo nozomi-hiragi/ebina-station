@@ -5,9 +5,14 @@ import {
   refreshTokens,
   removeToken,
 } from "../../utils/auth.ts";
-import { addMember, getMember, User } from "../../data/members.ts";
 import { logApi } from "../../utils/log.ts";
-import { getMembers, removeMember } from "../../data/members.ts";
+import {
+  addMember,
+  getMember,
+  getMembers,
+  removeMember,
+} from "../../project_data/members/members.ts";
+import { Member } from "../../project_data/members/member.ts";
 import webauthnRouter from "./webauthn.ts";
 
 const userRouter = new oak.Router();
@@ -15,8 +20,8 @@ const userRouter = new oak.Router();
 // funcs
 const createUser = (name: string, pass: string) => {
   const passwordAuth = { hash: bcrypt.hashSync(pass) };
-  const user: User = { name, auth: { password: passwordAuth } };
-  return user;
+  const member: Member = { name, auth: { password: passwordAuth } };
+  return member;
 };
 
 const registUser = (id: string, name: string, pass: string) => {

@@ -123,3 +123,14 @@ export interface AssertionExpectations {
   rpId?: string;
   flags?: string;
 }
+
+export type WebAuthnAuthenticator = {
+  fmt: string;
+  alg: { algName: string; hashAlg: string };
+  counter: number; // necessary
+  aaguid: string;
+  credentialID: string; // necessary
+  credentialPublicKey: string; // necessary
+  credentialType: PublicKeyCredentialType;
+  transports?: AuthenticatorTransportFuture[];
+};
