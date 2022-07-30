@@ -14,6 +14,11 @@ import {
 } from "../../project_data/members/members.ts";
 import { Member } from "../../project_data/members/member.ts";
 import webauthnRouter from "./webauthn/index.ts";
+import {
+  createLoginOptions,
+  verifyLoginChallenge,
+} from "../../utils/webauthn/funcs.ts";
+import { HttpExeption } from "../../utils/utils.ts";
 
 const userRouter = new oak.Router();
 
@@ -106,39 +111,104 @@ userRouter.get("/:id", authToken, (ctx) => {
   }
 });
 
+// プレログイン
+// origin:
+// :id
+// 200 オプション
+// 400 情報足りない
+// 500 WebAuthnの設定おかしい
+userRouter.get("/login/:id", async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const { id } = ctx.params;
+  if (!id) return ctx.response.status = 400;
+
+  const member = getMember(id);
+  if (!member) {
+    return ctx.response.body = { type: "password" };
+  }
+
+  try {
+    const options = await createLoginOptions(origin, id, []);
+    ctx.response.body = {
+      type: "WebAuthn",
+      options,
+    };
+  } catch (err) {
+    if (!(err instanceof HttpExeption)) throw err;
+
+    switch (err.status) {
+      case 404:
+      case 406:
+        return ctx.response.body = { type: "password" };
+      default:
+        ctx.response.status = err.status;
+        ctx.response.body = err.message;
+    }
+  }
+});
+
 // パスワードでログイン
-// { id, pass }
+// { type, id, pass }
 // 200 ユーザーとトークン
 // 400 情報足らない
 // 401 パスワードが違う
 // 404 メンバーない
 // 405 パスワードが設定されてない
 userRouter.post("/login", async (ctx) => {
-  const { id, pass }: { id: string; pass: string } = await ctx.request.body({
-    type: "json",
-  }).value;
-  if (!id || !pass) return ctx.response.status = 400;
+  const body = await ctx.request.body({ type: "json" }).value;
+  let member: Member | undefined;
+  let id: string;
+  switch (body.type as string) {
+    default:
+      return ctx.response.status = 400;
 
-  const user = getMember(id);
-  if (user === undefined) {
-    logApi.info("post", "user/login", "not exist user", id);
-    return ctx.response.status = 404;
+    case "public-key": {
+      const origin = ctx.request.headers.get("origin");
+      if (!origin) return ctx.response.status = 400;
+      id = body.response.userHandle;
+      try {
+        await verifyLoginChallenge(origin, id, body);
+        member = getMember(id);
+      } catch (err) {
+        if (err instanceof HttpExeption) {
+          ctx.response.status = err.status;
+          ctx.response.body = err.message;
+        } else {
+          throw err;
+        }
+      }
+      break;
+    }
+
+    case "password": {
+      id = body.id;
+      const pass: string = body.pass;
+      if (!id || !pass) return ctx.response.status = 400;
+      member = getMember(id);
+      if (member === undefined) {
+        logApi.info("post", "user/login", "not exist user", id);
+        return ctx.response.status = 404;
+      }
+      if (member.auth.webAuthn) {
+        logApi.info("post", "user/login", "you have webauthn", id);
+        return ctx.response.status = 400;
+      }
+      const passwordAuth = member.auth.password;
+      if (!passwordAuth || !passwordAuth.hash) return ctx.response.status = 405;
+
+      if (bcrypt.compareSync(pass, passwordAuth.hash)) {
+        const tokens = await generateTokens(id);
+        ctx.response.body = { user: { ...member, auth: undefined }, tokens };
+      } else {
+        ctx.response.status = 401;
+      }
+      break;
+    }
   }
 
-  if (user.auth.webAuthn) {
-    logApi.info("post", "user/login", "you have webauthn", id);
-    return ctx.response.status = 400;
-  }
-
-  const passwordAuth = user.auth.password;
-  if (!passwordAuth || !passwordAuth.hash) return ctx.response.status = 405;
-
-  if (bcrypt.compareSync(pass, passwordAuth.hash)) {
-    const tokens = await generateTokens(id);
-    ctx.response.body = { user: { ...user, auth: undefined }, tokens };
-  } else {
-    ctx.response.status = 401;
-  }
+  const tokens = await generateTokens(id);
+  ctx.response.body = { user: { ...member, auth: undefined }, tokens };
 });
 
 // ログアウト サーバー内のトークン消す

@@ -17,6 +17,8 @@ import {
   WebAuthnAuthenticator,
 } from "./types.ts";
 
+const challenges: { [key: string]: string | undefined } = {};
+
 const f2lList: { [id: string]: Fido2Lib | undefined } = {};
 
 const createF2L = (
@@ -95,6 +97,7 @@ export const createRegistOptions = async (
         transports: authenticator!.transports,
       })),
   };
+  challenges[memberId] = optionsJson.challenge;
 
   return optionsJson;
 };
@@ -103,7 +106,6 @@ export const verifyRegistChallenge = async (
   origin: string,
   memberId: string,
   deviceName: string,
-  challenge: string,
   // deno-lint-ignore no-explicit-any
   body: any,
 ) => {
@@ -137,6 +139,12 @@ export const verifyRegistChallenge = async (
     body.response.attestationObject,
   ).buffer;
   body.rawId = base64.decode(body.rawId).buffer;
+
+  const challenge = challenges[memberId];
+  if (!challenge) {
+    throw new HttpExeption(409, "didn't challenge");
+  }
+  delete challenges[memberId];
 
   const attestationExpectations = {
     challenge,
@@ -215,13 +223,13 @@ export const createLoginOptions = async (
       transports: authenticator.transports,
     })),
   };
+  challenges[memberId] = optionsJson.challenge;
   return optionsJson;
 };
 
 export const verifyLoginChallenge = async (
   origin: string,
   memberId: string,
-  challenge: string,
   // deno-lint-ignore no-explicit-any
   body: any,
 ) => {
@@ -262,6 +270,13 @@ export const verifyLoginChallenge = async (
   body.response.userHandle = body.rawId;
   const f2l = getF2L(originURL.hostname);
   const authenticator = webAuthnItem.authenticators[deviceName]!;
+
+  const challenge = challenges[memberId];
+  if (!challenge) {
+    throw new HttpExeption(409, "didn't challenge");
+  }
+  delete challenges[memberId];
+
   const assertionExpectations: AssertionExpectations = {
     challenge,
     origin,
