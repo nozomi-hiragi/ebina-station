@@ -5,3 +5,4 @@ export * as base64 from "https://deno.land/std@0.147.0/encoding/base64url.ts";
 export * as bcrypt from "https://deno.land/x/bcrypt@v0.2.4/mod.ts";
 export * as djwt from "https://deno.land/x/djwt@v2.7/mod.ts";
 export * as log from "https://deno.land/std@0.147.0/log/mod.ts";
+export { Fido2Lib } from "https://deno.land/x/fido2@3.2.4/dist/main.js";

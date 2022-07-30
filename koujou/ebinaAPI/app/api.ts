@@ -1,6 +1,6 @@
 import { oak } from "../../deps.ts";
 import { authToken } from "../../utils/auth.ts";
-import { APIs } from "../../data/apis.ts";
+import { APIs } from "../../project_data/apis.ts";
 import { APPS_DIR } from "./index.ts";
 
 const apiRouter = new oak.Router();

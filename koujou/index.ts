@@ -1,6 +1,6 @@
 import { config, oak, oakCors } from "./deps.ts";
 import ebinaRouter from "./ebinaAPI/index.ts";
-import { getSettings } from "./data/settings.ts";
+import { getSettings } from "./project_data/settings.ts";
 import { logKoujou } from "./utils/log.ts";
 import { JwtPayload } from "./utils/auth.ts";
 

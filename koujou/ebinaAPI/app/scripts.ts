@@ -4,13 +4,14 @@ import { authToken } from "../../utils/auth.ts";
 import { logApi } from "../../utils/log.ts";
 import { exist, mkdirIfNotExist } from "../../utils/utils.ts";
 
+const scriptsDir = "scripts";
 const jsRouter = new oak.Router();
 
 const initFolder = (appName: string) => {
-  mkdirIfNotExist(`${APPS_DIR}/${appName}/js`);
+  mkdirIfNotExist(`${APPS_DIR}/${appName}/${scriptsDir}`);
 };
 
-// JSファイル一覧取得
+// スクリプトファイル一覧取得
 // 200 一覧
 // 500 ファイル読めなかった
 jsRouter.get("/", authToken, (ctx) => {
@@ -19,7 +20,7 @@ jsRouter.get("/", authToken, (ctx) => {
 
   try {
     initFolder(appName);
-    const baseDir = `${APPS_DIR}/${appName}/js`;
+    const baseDir = `${APPS_DIR}/${appName}/${scriptsDir}`;
 
     const files: string[] = [];
     const exploringDir = (dirPath: string) => {
@@ -36,13 +37,13 @@ jsRouter.get("/", authToken, (ctx) => {
 
     ctx.response.body = files;
   } catch (err) {
-    logApi.error(["get", "api/js", err]);
+    logApi.error(["get", "api/scripts", err]);
     console.log(err);
     ctx.response.status = 500;
   }
 });
 
-// JSファイル作成
+// スクリプトファイル作成
 // :path
 // {}: string?
 // 200 OK
@@ -55,19 +56,19 @@ jsRouter.post("/:path", authToken, async (ctx) => {
 
   try {
     initFolder(appName);
-    const fullPath = `${APPS_DIR}/${appName}/js/${path}`;
+    const fullPath = `${APPS_DIR}/${appName}/${scriptsDir}/${path}`;
     if (exist(fullPath)) return ctx.response.status = 409;
     const body = await ctx.request.body({ type: "text" }).value;
     Deno.writeTextFileSync(fullPath, body);
     ctx.response.status = 200;
   } catch (err) {
     console.log(err);
-    logApi.error(["post", "api/js/:paht", err]);
+    logApi.error(["post", "api/scripts/:paht", err]);
     ctx.response.status = 500;
   }
 });
 
-// JSファイル取得
+// スクリプトファイル取得
 // :path
 // 200 text
 // 400 情報おかしい
@@ -80,7 +81,7 @@ jsRouter.get("/:path", authToken, (ctx) => {
 
   try {
     initFolder(appName);
-    const fullPath = `${APPS_DIR}/${appName}/js/${path}`;
+    const fullPath = `${APPS_DIR}/${appName}/${scriptsDir}/${path}`;
     if (!exist(fullPath)) return ctx.response.status = 404;
     if (Deno.statSync(fullPath).isDirectory) {
       const dir = [];
@@ -94,12 +95,12 @@ jsRouter.get("/:path", authToken, (ctx) => {
       ctx.response.body = text;
     }
   } catch (err) {
-    logApi.error(["get", "api/js/:path", err]);
+    logApi.error(["get", "api/scripts/:path", err]);
     ctx.response.status = 500;
   }
 });
 
-// JSファイル更新
+//スクリプトファイル更新
 // :path
 // 200 OK
 // 400 情報おかしい
@@ -112,7 +113,7 @@ jsRouter.patch("/:path", authToken, async (ctx) => {
 
   try {
     initFolder(appName);
-    const fullPath = `${APPS_DIR}/${appName}/js/${path}`;
+    const fullPath = `${APPS_DIR}/${appName}/${scriptsDir}/${path}`;
     if (!exist(fullPath)) return ctx.response.status = 404;
     if (Deno.statSync(fullPath).isDirectory) return ctx.response.status = 409;
 
@@ -120,12 +121,12 @@ jsRouter.patch("/:path", authToken, async (ctx) => {
     Deno.writeTextFileSync(fullPath, body);
     ctx.response.status = 200;
   } catch (err) {
-    logApi.error(["patch", "api/js/:path", err]);
+    logApi.error(["patch", "api/scripts/:path", err]);
     ctx.response.status = 500;
   }
 });
 
-// JSファイル削除
+//スクリプトファイル削除
 // :path
 // 200 OK
 // 404 ファイルない
@@ -137,14 +138,14 @@ jsRouter.delete("/:path", authToken, (ctx) => {
 
   try {
     initFolder(appName);
-    const fullPath = `${APPS_DIR}/${appName}/js/${path}`;
+    const fullPath = `${APPS_DIR}/${appName}/${scriptsDir}/${path}`;
     if (!exist(fullPath)) return ctx.response.status = 404;
     if (Deno.statSync(fullPath).isDirectory) return ctx.response.status = 409;
 
     Deno.removeSync(fullPath);
     ctx.response.status = 200;
   } catch (err) {
-    logApi.error(["delete", "api/js/:path", err]);
+    logApi.error(["delete", "api/scripts/:path", err]);
     ctx.response.status = 500;
   }
 });

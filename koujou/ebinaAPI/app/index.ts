@@ -1,6 +1,6 @@
 import { oak } from "../../deps.ts";
 import apiRouter from "./api.ts";
-import jsRouter from "./js.ts";
+import jsRouter from "./scripts.ts";
 import { mkdirIfNotExist } from "../../utils/utils.ts";
 import { authToken } from "../../utils/auth.ts";
 import { logApi } from "../../utils/log.ts";
@@ -86,6 +86,6 @@ appRouter.delete("/:appName", authToken, (ctx) => {
 });
 
 appRouter.use("/:appName/api", apiRouter.routes());
-appRouter.use("/:appName/js", jsRouter.routes());
+appRouter.use("/:appName/scripts", jsRouter.routes());
 
 export default appRouter;
