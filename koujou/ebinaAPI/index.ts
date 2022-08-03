@@ -1,10 +1,15 @@
-import express from "express"
-import userRouter from "./user"
-import appRouter from './app'
+// import express from "express"
+import { oak } from "../deps.ts";
+import userRouter from "./user/index.ts";
+import appRouter from "./app/index.ts";
+import projectRouter from "./project_settings/project.ts";
+import databaseRouter from "./database/database.ts";
 
-const ebinaRouter = express.Router()
+const ebinaRouter = new oak.Router();
 
-ebinaRouter.use('/user', userRouter)
-ebinaRouter.use('/app', appRouter)
+ebinaRouter.use("/user", userRouter.routes());
+ebinaRouter.use("/app", appRouter.routes());
+ebinaRouter.use("/project", projectRouter.routes());
+ebinaRouter.use("/database", databaseRouter.routes());
 
-export default ebinaRouter
+export default ebinaRouter;

@@ -1,14 +1,15 @@
-FROM node:16.15.1
+FROM denoland/deno:latest
 
-WORKDIR /usr/src/app
+EXPOSE 3456
 
-COPY package*.json ./
+WORKDIR /app
 
-# RUN npm install
-RUN npm ci
+COPY deps.ts .
+RUN deno cache deps.ts
 
 COPY . .
 
-RUN npm run build
+RUN mkdir logs
+RUN deno cache index.ts
 
-CMD [ "node", "dist/index.js" ]
+CMD ["run", "-A", "index.ts"]

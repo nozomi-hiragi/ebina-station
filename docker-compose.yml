@@ -1,7 +1,7 @@
 version: '3.7'
 
 services:
-  EbinaStationKoujou:
+  Koujou:
     build: ./koujou
     image: ebina-station-api
     container_name: EbinaStationKoujou
@@ -9,28 +9,27 @@ services:
       - 3456:3456
       - 1234:1234
     volumes:
-      - ./project:/usr/src/app/project
-    env_file:
-      - ./koujou/.env
+      - ./project:/app/project
+    env_file: ./koujou/.env
 
   EbinaStationDB:
     image: mongo
     container_name: EbinaStationDB
     command: mongod --port 27017
     restart: always
-    env_file: ./mongodb/.env
+    env_file: ./koujou/.env
     ports:
       - 27017:27017
     volumes:
       - ./mongodb/mongo_db:/data/db
       - ./mongodb/initdb.d:/docker-entrypoint-initdb.d
 
-  EbinaStationJinji:
+  Jinji:
     image: nginx:latest
     container_name: EbinaStationJinji
     restart: always
     depends_on:
-      - "EbinaStationKoujou"
+      - "Koujou"
       - "EbinaStationDB"
     ports:
       - 80:80
@@ -45,7 +44,7 @@ services:
   certbot:
     image: certbot/certbot
     depends_on:
-      - "EbinaStationJinji"
+      - "Jinji"
     volumes:
       - ./project/letsencrypt:/etc/letsencrypt
       - ./html:/var/www/html

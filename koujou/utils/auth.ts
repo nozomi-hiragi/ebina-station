@@ -1,95 +1,129 @@
-import express from "express"
-import jwt from "jsonwebtoken"
-import { logKoujou } from './log'
+import { djwt, oak } from "../deps.ts";
+import { logKoujou } from "./log.ts";
+import { States } from "../index.ts";
 
-const userTokens: { [key: string]: { token: string, refreshToken: string } } = {}
+const userTokens: { [key: string]: { token: string; refreshToken: string } } =
+  {};
 
 export type JwtPayload = {
-  id: string,
-  exp?: number,
-  iat?: number,
-}
+  id: string;
+} & djwt.Payload;
 
-export const generateJwtToken = (payload: JwtPayload) => {
-  const token = jwt.sign(
-    payload,
-    process.env.USER_AUTH_SECRET!,
-    { algorithm: "HS512", expiresIn: "2d" }
-  )
-  const refreshToken = jwt.sign(
-    payload,
-    process.env.USER_REFRESH_SECRET!,
-    { algorithm: "HS512", expiresIn: "30d" }
-  )
-  return { token: token, refreshToken: refreshToken }
-}
+const getKey = async (filename: string) => {
+  return await Deno.readTextFile(`./${filename}`)
+    .then(async (keyString) => {
+      const key = await crypto.subtle.importKey(
+        "jwk",
+        JSON.parse(keyString),
+        { name: "HMAC", hash: "SHA-512" },
+        true,
+        ["verify", "sign"],
+      );
+      return key;
+    })
+    .catch(async () => {
+      const key = await window.crypto.subtle.generateKey(
+        { name: "HMAC", hash: "SHA-512" },
+        true,
+        ["verify", "sign"],
+      );
+      const exportedKey = await crypto.subtle.exportKey(
+        "jwk",
+        key,
+      ).then((key) => key);
+      Deno.writeTextFileSync(`./${filename}`, `${JSON.stringify(exportedKey)}`);
+      return key;
+    });
+};
 
-const verifyAuthToken = (token: string) => {
+export const generateJwtToken = async (payload: JwtPayload) => {
+  const tokenKey = await getKey("token.key");
+  const token = await djwt.create(
+    { alg: "HS512", typ: "JWT" },
+    { ...payload, exp: djwt.getNumericDate(60 * 60 * 24 * 2) },
+    tokenKey,
+  );
+
+  const refreshKey = await getKey("refreshtoken.key");
+  const refreshToken = await djwt.create(
+    { alg: "HS512", typ: "JWT" },
+    { ...payload, exp: djwt.getNumericDate(60 * 60 * 24 * 30) },
+    refreshKey,
+  );
+  return { token: token, refreshToken: refreshToken };
+};
+
+const verifyAuthToken = async (token: string) => {
   try {
-    return jwt.verify(token, process.env.USER_AUTH_SECRET!) as JwtPayload
+    const key = await getKey("token.key");
+    return await djwt.verify(token, key) as JwtPayload;
   } catch (err) {
-    logKoujou.info('verifyAuthToken', token, err)
+    logKoujou.info([`verifyAuthToken ${token} ${err}`, token, err]);
   }
-}
+};
 
-const verifyRefreshToken = (token: string) => {
+const verifyRefreshToken = async (token: string) => {
   try {
-    return jwt.verify(token, process.env.USER_REFRESH_SECRET!) as JwtPayload
+    const key = await getKey("refreshtoken.key");
+    return await djwt.verify(token, key) as JwtPayload;
   } catch (err) {
-    logKoujou.info('verifyRefreshToken', token, err)
+    logKoujou.info(["verifyRefreshToken", token, err]);
   }
-}
+};
 
-export const generateTokens = (id: string) => {
-  const tokens = generateJwtToken({ id: id })
-  userTokens[id] = tokens
-  return tokens
-}
+export const generateTokens = async (id: string) => {
+  const tokens = await generateJwtToken({ id: id });
+  userTokens[id] = tokens;
+  return tokens;
+};
 
 export const isAvailableToken = (id: string, token: string) => {
-  const tokens = userTokens[id]
-  return tokens && tokens.token === token
-}
+  const tokens = userTokens[id];
+  return tokens && tokens.token === token;
+};
 
 export const removeToken = (id: string) => {
-  const isLogedin = userTokens[id] !== undefined
+  const isLogedin = userTokens[id] !== undefined;
   if (isLogedin) {
-    delete userTokens[id]
+    delete userTokens[id];
   }
-  return isLogedin
-}
+  return isLogedin;
+};
 
-export const authToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const authHeader = req.headers.authorization
-  if (!authHeader) { return res.sendStatus(401) }
-  const tokenArray = authHeader.split(' ')
-  if (tokenArray[0] !== "Bearer") { return res.sendStatus(400) }
-  const token = tokenArray[1]
-  const payload = verifyAuthToken(token)
+export const authToken = async (
+  ctx: oak.Context<States>,
+  next: () => Promise<unknown>,
+) => {
+  const authHeader = ctx.request.headers.get("authorization");
+  if (!authHeader) return ctx.response.status = 401;
+  const tokenArray = authHeader.split(" ");
+  if (tokenArray[0] !== "Bearer") return ctx.response.status = 400;
+  const token = tokenArray[1];
+  const payload = await verifyAuthToken(token);
   if (payload) {
-    res.locals.token = token
-    res.locals.payload = payload
-    next()
+    ctx.state.token = token;
+    ctx.state.payload = payload;
+    await next();
   } else {
-    res.sendStatus(401)
+    ctx.response.status = 401;
   }
-}
+};
 
-export const refreshTokens = (refreshToken: string, id?: string) => {
-  const payload = verifyRefreshToken(refreshToken) as JwtPayload
-  if (!payload) return undefined
+export const refreshTokens = async (refreshToken: string, id?: string) => {
+  const payload = await verifyRefreshToken(refreshToken) as JwtPayload;
+  if (!payload) return undefined;
 
   if (id && payload.id !== id) {
-    removeToken(payload.id)
-    logKoujou.info('refreshTokens', 'wrong user', id, payload)
-    return undefined
+    removeToken(payload.id);
+    logKoujou.info(["refreshTokens", "wrong user", id, payload]);
+    return undefined;
   }
 
   if (userTokens[payload.id]?.refreshToken === refreshToken) {
-    removeToken(payload.id)
-    return generateTokens(payload.id)
+    removeToken(payload.id);
+    return generateTokens(payload.id);
   } else {
-    logKoujou.info('refreshTokens', 'not logedin this user', payload)
-    return undefined
+    logKoujou.info(["refreshTokens", "not logedin this user", payload]);
+    return undefined;
   }
-}
+};

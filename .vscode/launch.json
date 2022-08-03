@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "request": "launch",
+      "name": "deno",
+      "type": "node",
+      "cwd": "${workspaceFolder}/koujou",
+      "runtimeExecutable": "deno",
+      "runtimeArgs": [
+        "run",
+        "--inspect-brk",
+        "-A",
+        "index.ts"
+      ],
+      "attachSimplePort": 9229
+    }
+  ]
+}

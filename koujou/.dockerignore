@@ -117,3 +117,7 @@ dist
 
 # Project
 project
+
+# Token key
+token.key
+refreshtoken.key
