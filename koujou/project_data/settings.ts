@@ -47,6 +47,20 @@ class Settings {
         return true;
     }
   }
+
+  getMongodbUsername() {
+    const mongodb = this.mongodb;
+    if (!mongodb) return undefined;
+    if (mongodb.username !== "env") return mongodb.username;
+    return Deno.env.get("MONGO_INITDB_ROOT_USERNAME");
+  }
+
+  getMongodbPassword() {
+    const mongodb = this.mongodb;
+    if (!mongodb) return undefined;
+    if (mongodb.password !== "env") return mongodb.password;
+    return Deno.env.get("MONGO_INITDB_ROOT_PASSWORD");
+  }
 }
 
 let settings: Settings = (() => {

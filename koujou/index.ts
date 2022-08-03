@@ -1,4 +1,4 @@
-import { config, oak, oakCors } from "./deps.ts";
+import { oak, oakCors } from "./deps.ts";
 import ebinaRouter from "./ebinaAPI/index.ts";
 import { getSettings } from "./project_data/settings.ts";
 import { logKoujou } from "./utils/log.ts";
@@ -8,8 +8,6 @@ export type States = {
   token?: string;
   payload?: JwtPayload;
 };
-
-config();
 
 const settings = getSettings();
 
