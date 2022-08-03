@@ -58,4 +58,60 @@ databaseRouter.get("/:db/:collection/find", authToken, async (ctx) => {
   }
 });
 
+databaseRouter.get("/users", authToken, async (ctx) => {
+  await initClient();
+  const db = client.database("admin");
+  const collection = db.collection("system.users");
+  try {
+    const docs = (await collection.find().toArray()).map((doc) => {
+      return {
+        user: doc.user,
+        roles: doc.roles,
+      };
+    });
+    ctx.response.body = docs;
+  } catch (err) {
+    ctx.response.status = 500;
+    ctx.response.body = err;
+  }
+});
+
+databaseRouter.post("/user", authToken, async (ctx) => {
+  const body = await ctx.request.body({ type: "json" }).value;
+  const { username, password, roles }: {
+    username?: string;
+    password?: string;
+    roles?: { role: string; db: string }[];
+  } = body;
+  if (!username || !password || !roles) {
+    return ctx.response.status = 401;
+  }
+
+  await initClient();
+  const db = client.database("admin");
+  try {
+    const user = await db.createUser(username, password, { roles });
+    ctx.response.body = user;
+  } catch (err) {
+    ctx.response.status = 500;
+    ctx.response.body = err;
+  }
+});
+
+databaseRouter.delete("/user/:username", authToken, async (ctx) => {
+  const { username }: { username?: string } = ctx.params;
+  if (!username) {
+    return ctx.response.status = 401;
+  }
+  await initClient();
+  const db = client.database("admin");
+  try {
+    const res = await db.dropUser(username);
+    ctx.response.body = res;
+  } catch (err) {
+    ctx.response.status = 500;
+    ctx.response.body = err;
+  }
+});
+
 export default databaseRouter;
