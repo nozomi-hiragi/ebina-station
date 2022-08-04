@@ -1,6 +1,7 @@
 import { oak } from "../../deps.ts";
 import apiRouter from "./api.ts";
 import jsRouter from "./scripts.ts";
+import cronRouter from "./cron.ts";
 import { mkdirIfNotExist } from "../../utils/utils.ts";
 import { authToken } from "../../utils/auth.ts";
 import { logApi } from "../../utils/log.ts";
@@ -87,5 +88,6 @@ appRouter.delete("/:appName", authToken, (ctx) => {
 
 appRouter.use("/:appName/api", apiRouter.routes());
 appRouter.use("/:appName/scripts", jsRouter.routes());
+appRouter.use("/:appName/cron", cronRouter.routes());
 
 export default appRouter;

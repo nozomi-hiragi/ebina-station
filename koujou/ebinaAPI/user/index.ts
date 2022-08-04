@@ -156,6 +156,8 @@ userRouter.get("/login/:id", async (ctx) => {
 // 404 メンバーない
 // 405 パスワードが設定されてない
 userRouter.post("/login", async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
   const body = await ctx.request.body({ type: "json" }).value;
   let member: Member | undefined;
   let id: string;
@@ -164,8 +166,6 @@ userRouter.post("/login", async (ctx) => {
       return ctx.response.status = 400;
 
     case "public-key": {
-      const origin = ctx.request.headers.get("origin");
-      if (!origin) return ctx.response.status = 400;
       id = body.response.userHandle;
       try {
         await verifyLoginChallenge(origin, id, body);
@@ -187,11 +187,11 @@ userRouter.post("/login", async (ctx) => {
       if (!id || !pass) return ctx.response.status = 400;
       member = getMember(id);
       if (member === undefined) {
-        logApi.info("post", "user/login", "not exist user", id);
+        logApi.info(["post", "user/login", "not exist user", id]);
         return ctx.response.status = 404;
       }
-      if (member.auth.webAuthn) {
-        logApi.info("post", "user/login", "you have webauthn", id);
+      if (member.auth.webAuthn && member.auth.webAuthn[origin]) {
+        logApi.info(["post", "user/login", "you have webauthn", id]);
         return ctx.response.status = 400;
       }
       const passwordAuth = member.auth.password;

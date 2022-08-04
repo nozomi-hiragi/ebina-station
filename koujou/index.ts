@@ -3,6 +3,7 @@ import ebinaRouter from "./ebinaAPI/index.ts";
 import { getSettings } from "./project_data/settings.ts";
 import { logKoujou } from "./utils/log.ts";
 import { JwtPayload } from "./utils/auth.ts";
+import { startCrons } from "./project_data/cron.ts";
 
 export type States = {
   token?: string;
@@ -23,3 +24,4 @@ app.use(router.routes(), router.allowedMethods());
 
 app.listen({ port });
 logKoujou.info(`EbinaStation Start lestening on ${port}`);
+startCrons();
