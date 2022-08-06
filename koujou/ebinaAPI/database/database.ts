@@ -32,12 +32,26 @@ const initClient = async () => {
 
 databaseRouter.get("/databases", authToken, async (ctx) => {
   await initClient();
-  const list = await client.listDatabases();
+  const mongodbSettings = getSettings().mongodb;
+  let filter: mongodb.Document | undefined = undefined;
+  if (mongodbSettings) {
+    const names = Object.keys(mongodbSettings.databaseFilter).filter((name) =>
+      mongodbSettings.databaseFilter[name].enable
+    );
+    filter = { name: { "$nin": names } };
+  }
+  const list = await client.listDatabases({ filter });
   ctx.response.body = list;
 });
 
 databaseRouter.get("/:db/collections", authToken, async (ctx) => {
   const dbName = ctx.params.db;
+  const mongodbSettings = getSettings().mongodb;
+  if (mongodbSettings) {
+    const filter = mongodbSettings.databaseFilter[dbName];
+    if (filter && filter.enable) return ctx.response.status = 403;
+  }
+
   await initClient();
   const db = client.database(dbName);
   ctx.response.body = await db.listCollectionNames();
@@ -45,6 +59,12 @@ databaseRouter.get("/:db/collections", authToken, async (ctx) => {
 
 databaseRouter.get("/:db/:collection/find", authToken, async (ctx) => {
   const dbName = ctx.params.db;
+  const mongodbSettings = getSettings().mongodb;
+  if (mongodbSettings) {
+    const filter = mongodbSettings.databaseFilter[dbName];
+    if (filter && filter.enable) return ctx.response.status = 403;
+  }
+
   const collectionName = ctx.params.collection;
   await initClient();
   const db = client.database(dbName);
