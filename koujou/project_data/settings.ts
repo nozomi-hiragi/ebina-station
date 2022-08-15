@@ -15,6 +15,7 @@ export type MongoBD = {
   port: number;
   username: "env" | string;
   password: "env" | string;
+  databaseFilter: { [databaseName: string]: { enable: boolean } };
 };
 
 class Settings {
