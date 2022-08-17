@@ -106,17 +106,21 @@ export const setCron = async (
 };
 
 export const startCrons = () => {
-  for (const dir of Deno.readDirSync(APPS_DIR)) {
-    if (!dir.isDirectory) continue;
-    const appName = dir.name;
-    const cronJson = getCronJson(appName);
-    Object.keys(cronJson).forEach((cronName) => {
-      const cronItem = cronJson[cronName];
-      if (!cronItem) return;
-      setCron(appName, cronName, cronItem).then((isOk) => {
-        if (isOk) return;
-        console.log(`error cron load ${appName}/${cronName}`);
+  try {
+    for (const dir of Deno.readDirSync(APPS_DIR)) {
+      if (!dir.isDirectory) continue;
+      const appName = dir.name;
+      const cronJson = getCronJson(appName);
+      Object.keys(cronJson).forEach((cronName) => {
+        const cronItem = cronJson[cronName];
+        if (!cronItem) return;
+        setCron(appName, cronName, cronItem).then((isOk) => {
+          if (isOk) return;
+          console.log(`error cron load ${appName}/${cronName}`);
+        });
       });
-    });
+    }
+  } catch (err) {
+    console.log(err.message);
   }
 };
