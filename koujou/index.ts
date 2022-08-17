@@ -4,11 +4,18 @@ import { getSettings } from "./project_data/settings.ts";
 import { logKoujou } from "./utils/log.ts";
 import { JwtPayload } from "./utils/auth.ts";
 import { startCrons } from "./project_data/cron.ts";
+import { initHonbuDelegate } from "./utils/honbuDelegate.ts";
 
 export type States = {
   token?: string;
   payload?: JwtPayload;
 };
+
+initHonbuDelegate().then((success) => {
+  console.log(success ? "Success Honbu init " : "Honbu is disable");
+}).catch((err) => {
+  console.log("init honbu error: ", err.message);
+});
 
 const settings = getSettings();
 

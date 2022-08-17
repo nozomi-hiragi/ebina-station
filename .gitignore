@@ -3,3 +3,6 @@ html
 
 #  Ebina project folder
 project
+
+# Geneare docker-compose
+docker-compose.yml
