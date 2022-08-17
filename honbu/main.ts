@@ -109,3 +109,7 @@ const main = async () => {
 };
 
 main();
+
+Deno.addSignalListener("SIGTERM", () => {
+  rmService("Koujou").then((success) => Deno.exit(success ? 0 : 1));
+});
