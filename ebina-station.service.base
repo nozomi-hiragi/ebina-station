@@ -1,0 +1,12 @@
+[Unit]
+Description=Ebina Station
+Documentation=https://github.com/nozomi-hiragi/ebina-station
+Wants=network-online.target
+After=network-online.target
+[Service]
+Type=simple
+ExecStart=${ebinaStationHonbu}
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
