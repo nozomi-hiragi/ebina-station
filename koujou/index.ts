@@ -4,7 +4,10 @@ import { getSettings } from "./project_data/settings.ts";
 import { logKoujou } from "./utils/log.ts";
 import { JwtPayload } from "./utils/auth.ts";
 import { startCrons } from "./project_data/cron.ts";
-import { initHonbuDelegate } from "./utils/honbuDelegate.ts";
+import {
+  honbuDelegateRouter,
+  initHonbuDelegate,
+} from "./utils/honbuDelegate.ts";
 
 export type States = {
   token?: string;
@@ -27,6 +30,7 @@ if (settings.origins) {
 
 const router = new oak.Router();
 router.use("/ebina", ebinaRouter.routes());
+router.use("/honbu", honbuDelegateRouter.routes());
 app.use(router.routes(), router.allowedMethods());
 
 app.listen({ port });
