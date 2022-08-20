@@ -6,6 +6,7 @@ export const readReader = async (
   const buffer = new Uint8Array(4096);
   while (await reader.read(buffer) !== null) {
     for (const msg of decoder.decode(buffer).split("\n")) {
+      if (msg.indexOf("\0") === 0) continue;
       if (callback(msg)) return;
     }
   }

@@ -10,6 +10,7 @@ import { crypto } from "https://deno.land/std@0.152.0/crypto/mod.ts";
 import { rmService, upService } from "./DockerComposeController.ts";
 
 const port = 9876;
+const koujouPort = 3456;
 
 const initDockerComposeFile = async (honbuKey: string) => {
   const isDesktop = await isDockerDesktop();
@@ -32,7 +33,7 @@ const initDockerComposeFile = async (honbuKey: string) => {
       `HONBU_KEY=${honbuKey}`,
     ]),
   };
-  if (isDesktop) serviceKoujou.ports = ["3456:3456"];
+  if (isDesktop) serviceKoujou.ports = [`${koujouPort}:${koujouPort}`];
   else serviceKoujou.network_mode = "host";
   dockerComposeYaml.setService("Koujou", serviceKoujou);
 
@@ -87,6 +88,69 @@ const main = async () => {
     if (msg === "q") {
       rmService("Koujou").then((success) => Deno.exit(success ? 0 : 1));
       return true;
+    } else if (!msg.indexOf("create")) {
+      const commands = msg.split(" ");
+      let paramType = undefined;
+      const params = {} as {
+        id?: string;
+        name?: string;
+        pass?: string;
+        admin?: boolean;
+      };
+      for (const it of commands) {
+        switch (paramType) {
+          case undefined:
+            paramType = it;
+            break;
+
+          case "create":
+            if (it !== "member") {
+              console.log("unsupport type");
+              return;
+            }
+            paramType = undefined;
+            break;
+
+          case "-u":
+            params.name = it;
+            paramType = undefined;
+            break;
+
+          case "-i":
+            params.id = it;
+            paramType = undefined;
+            break;
+
+          case "-p":
+            params.pass = it;
+            paramType = undefined;
+            break;
+
+          case "-f":
+            if (it === "admin") params.admin = true;
+            paramType = undefined;
+            break;
+        }
+      }
+      if (
+        params.name !== undefined &&
+        params.id !== undefined &&
+        params.pass !== undefined
+      ) {
+        fetch(`http://${"localhost"}:${koujouPort}/honbu/member/new`, {
+          method: "POST",
+          body: JSON.stringify(params),
+          headers: { key: honbuKey },
+        }).then((ret) => {
+          if (ret.status !== 201) {
+            console.error("failed create member", ret);
+          }
+        });
+      } else {
+        console.log("params are wrong");
+      }
+    } else {
+      console.log("><");
     }
   });
 
