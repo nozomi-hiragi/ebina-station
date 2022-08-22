@@ -22,7 +22,7 @@ initHonbuDelegate().then((success) => {
 
 const settings = getSettings();
 
-const port = settings.getPort();
+const port = settings.getPortNumber();
 const app = new oak.Application<States>();
 if (settings.origins) {
   app.use(oakCors({ origin: settings.origins, credentials: true }));

@@ -8,15 +8,19 @@ import { isDockerDesktop, readReader } from "./utils.ts";
 import { config } from "https://deno.land/x/dotenv@v3.2.0/mod.ts";
 import { crypto } from "https://deno.land/std@0.152.0/crypto/mod.ts";
 import { rmService, upService } from "./DockerComposeController.ts";
+import { getSettings } from "../koujou/project_data/settings.ts";
 
-const port = 9876;
-const koujouPort = 3456;
+const projectSettings = getSettings();
+const mongoSettings = projectSettings.mongodb;
+const koujouPort = projectSettings.getPortNumber();
+const honbuPort = projectSettings.getHonbuPortNumber();
 
 const initDockerComposeFile = async (honbuKey: string) => {
   const isDesktop = await isDockerDesktop();
 
   const dockerComposeYaml = new DockerComposeYamlManager();
 
+  await rmService("Koujou");
   const ipAddress = await getNetworkAddr();
   const koujouEnv = config({ path: "./koujou/.env" });
   const koujouEnvArray = Object.keys(koujouEnv)
@@ -29,7 +33,7 @@ const initDockerComposeFile = async (honbuKey: string) => {
     environment: koujouEnvArray.concat([
       "HONBU=true",
       `HONBU_ADDRESS=${ipAddress}`,
-      `HONBU_PORT=${port}`,
+      `HONBU_PORT=${honbuPort}`,
       `HONBU_KEY=${honbuKey}`,
     ]),
   };
@@ -37,18 +41,22 @@ const initDockerComposeFile = async (honbuKey: string) => {
   else serviceKoujou.network_mode = "host";
   dockerComposeYaml.setService("Koujou", serviceKoujou);
 
-  dockerComposeYaml.setService("EbinaStationDB", {
-    image: "mongo",
-    container_name: "EbinaStationDB",
-    command: "mongod --port 27017",
-    restart: "always",
-    environment: koujouEnvArray,
-    ports: ["27017:27017"],
-    volumes: [
-      "./mongodb/mongo_db:/data/db",
-      "./mongodb/initdb.d:/docker-entrypoint-initdb.d",
-    ],
-  });
+  await rmService("EbinaStationDB");
+  if (mongoSettings) {
+    const mongoPort = mongoSettings.port;
+    dockerComposeYaml.setService("EbinaStationDB", {
+      image: "mongo",
+      container_name: "EbinaStationDB",
+      command: `mongod --port ${mongoPort}`,
+      restart: "always",
+      environment: koujouEnvArray,
+      ports: [`${mongoPort}:${mongoPort}`],
+      volumes: [
+        "./mongodb/mongo_db:/data/db",
+        "./mongodb/initdb.d:/docker-entrypoint-initdb.d",
+      ],
+    });
+  }
 
   dockerComposeYaml.setService("Jinji", {
     image: "nginx:latest",
@@ -81,7 +89,7 @@ const main = async () => {
   const honbuKey = crypto.randomUUID() ?? "honbukey";
   await initDockerComposeFile(honbuKey);
 
-  if (!await upService("EbinaStationDB")) Deno.exit(1);
+  if (mongoSettings) if (!await upService("EbinaStationDB")) Deno.exit(1);
   if (!await upService("Koujou")) Deno.exit(1);
 
   readReader(Deno.stdin, (msg: string) => {
@@ -169,7 +177,7 @@ const main = async () => {
 
   const app = new oak.Application();
   app.use(router.routes(), router.allowedMethods());
-  app.listen({ port });
+  app.listen({ port: honbuPort });
 };
 
 main();
