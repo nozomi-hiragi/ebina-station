@@ -1,5 +1,5 @@
 import { Cron } from "../deps.ts";
-import { APPS_DIR } from "../ebinaAPI/app/index.ts";
+import { APPS_DIR } from "./settings.ts";
 
 export type CronItem = {
   enable: boolean;
@@ -49,20 +49,27 @@ export const switchCron = async (
 
   const cronJson = getCronJson(appName);
   const cronItem = cronJson[cronName];
-  if (!cronItem) return false;
+  if (!cronItem) {
+    console.log("no cron item");
+    return false;
+  }
 
   if (on) {
     const args = cronItem.function.split(">");
-    const modelPath = `../../${APPS_DIR}/${appName}/scripts/${args[0]}`;
+    const modelPath = `../${APPS_DIR}/${appName}/scripts/${args[0]}`;
     let module = modules[modelPath];
     try {
       if (!module) module = await import(modelPath);
-      if (!Object.keys(module).includes(args[1])) return false;
+      if (!Object.keys(module).includes(args[1])) {
+        console.log("no value in module", args[1]);
+        return false;
+      }
       crons[`${appName}/${cronName}`] = new Cron(cronItem.pattern, () => {
         const ret = module[args[1]]() as string;
         console.log(`${appName}/${cronName}: ${ret}`);
       });
-    } catch (_) {
+    } catch (err) {
+      console.log(err);
       return false;
     }
   }
@@ -99,17 +106,21 @@ export const setCron = async (
 };
 
 export const startCrons = () => {
-  for (const dir of Deno.readDirSync(APPS_DIR)) {
-    if (!dir.isDirectory) continue;
-    const appName = dir.name;
-    const cronJson = getCronJson(appName);
-    Object.keys(cronJson).forEach((cronName) => {
-      const cronItem = cronJson[cronName];
-      if (!cronItem) return;
-      setCron(appName, cronName, cronItem).then((isOk) => {
-        if (isOk) return;
-        console.log(`error cron load ${appName}/${cronName}`);
+  try {
+    for (const dir of Deno.readDirSync(APPS_DIR)) {
+      if (!dir.isDirectory) continue;
+      const appName = dir.name;
+      const cronJson = getCronJson(appName);
+      Object.keys(cronJson).forEach((cronName) => {
+        const cronItem = cronJson[cronName];
+        if (!cronItem) return;
+        setCron(appName, cronName, cronItem).then((isOk) => {
+          if (isOk) return;
+          console.log(`error cron load ${appName}/${cronName}`);
+        });
       });
-    });
+    }
+  } catch (err) {
+    console.log(err.message);
   }
 };

@@ -23,15 +23,21 @@ import { HttpExeption } from "../../utils/utils.ts";
 const userRouter = new oak.Router();
 
 // funcs
-const createUser = (name: string, pass: string) => {
+const createUser = (name: string, pass: string, admin?: boolean) => {
   const passwordAuth = { hash: bcrypt.hashSync(pass) };
   const member: Member = { name, auth: { password: passwordAuth } };
+  if (admin) member.flags = { admin: true };
   return member;
 };
 
-const registUser = (id: string, name: string, pass: string) => {
+export const registUser = (
+  id: string,
+  name: string,
+  pass: string,
+  admin?: boolean,
+) => {
   if (getMember(id)) return false;
-  const user = createUser(name, pass);
+  const user = createUser(name, pass, admin);
   return addMember(id, user);
 };
 
@@ -48,7 +54,7 @@ const getMembersArray = (ids: string[]) => {
 // 201 できた
 // 400 情報足らない
 // 406 IDがもうある˝
-userRouter.post("/", async (ctx) => {
+userRouter.post("/", authToken, async (ctx) => {
   const { id, name, pass } = await ctx
     .request.body({ type: "json" }).value;
   if (!id || !name || !pass) return ctx.response.status = 400;

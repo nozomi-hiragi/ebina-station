@@ -1,7 +1,13 @@
-import { PROJECT_PATH } from "../ebinaAPI/app/index.ts";
 import { AttestationConveyancePreference } from "../utils/webauthn/types.ts";
 
+export const PROJECT_PATH = "./project";
+export const APPS_DIR = `${PROJECT_PATH}/apps`;
+export const GOMI_DIR = `${PROJECT_PATH}/gomi`;
+
 const SETTINGS_FILE_PATH = `${PROJECT_PATH}/settings.json`;
+const DEFAULT_PORT_NUM = 3456;
+const DEFAULT_HONBU_PORT_NUM = 9876;
+const DEFAULT_MONGODB_PORT = 27017;
 
 type WebAuthnSetting = {
   rpName: string;
@@ -11,7 +17,6 @@ type WebAuthnSetting = {
 };
 
 export type MongoBD = {
-  hostname: string;
   port: number;
   username: "env" | string;
   password: "env" | string;
@@ -20,6 +25,7 @@ export type MongoBD = {
 
 class Settings {
   port?: "env" | number;
+  honbuPort?: number;
   // membersEncryption = false;
   origins: string[] | string = [];
   WebAuthn?: WebAuthnSetting;
@@ -27,16 +33,24 @@ class Settings {
 
   constructor(init?: Partial<Settings>) {
     Object.assign(this, init);
+
+    const mongodb = this.mongodb;
+    if (mongodb) {
+      if (mongodb.port === undefined) mongodb.port = DEFAULT_MONGODB_PORT;
+    }
   }
 
-  getPort() {
-    let port: number | undefined;
-    if (typeof settings.port === "string") {
-      port = settings.port === "env" ? Number(Deno.env.get("PORT")) : undefined;
+  getPortNumber() {
+    if (this.port === "env") {
+      const envPort = Number(Deno.env.get("PORT"));
+      return Number.isNaN(envPort) ? DEFAULT_PORT_NUM : envPort;
     } else {
-      port = settings.port;
+      return this.port ?? DEFAULT_PORT_NUM;
     }
-    return port || 3456;
+  }
+
+  getHonbuPortNumber() {
+    return this.honbuPort ?? DEFAULT_HONBU_PORT_NUM;
   }
 
   isRPIDStatic() {

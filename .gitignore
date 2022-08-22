@@ -1,5 +1,13 @@
+.DS_Store
+
 # certbot html
 html
 
 #  Ebina project folder
 project
+
+# Geneare docker-compose
+docker-compose.yml
+
+# Generate files
+generate
