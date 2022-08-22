@@ -1,4 +1,4 @@
-import { PROJECT_PATH } from "../../ebinaAPI/app/index.ts";
+import { PROJECT_PATH } from "../settings.ts";
 import { Member } from "./member.ts";
 export type { WebAuthn, WebAuthnItem } from "./auth/webauthn.ts";
 

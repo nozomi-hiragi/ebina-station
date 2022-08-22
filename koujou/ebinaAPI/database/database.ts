@@ -1,21 +1,26 @@
-import { mongodb, oak } from "../../deps.ts";
+import { mongodb, Mutex, oak } from "../../deps.ts";
 import { getSettings } from "../../project_data/settings.ts";
 import { authToken } from "../../utils/auth.ts";
 
 const databaseRouter = new oak.Router();
 
 const client = new mongodb.MongoClient();
+const mutex = new Mutex();
 
 const initClient = async () => {
   const settings = getSettings();
   const mongodbSettings = settings.mongodb;
-  if (!client.buildInfo && mongodbSettings) {
+  if (!mongodbSettings) return;
+  await mutex.use(async () => {
+    if (client.buildInfo) return;
     console.log("start init db");
     const op: mongodb.ConnectOptions = {
       db: "admin",
       servers: [
         {
-          host: mongodbSettings.hostname,
+          host: Deno.env.get("HONBU") === "true"
+            ? "EbinaStationDB"
+            : "localhost",
           port: mongodbSettings.port,
         },
       ],
@@ -27,7 +32,7 @@ const initClient = async () => {
       },
     };
     await client.connect(op);
-  }
+  });
 };
 
 databaseRouter.get("/databases", authToken, async (ctx) => {

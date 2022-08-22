@@ -1,5 +1,5 @@
 import { oak } from "../../deps.ts";
-import { APPS_DIR } from "./index.ts";
+import { APPS_DIR } from "../../project_data/settings.ts";
 import { authToken } from "../../utils/auth.ts";
 import { logApi } from "../../utils/log.ts";
 import { exist, mkdirIfNotExist } from "../../utils/utils.ts";

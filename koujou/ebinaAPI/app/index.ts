@@ -5,11 +5,9 @@ import cronRouter from "./cron.ts";
 import { mkdirIfNotExist } from "../../utils/utils.ts";
 import { authToken } from "../../utils/auth.ts";
 import { logApi } from "../../utils/log.ts";
+import { APPS_DIR, GOMI_DIR } from "../../project_data/settings.ts";
 
 const FIRST_APP_NAME = "FirstApp";
-export const PROJECT_PATH = "./project";
-export const APPS_DIR = `${PROJECT_PATH}/apps`;
-export const GOMI_DIR = `${PROJECT_PATH}/gomi`;
 
 const appRouter = new oak.Router();
 

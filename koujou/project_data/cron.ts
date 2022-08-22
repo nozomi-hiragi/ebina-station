@@ -1,5 +1,5 @@
 import { Cron } from "../deps.ts";
-import { APPS_DIR } from "../ebinaAPI/app/index.ts";
+import { APPS_DIR } from "./settings.ts";
 
 export type CronItem = {
   enable: boolean;
