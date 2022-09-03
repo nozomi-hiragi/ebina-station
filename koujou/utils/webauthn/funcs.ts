@@ -1,11 +1,7 @@
 import { base64, Fido2Lib } from "../../deps.ts";
-import {
-  getMember,
-  setMember,
-  WebAuthn,
-  WebAuthnItem,
-} from "../../project_data/members/members.ts";
-import { getSettings } from "../../project_data/settings.ts";
+import { Member } from "../../settings/members/member.ts";
+import { getMembers, WebAuthnItem } from "../../settings/members/members.ts";
+import { getSettings } from "../../settings/settings.ts";
 import { HttpExeption } from "../utils.ts";
 import {
   AssertionExpectations,
@@ -59,34 +55,29 @@ const getF2L = (hostname: string) => {
 
 export const createRegistOptions = async (
   origin: string,
-  memberId: string,
+  member: Member,
   fource = false,
 ) => {
-  const originURL = new URL(origin);
-  const member = getMember(memberId);
-  if (!member) throw new HttpExeption(404, "wrong member id");
+  const { hostname } = new URL(origin);
 
   const settings = getSettings();
   const webAuthnSetting = settings.WebAuthn;
   if (!webAuthnSetting) throw new HttpExeption(500, "No WebAuthn setting");
 
-  const rpID = settings.isRPIDStatic()
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
+  const rpID = settings.isRPIDStatic() ? webAuthnSetting.rpID : hostname;
   if (!rpID) throw new HttpExeption(500, "No rpID value");
 
-  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem = userWebAuthn[rpID] ??
+  const webAuthnItem: WebAuthnItem = member.getWebAuthnItem(rpID) ??
     { authenticators: {}, enableDevices: [] };
-  const f2l = getF2L(originURL.hostname);
+  const f2l = getF2L(hostname);
   const options = await f2l
     .attestationOptions() as PublicKeyCredentialCreationOptions;
   const optionsJson: PublicKeyCredentialCreationOptionsJSON = {
     ...options,
     user: {
-      id: memberId,
-      name: member.name,
-      displayName: member.name,
+      id: member.getId(),
+      name: member.getName(),
+      displayName: member.getName(),
     },
     challenge: base64.encode(options.challenge),
     excludeCredentials: Object.values(webAuthnItem.authenticators)
@@ -97,21 +88,19 @@ export const createRegistOptions = async (
         transports: authenticator!.transports,
       })),
   };
-  challenges[memberId] = optionsJson.challenge;
+  challenges[member.getId()] = optionsJson.challenge;
 
   return optionsJson;
 };
 
 export const verifyRegistChallenge = async (
   origin: string,
-  memberId: string,
+  member: Member,
   deviceName: string,
   // deno-lint-ignore no-explicit-any
   body: any,
 ) => {
-  const originURL = new URL(origin);
-  const member = getMember(memberId);
-  if (!member) throw new HttpExeption(404, "wrong member id");
+  const { hostname } = new URL(origin);
 
   const settings = getSettings();
   const webAuthnSetting = settings.WebAuthn;
@@ -119,32 +108,29 @@ export const verifyRegistChallenge = async (
     throw new HttpExeption(500, "No WebAuthn setting");
   }
 
-  const rpID = settings.isRPIDStatic()
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
+  const rpID = settings.isRPIDStatic() ? webAuthnSetting.rpID : hostname;
   if (!rpID) {
     throw new HttpExeption(500, "No rpID value");
   }
 
-  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem = userWebAuthn[rpID] ??
+  const webAuthnItem: WebAuthnItem = member.getWebAuthnItem(rpID) ??
     { authenticators: {}, enableDevices: [] };
   if (webAuthnItem.authenticators[deviceName]) {
     throw new HttpExeption(400, "Already used this device name");
   }
 
-  const f2l = getF2L(originURL.hostname);
+  const f2l = getF2L(hostname);
 
   body.response.attestationObject = base64.decode(
     body.response.attestationObject,
   ).buffer;
   body.rawId = base64.decode(body.rawId).buffer;
 
-  const challenge = challenges[memberId];
+  const challenge = challenges[member.getId()];
   if (!challenge) {
     throw new HttpExeption(409, "didn't challenge");
   }
-  delete challenges[memberId];
+  delete challenges[member.getId()];
 
   const attestationExpectations = {
     challenge,
@@ -164,20 +150,16 @@ export const verifyRegistChallenge = async (
     credentialType: "public-key",
   };
   webAuthnItem.enableDevices.push(deviceName);
-  userWebAuthn[rpID] = webAuthnItem;
-  member.auth.webAuthn = userWebAuthn;
-  setMember(memberId, member);
+  member.setWebAuthnItem(rpID, webAuthnItem);
+  getMembers().setMember(member);
 };
 
 export const createLoginOptions = async (
   origin: string,
-  memberId: string,
+  member: Member,
   deviceNames: string[],
 ) => {
-  const originURL = new URL(origin);
-
-  const member = getMember(memberId);
-  if (!member) throw new HttpExeption(404, "wrong member id");
+  const { hostname } = new URL(origin);
 
   const settings = getSettings();
   const webAuthnSetting = settings.WebAuthn;
@@ -185,15 +167,12 @@ export const createLoginOptions = async (
     throw new HttpExeption(500, "No WebAuthn setting");
   }
 
-  const rpID = settings.isRPIDStatic()
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
+  const rpID = settings.isRPIDStatic() ? webAuthnSetting.rpID : hostname;
   if (!rpID) {
     throw new HttpExeption(500, "No rpID value");
   }
 
-  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem = userWebAuthn[rpID];
+  const webAuthnItem = member.getWebAuthnItem(rpID);
   if (!webAuthnItem) {
     throw new HttpExeption(406, "no webauthn authenticator");
   }
@@ -208,7 +187,7 @@ export const createLoginOptions = async (
     .map((deviceName) => webAuthnItem.authenticators[deviceName])
     .filter((a) => a) as WebAuthnAuthenticator[];
 
-  const f2l = getF2L(originURL.hostname);
+  const f2l = getF2L(hostname);
   const option = await f2l
     .assertionOptions() as PublicKeyCredentialRequestOptions;
   const optionsJson: PublicKeyCredentialRequestOptionsJSON = {
@@ -223,19 +202,17 @@ export const createLoginOptions = async (
       transports: authenticator.transports,
     })),
   };
-  challenges[memberId] = optionsJson.challenge;
+  challenges[member.getId()] = optionsJson.challenge;
   return optionsJson;
 };
 
 export const verifyLoginChallenge = async (
   origin: string,
-  memberId: string,
+  member: Member,
   // deno-lint-ignore no-explicit-any
   body: any,
 ) => {
-  const originURL = new URL(origin);
-  const member = getMember(memberId);
-  if (!member) throw new HttpExeption(404, "wrong member id");
+  const { hostname } = new URL(origin);
 
   const settings = getSettings();
   const webAuthnSetting = settings.WebAuthn;
@@ -243,15 +220,12 @@ export const verifyLoginChallenge = async (
     throw new HttpExeption(500, "No WebAuthn setting");
   }
 
-  const rpID = settings.isRPIDStatic()
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
+  const rpID = settings.isRPIDStatic() ? webAuthnSetting.rpID : hostname;
   if (!rpID) {
     throw new HttpExeption(500, "No rpID value");
   }
 
-  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID];
+  const webAuthnItem = member.getWebAuthnItem(rpID);
   if (!webAuthnItem) {
     throw new HttpExeption(400, "wrong rpid");
   }
@@ -268,14 +242,14 @@ export const verifyLoginChallenge = async (
 
   body.rawId = base64.decode(body.rawId).buffer;
   body.response.userHandle = body.rawId;
-  const f2l = getF2L(originURL.hostname);
+  const f2l = getF2L(hostname);
   const authenticator = webAuthnItem.authenticators[deviceName]!;
 
-  const challenge = challenges[memberId];
+  const challenge = challenges[member.getId()];
   if (!challenge) {
     throw new HttpExeption(409, "didn't challenge");
   }
-  delete challenges[memberId];
+  delete challenges[member.getId()];
 
   const assertionExpectations: AssertionExpectations = {
     challenge,
@@ -289,15 +263,12 @@ export const verifyLoginChallenge = async (
 
   webAuthnItem.authenticators[deviceName]!.counter = result.authnrData
     ?.get("counter");
-  userWebAuthn[rpID] = webAuthnItem;
-  member.auth.webAuthn = userWebAuthn;
-  setMember(memberId, member);
+  member.setWebAuthnItem(rpID, webAuthnItem);
+  getMembers().setMember(member);
 };
 
-export const getAuthenticatorNames = (origin: string, memberId: string) => {
-  const originURL = new URL(origin);
-  const member = getMember(memberId);
-  if (!member) throw new HttpExeption(404, "wrong member id");
+export const getAuthenticatorNames = (origin: string, member: Member) => {
+  const { hostname } = new URL(origin);
 
   const settings = getSettings();
   const webAuthnSetting = settings.WebAuthn;
@@ -305,15 +276,12 @@ export const getAuthenticatorNames = (origin: string, memberId: string) => {
     throw new HttpExeption(500, "No WebAuthn setting");
   }
 
-  const rpID = settings.isRPIDStatic()
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
+  const rpID = settings.isRPIDStatic() ? webAuthnSetting.rpID : hostname;
   if (!rpID) {
     throw new HttpExeption(500, "No rpID value");
   }
 
-  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID];
+  const webAuthnItem = member.getWebAuthnItem(rpID);
   const authenticatorNames = webAuthnItem
     ? Object.keys(webAuthnItem.authenticators)
     : [];
@@ -323,12 +291,10 @@ export const getAuthenticatorNames = (origin: string, memberId: string) => {
 
 export const deleteAuthenticators = (
   origin: string,
-  memberId: string,
+  member: Member,
   deviceNames: string[],
 ) => {
-  const originURL = new URL(origin);
-  const member = getMember(memberId);
-  if (!member) throw new HttpExeption(404, "wrong member id");
+  const { hostname } = new URL(origin);
 
   const settings = getSettings();
   const webAuthnSetting = settings.WebAuthn;
@@ -336,15 +302,12 @@ export const deleteAuthenticators = (
     throw new HttpExeption(500, "No WebAuthn setting");
   }
 
-  const rpID = settings.isRPIDStatic()
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
+  const rpID = settings.isRPIDStatic() ? webAuthnSetting.rpID : hostname;
   if (!rpID) {
     throw new HttpExeption(500, "No rpID value");
   }
 
-  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID];
+  const webAuthnItem = member.getWebAuthnItem(rpID);
   const authenticatorNames = Object.keys(webAuthnItem?.authenticators ?? {});
   if (!webAuthnItem || authenticatorNames.length === 0) {
     throw new HttpExeption(404, "Disable WebAuthn on this account");
@@ -356,22 +319,22 @@ export const deleteAuthenticators = (
     if (!isTarget) return;
     if (webAuthnItem.authenticators[name]) {
       delete webAuthnItem.authenticators[name];
+      webAuthnItem.enableDevices = webAuthnItem.enableDevices
+        .filter((it) => it !== name);
     } else {
       failedNames.push(name);
     }
   });
 
-  userWebAuthn[rpID] = webAuthnItem;
-  member.auth.webAuthn = userWebAuthn;
-  setMember(memberId, member);
+  console.log("delete", webAuthnItem);
+  member.setWebAuthnItem(rpID, webAuthnItem);
+  getMembers().setMember(member);
 
   return failedNames;
 };
 
-export const getEnableAuthenticators = (origin: string, memberId: string) => {
-  const originURL = new URL(origin);
-  const member = getMember(memberId);
-  if (!member) throw new HttpExeption(404, "wrong member id");
+export const getEnableAuthenticators = (origin: string, member: Member) => {
+  const { hostname } = new URL(origin);
 
   const settings = getSettings();
   const webAuthnSetting = settings.WebAuthn;
@@ -379,15 +342,12 @@ export const getEnableAuthenticators = (origin: string, memberId: string) => {
     throw new HttpExeption(500, "No WebAuthn setting");
   }
 
-  const rpID = settings.isRPIDStatic()
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
+  const rpID = settings.isRPIDStatic() ? webAuthnSetting.rpID : hostname;
   if (!rpID) {
     throw new HttpExeption(500, "No rpID value");
   }
 
-  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID];
+  const webAuthnItem = member.getWebAuthnItem(rpID);
   const authenticatorNames = Object.keys(webAuthnItem?.authenticators ?? {});
   if (!webAuthnItem || authenticatorNames.length === 0) {
     throw new HttpExeption(404, "Disable WebAuthn on this account");
@@ -398,12 +358,10 @@ export const getEnableAuthenticators = (origin: string, memberId: string) => {
 
 export const enableAuthenticator = (
   origin: string,
-  memberId: string,
+  member: Member,
   deviceName: string,
 ) => {
-  const originURL = new URL(origin);
-  const member = getMember(memberId);
-  if (!member) throw new HttpExeption(404, "wrong member id");
+  const { hostname } = new URL(origin);
 
   const settings = getSettings();
   const webAuthnSetting = settings.WebAuthn;
@@ -411,15 +369,12 @@ export const enableAuthenticator = (
     throw new HttpExeption(500, "No WebAuthn setting");
   }
 
-  const rpID = settings.isRPIDStatic()
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
+  const rpID = settings.isRPIDStatic() ? webAuthnSetting.rpID : hostname;
   if (!rpID) {
     throw new HttpExeption(500, "No rpID value");
   }
 
-  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID];
+  const webAuthnItem = member.getWebAuthnItem(rpID);
   const authenticatorNames = Object.keys(webAuthnItem?.authenticators ?? {});
   if (!webAuthnItem || authenticatorNames.length === 0) {
     throw new HttpExeption(404, "Disable WebAuthn on this account");
@@ -432,21 +387,18 @@ export const enableAuthenticator = (
     return false;
   } else {
     webAuthnItem.enableDevices.push(deviceName);
-    userWebAuthn[rpID] = webAuthnItem;
-    member.auth.webAuthn = userWebAuthn;
-    setMember(memberId, member);
+    member.setWebAuthnItem(rpID, webAuthnItem);
+    getMembers().setMember(member);
     return true;
   }
 };
 
 export const disableAuthenticator = (
   origin: string,
-  memberId: string,
+  member: Member,
   deviceName: string,
 ) => {
-  const originURL = new URL(origin);
-  const member = getMember(memberId);
-  if (!member) throw new HttpExeption(404, "wrong member id");
+  const { hostname } = new URL(origin);
 
   const settings = getSettings();
   const webAuthnSetting = settings.WebAuthn;
@@ -454,15 +406,12 @@ export const disableAuthenticator = (
     throw new HttpExeption(500, "No WebAuthn setting");
   }
 
-  const rpID = settings.isRPIDStatic()
-    ? webAuthnSetting.rpID
-    : originURL.hostname;
+  const rpID = settings.isRPIDStatic() ? webAuthnSetting.rpID : hostname;
   if (!rpID) {
     throw new HttpExeption(500, "No rpID value");
   }
 
-  const userWebAuthn: WebAuthn = member.auth.webAuthn ?? {};
-  const webAuthnItem: WebAuthnItem | undefined = userWebAuthn[rpID];
+  const webAuthnItem = member.getWebAuthnItem(rpID);
   const authenticatorNames = Object.keys(webAuthnItem?.authenticators ?? {});
   if (!webAuthnItem || authenticatorNames.length === 0) {
     throw new HttpExeption(404, "Disable WebAuthn on this account");
@@ -476,12 +425,10 @@ export const disableAuthenticator = (
   if (!include) {
     return false;
   } else {
-    webAuthnItem.enableDevices = webAuthnItem.enableDevices.filter((enable) =>
-      enable !== deviceName
-    );
-    userWebAuthn[rpID] = webAuthnItem;
-    member.auth.webAuthn = userWebAuthn;
-    setMember(memberId, member);
+    webAuthnItem.enableDevices = webAuthnItem.enableDevices
+      .filter((enable) => enable !== deviceName);
+    member.setWebAuthnItem(rpID, webAuthnItem);
+    getMembers().setMember(member);
     return true;
   }
 };

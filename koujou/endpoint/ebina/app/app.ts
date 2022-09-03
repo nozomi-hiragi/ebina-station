@@ -1,11 +1,11 @@
-import { oak } from "../../deps.ts";
+import { oak } from "../../../deps.ts";
 import apiRouter from "./api.ts";
 import jsRouter from "./scripts.ts";
 import cronRouter from "./cron.ts";
-import { mkdirIfNotExist } from "../../utils/utils.ts";
-import { authToken } from "../../utils/auth.ts";
-import { logApi } from "../../utils/log.ts";
-import { APPS_DIR, GOMI_DIR } from "../../project_data/settings.ts";
+import { mkdirIfNotExist } from "../../../utils/utils.ts";
+import { authToken } from "../../../utils/auth.ts";
+import { logApi } from "../../../utils/log.ts";
+import { APPS_DIR, GOMI_DIR } from "../../../settings/settings.ts";
 
 const FIRST_APP_NAME = "FirstApp";
 
@@ -85,7 +85,7 @@ appRouter.delete("/:appName", authToken, (ctx) => {
 });
 
 appRouter.use("/:appName/api", apiRouter.routes());
-appRouter.use("/:appName/scripts", jsRouter.routes());
+appRouter.use("/:appName/script", jsRouter.routes());
 appRouter.use("/:appName/cron", cronRouter.routes());
 
 export default appRouter;

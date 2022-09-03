@@ -1,8 +1,8 @@
-import { oak } from "../../deps.ts";
-import { APPS_DIR } from "../../project_data/settings.ts";
-import { authToken } from "../../utils/auth.ts";
-import { logApi } from "../../utils/log.ts";
-import { exist, mkdirIfNotExist } from "../../utils/utils.ts";
+import { oak } from "../../../deps.ts";
+import { APPS_DIR } from "../../../settings/settings.ts";
+import { authToken } from "../../../utils/auth.ts";
+import { logApi } from "../../../utils/log.ts";
+import { exist, mkdirIfNotExist } from "../../../utils/utils.ts";
 
 const scriptsDir = "scripts";
 const jsRouter = new oak.Router();
@@ -53,6 +53,7 @@ jsRouter.get("/", authToken, (ctx) => {
 jsRouter.post("/:path", authToken, async (ctx) => {
   const { appName, path } = ctx.params;
   if (!appName) return ctx.response.status = 400;
+  if (path.includes("..")) return ctx.response.status = 400;
 
   try {
     initFolder(appName);
@@ -78,6 +79,7 @@ jsRouter.post("/:path", authToken, async (ctx) => {
 jsRouter.get("/:path", authToken, (ctx) => {
   const { appName, path } = ctx.params;
   if (!appName) return ctx.response.status = 400;
+  if (path.includes("..")) return ctx.response.status = 400;
 
   try {
     initFolder(appName);
@@ -110,6 +112,7 @@ jsRouter.get("/:path", authToken, (ctx) => {
 jsRouter.patch("/:path", authToken, async (ctx) => {
   const { appName, path } = ctx.params;
   if (!appName) return ctx.response.status = 400;
+  if (path.includes("..")) return ctx.response.status = 400;
 
   try {
     initFolder(appName);
@@ -135,6 +138,7 @@ jsRouter.patch("/:path", authToken, async (ctx) => {
 jsRouter.delete("/:path", authToken, (ctx) => {
   const { appName, path } = ctx.params;
   if (!appName) return ctx.response.status = 400;
+  if (path.includes("..")) return ctx.response.status = 400;
 
   try {
     initFolder(appName);

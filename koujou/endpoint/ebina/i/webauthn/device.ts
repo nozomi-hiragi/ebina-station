@@ -1,13 +1,14 @@
-import { oak } from "../../../deps.ts";
-import { authToken, JwtPayload } from "../../../utils/auth.ts";
-import { HttpExeption } from "../../../utils/utils.ts";
+import { oak } from "../../../../deps.ts";
+import { getMembers } from "../../../../settings/members/members.ts";
+import { authToken, JwtPayload } from "../../../../utils/auth.ts";
+import { HttpExeption } from "../../../../utils/utils.ts";
 import {
   deleteAuthenticators,
   disableAuthenticator,
   enableAuthenticator,
   getAuthenticatorNames,
   getEnableAuthenticators,
-} from "../../../utils/webauthn/funcs.ts";
+} from "../../../../utils/webauthn/funcs.ts";
 
 const deviceRouter = new oak.Router();
 
@@ -22,12 +23,14 @@ deviceRouter.get("/", authToken, (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload: JwtPayload = ctx.state.payload!;
   const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
 
   const deviceNames: string[] =
     ctx.request.url.searchParams.get("deviceNames")?.split(",") ?? [];
 
   try {
-    const authenticatorNames = getAuthenticatorNames(origin, memberId);
+    const authenticatorNames = getAuthenticatorNames(origin, member);
     ctx.response.body = deviceNames.length === 0
       ? authenticatorNames
       : authenticatorNames.filter((name) => deviceNames.includes(name));
@@ -53,12 +56,14 @@ deviceRouter.delete("/", authToken, (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload: JwtPayload = ctx.state.payload!;
   const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
 
   const deviceNames = ctx.request.url.searchParams
     .get("deviceNames")?.split(",") ?? [];
 
   try {
-    const failedNames = deleteAuthenticators(origin, memberId, deviceNames);
+    const failedNames = deleteAuthenticators(origin, member, deviceNames);
     if (failedNames.length === 0) {
       ctx.response.status = 200;
     } else if (failedNames.length === deviceNames.length) {
@@ -90,12 +95,14 @@ deviceRouter.get("/:deviceName", authToken, (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload = ctx.state.payload!;
   const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
 
   const { deviceName } = ctx.params;
   if (!deviceName) return ctx.response.status = 400;
 
   try {
-    const authenticatorNames = getAuthenticatorNames(origin, memberId);
+    const authenticatorNames = getAuthenticatorNames(origin, member);
     if (authenticatorNames.includes(deviceName)) {
       ctx.response.body = deviceName;
     } else {
@@ -122,12 +129,14 @@ deviceRouter.delete("/:deviceName", authToken, (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload = ctx.state.payload!;
   const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
 
   const { deviceName } = ctx.params;
   if (!deviceName) return ctx.response.status = 400;
 
   try {
-    const failedNames = deleteAuthenticators(origin, memberId, [deviceName]);
+    const failedNames = deleteAuthenticators(origin, member, [deviceName]);
     if (failedNames.length) {
       ctx.response.status = 500;
     } else {
@@ -149,17 +158,19 @@ deviceRouter.delete("/:deviceName", authToken, (ctx) => {
 // 200 こたえ
 // 404 みつからない
 // 500 WebAuthnの設定おかしい
-deviceRouter.get("/enable/:deviceName", authToken, (ctx) => {
+deviceRouter.get("/:deviceName/enable", authToken, (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
   const payload = ctx.state.payload!;
   const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
 
   const { deviceName } = ctx.params;
   if (!deviceName) return ctx.response.status = 400;
 
   try {
-    const enableDevices = getEnableAuthenticators(origin, memberId);
+    const enableDevices = getEnableAuthenticators(origin, member);
     ctx.response.body = enableDevices.includes(deviceName);
   } catch (err) {
     if (err instanceof HttpExeption) {
@@ -178,17 +189,19 @@ deviceRouter.get("/enable/:deviceName", authToken, (ctx) => {
 // 208 もうある
 // 404 みつからない
 // 500 WebAuthnの設定おかしい
-deviceRouter.post("/enable/:deviceName", authToken, (ctx) => {
+deviceRouter.post("/:deviceName/enable", authToken, (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
   const payload = ctx.state.payload!;
   const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
 
   const { deviceName } = ctx.params;
   if (!deviceName) return ctx.response.status = 400;
 
   try {
-    if (enableAuthenticator(origin, memberId, deviceName)) {
+    if (enableAuthenticator(origin, member, deviceName)) {
       ctx.response.status = 200;
     } else {
       ctx.response.status = 208;
@@ -210,17 +223,19 @@ deviceRouter.post("/enable/:deviceName", authToken, (ctx) => {
 // 208 もうない
 // 404 みつからない
 // 500 WebAuthnの設定おかしい
-deviceRouter.post("/disable/:deviceName", authToken, (ctx) => {
+deviceRouter.post("/:deviceName/disable", authToken, (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
   const payload = ctx.state.payload!;
   const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
 
   const { deviceName } = ctx.params;
   if (!deviceName) return ctx.response.status = 400;
 
   try {
-    if (disableAuthenticator(origin, memberId, deviceName)) {
+    if (disableAuthenticator(origin, member, deviceName)) {
       ctx.response.status = 200;
     } else {
       ctx.response.status = 208;
