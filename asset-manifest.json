@@ -1,12 +1,12 @@
 {
   "files": {
-    "main.js": "/ebina-station/static/js/main.4709edab.js",
+    "main.js": "/ebina-station/static/js/main.4399f22b.js",
     "static/js/787.8d8aefb5.chunk.js": "/ebina-station/static/js/787.8d8aefb5.chunk.js",
     "index.html": "/ebina-station/index.html",
-    "main.4709edab.js.map": "/ebina-station/static/js/main.4709edab.js.map",
+    "main.4399f22b.js.map": "/ebina-station/static/js/main.4399f22b.js.map",
     "787.8d8aefb5.chunk.js.map": "/ebina-station/static/js/787.8d8aefb5.chunk.js.map"
   },
   "entrypoints": [
-    "static/js/main.4709edab.js"
+    "static/js/main.4399f22b.js"
   ]
 }
