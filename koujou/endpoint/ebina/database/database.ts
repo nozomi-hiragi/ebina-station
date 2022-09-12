@@ -1,6 +1,6 @@
-import { mongodb, Mutex, oak } from "../../deps.ts";
-import { getSettings } from "../../project_data/settings.ts";
-import { authToken } from "../../utils/auth.ts";
+import { mongodb, Mutex, oak } from "../../../deps.ts";
+import { getSettings } from "../../../settings/settings.ts";
+import { authToken } from "../../../utils/auth.ts";
 
 const databaseRouter = new oak.Router();
 
@@ -35,7 +35,7 @@ const initClient = async () => {
   });
 };
 
-databaseRouter.get("/databases", authToken, async (ctx) => {
+databaseRouter.get("/", authToken, async (ctx) => {
   await initClient();
   const mongodbSettings = getSettings().mongodb;
   let filter: mongodb.Document | undefined = undefined;
@@ -49,7 +49,7 @@ databaseRouter.get("/databases", authToken, async (ctx) => {
   ctx.response.body = list;
 });
 
-databaseRouter.get("/:db/collections", authToken, async (ctx) => {
+databaseRouter.get("/:db", authToken, async (ctx) => {
   const dbName = ctx.params.db;
   const mongodbSettings = getSettings().mongodb;
   if (mongodbSettings) {
@@ -83,7 +83,7 @@ databaseRouter.get("/:db/:collection/find", authToken, async (ctx) => {
   }
 });
 
-databaseRouter.get("/users", authToken, async (ctx) => {
+databaseRouter.get("/user", authToken, async (ctx) => {
   await initClient();
   const db = client.database("admin");
   const collection = db.collection("system.users");

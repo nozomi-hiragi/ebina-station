@@ -8,7 +8,7 @@ import { isDockerDesktop, readReader } from "./utils.ts";
 import { config } from "https://deno.land/x/dotenv@v3.2.0/mod.ts";
 import { crypto } from "https://deno.land/std@0.152.0/crypto/mod.ts";
 import { rmService, upService } from "./DockerComposeController.ts";
-import { getSettings } from "../koujou/project_data/settings.ts";
+import { getSettings } from "../koujou/settings/settings.ts";
 
 const projectSettings = getSettings();
 const mongoSettings = projectSettings.mongodb;

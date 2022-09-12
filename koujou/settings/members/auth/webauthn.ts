@@ -6,5 +6,9 @@ export type WebAuthnItem = {
 };
 
 export type WebAuthn = {
-  [origins: string]: WebAuthnItem | undefined;
+  [hostname: string]: WebAuthnItem | undefined;
+};
+
+export const hasHostname = (webAuthn: WebAuthn, hostname: string) => {
+  return webAuthn[hostname] !== undefined;
 };
