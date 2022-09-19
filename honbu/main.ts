@@ -15,12 +15,24 @@ const mongoSettings = projectSettings.mongodb;
 const koujouPort = projectSettings.getPortNumber();
 const honbuPort = projectSettings.getHonbuPortNumber();
 
+const removeBaseServices = () =>
+  Promise.all([
+    rmService("Koujou"),
+    rmService("Jinji"),
+  ]);
+
+const exitHonbu = () =>
+  removeBaseServices().then((successes) => {
+    const isFailed = successes.find((success) => !success);
+    Deno.exit(isFailed ? 1 : 0);
+  });
+
 const initDockerComposeFile = async (honbuKey: string) => {
   const isDesktop = await isDockerDesktop();
 
   const dockerComposeYaml = new DockerComposeYamlManager();
 
-  await rmService("Koujou");
+  await removeBaseServices();
   const ipAddress = await getNetworkAddr();
   const koujouEnv = config({ path: "./koujou/.env" });
   const koujouEnvArray = Object.keys(koujouEnv)
@@ -58,19 +70,30 @@ const initDockerComposeFile = async (honbuKey: string) => {
     });
   }
 
+  const jinjiVolumes = [
+    "./project/nginx/nginx.conf:/etc/nginx/nginx.conf",
+    "./project/nginx/sites-enabled:/etc/nginx/sites-enabled",
+    "./project/letsencrypt:/etc/letsencrypt",
+    "./project/letsencrypt/html:/var/www/html",
+  ];
+  try {
+  const file = await Deno.stat("/etc/ssl/certs/dhparam.pem");
+  if (file.isFile) {
+      jinjiVolumes.push(
+        "/etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem",
+      );
+    }
+  } catch {
+    console.log("no pem file");
+  }
+
   dockerComposeYaml.setService("Jinji", {
     image: "nginx:latest",
     container_name: "EbinaStationJinji",
     restart: "always",
     depends_on: ["Koujou", "EbinaStationDB"],
     ports: ["80:80", "443:443"],
-    volumes: [
-      "./project/nginx/nginx.conf:/etc/nginx/nginx.conf",
-      "./project/nginx/sites-enabled:/etc/nginx/sites-enabled",
-      "./project/letsencrypt:/etc/letsencrypt",
-      "./html:/var/www/html",
-      "/etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem",
-    ],
+    volumes: jinjiVolumes,
   });
 
   dockerComposeYaml.setService("certbot", {
@@ -78,7 +101,7 @@ const initDockerComposeFile = async (honbuKey: string) => {
     depends_on: ["Jinji"],
     volumes: [
       "./project/letsencrypt:/etc/letsencrypt",
-      "./html:/var/www/html",
+      "./project/letsencrypt/html:/var/www/html",
     ],
   });
 
@@ -91,10 +114,11 @@ const main = async () => {
 
   if (mongoSettings) if (!await upService("EbinaStationDB")) Deno.exit(1);
   if (!await upService("Koujou")) Deno.exit(1);
+  if (!await upService("Jinji")) Deno.exit(1);
 
   readReader(Deno.stdin, (msg: string) => {
     if (msg === "q") {
-      rmService("Koujou").then((success) => Deno.exit(success ? 0 : 1));
+      exitHonbu();
       return true;
     } else if (!msg.indexOf("create")) {
       const commands = msg.split(" ");
@@ -182,6 +206,4 @@ const main = async () => {
 
 main();
 
-Deno.addSignalListener("SIGTERM", () => {
-  rmService("Koujou").then((success) => Deno.exit(success ? 0 : 1));
-});
+Deno.addSignalListener("SIGTERM", () => exitHonbu());
