@@ -60,22 +60,31 @@ export const generateNginxConfsFromJson = () => {
   Deno.writeTextFileSync(includesConfPath, includes.join("\n"));
 };
 
+const createAuthKeyFunc = (honbuKey: string) => {
+  return async (ctx: oak.Context, next: () => Promise<unknown>) => {
+    const authKey = ctx.request.headers.get("key");
+    if (!authKey) return ctx.response.status = 401;
+
+    if (authKey === honbuKey) {
+      ctx.state.key = authKey;
+      await next();
+    } else {
+      console.log("wrong key", ctx.request);
+      ctx.response.status = 401;
+    }
+  };
+};
+
 export const createHonbuRouter = (honbuKey: string) => {
+  const authKey = createAuthKeyFunc(honbuKey);
   const router = new oak.Router();
 
-  router.post("/ping", async (ctx) => {
-    const body = await ctx.request.body({ type: "json" }).value;
-    if (body.key === honbuKey) {
-      console.log("ok from ", ctx.request.ip);
-      ctx.response.status = 200;
-    } else {
-      console.log("wrong key");
-      ctx.response.status = 400;
-      ctx.response.body = "wrong key";
-    }
+  router.post("/ping", authKey, (ctx) => {
+    console.log("ok from ", ctx.request.ip);
+    ctx.response.status = 200;
   });
 
-  router.put("/nginx/status", async (ctx) => {
+  router.put("/nginx/status", authKey, async (ctx) => {
     const body = await ctx.request.body({ type: "json" }).value;
     const status = body.status;
     switch (status) {

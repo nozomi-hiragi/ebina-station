@@ -22,7 +22,7 @@ export const initHonbuDelegate = async () => {
 
   const ret = await fetch(`${honbuAddress}/ping`, {
     method: "POST",
-    body: JSON.stringify({ key: honbuKey }),
+    headers: { key: honbuKey },
   });
   if (ret.status !== 200) {
     throw new Error(`Honbu connection error: ${ret.status}`);
