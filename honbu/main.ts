@@ -1,13 +1,9 @@
 import * as oak from "https://deno.land/x/oak@v10.6.0/mod.ts";
-import { getNetworkAddr } from "https://deno.land/x/local_ip@0.0.3/mod.ts";
-import {
-  DockerComposeYamlManager,
-  DockerComposeYamlService,
-} from "./DockerComposeYamlManager.ts";
-import { isDockerDesktop, readReader } from "./utils.ts";
-import { config } from "https://deno.land/x/dotenv@v3.2.0/mod.ts";
+import { readReader } from "./utils.ts";
 import { crypto } from "https://deno.land/std@0.152.0/crypto/mod.ts";
 import { rmService, upService } from "./DockerComposeController.ts";
+import { initDockerComposeFile, ServiceName } from "./EbinaService.ts";
+import { createHonbuRouter } from "./honbuAPI.ts";
 import { getSettings } from "../koujou/settings/settings.ts";
 
 const projectSettings = getSettings();
@@ -17,8 +13,8 @@ const honbuPort = projectSettings.getHonbuPortNumber();
 
 const removeBaseServices = () =>
   Promise.all([
-    rmService("Koujou"),
-    rmService("Jinji"),
+    rmService(ServiceName.Koujou),
+    rmService(ServiceName.Jinji),
   ]);
 
 const exitHonbu = () =>
@@ -27,94 +23,17 @@ const exitHonbu = () =>
     Deno.exit(isFailed ? 1 : 0);
   });
 
-const initDockerComposeFile = async (honbuKey: string) => {
-  const isDesktop = await isDockerDesktop();
-
-  const dockerComposeYaml = new DockerComposeYamlManager();
-
-  await removeBaseServices();
-  const ipAddress = await getNetworkAddr();
-  const koujouEnv = config({ path: "./koujou/.env" });
-  const koujouEnvArray = Object.keys(koujouEnv)
-    .map((key) => `${key}=${koujouEnv[key]}`);
-  const serviceKoujou: DockerComposeYamlService = {
-    build: "./koujou",
-    image: "ebina-station-api",
-    container_name: "EbinaStationKoujou",
-    volumes: ["./project:/app/project"],
-    environment: koujouEnvArray.concat([
-      "HONBU=true",
-      `HONBU_ADDRESS=${ipAddress}`,
-      `HONBU_PORT=${honbuPort}`,
-      `HONBU_KEY=${honbuKey}`,
-    ]),
-  };
-  if (isDesktop) serviceKoujou.ports = [`${koujouPort}:${koujouPort}`];
-  else serviceKoujou.network_mode = "host";
-  dockerComposeYaml.setService("Koujou", serviceKoujou);
-
-  await rmService("EbinaStationDB");
-  if (mongoSettings) {
-    const mongoPort = mongoSettings.port;
-    dockerComposeYaml.setService("EbinaStationDB", {
-      image: "mongo",
-      container_name: "EbinaStationDB",
-      command: `mongod --port ${mongoPort}`,
-      restart: "always",
-      environment: koujouEnvArray,
-      ports: [`${mongoPort}:${mongoPort}`],
-      volumes: [
-        "./mongodb/mongo_db:/data/db",
-        "./mongodb/initdb.d:/docker-entrypoint-initdb.d",
-      ],
-    });
-  }
-
-  const jinjiVolumes = [
-    "./project/nginx/nginx.conf:/etc/nginx/nginx.conf",
-    "./project/nginx/sites-enabled:/etc/nginx/sites-enabled",
-    "./project/letsencrypt:/etc/letsencrypt",
-    "./project/letsencrypt/html:/var/www/html",
-  ];
-  try {
-  const file = await Deno.stat("/etc/ssl/certs/dhparam.pem");
-  if (file.isFile) {
-      jinjiVolumes.push(
-        "/etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem",
-      );
-    }
-  } catch {
-    console.log("no pem file");
-  }
-
-  dockerComposeYaml.setService("Jinji", {
-    image: "nginx:latest",
-    container_name: "EbinaStationJinji",
-    restart: "always",
-    depends_on: ["Koujou", "EbinaStationDB"],
-    ports: ["80:80", "443:443"],
-    volumes: jinjiVolumes,
-  });
-
-  dockerComposeYaml.setService("certbot", {
-    image: "certbot/certbot",
-    depends_on: ["Jinji"],
-    volumes: [
-      "./project/letsencrypt:/etc/letsencrypt",
-      "./project/letsencrypt/html:/var/www/html",
-    ],
-  });
-
-  dockerComposeYaml.saveToFile("docker-compose.yml");
-};
-
 const main = async () => {
   const honbuKey = crypto.randomUUID() ?? "honbukey";
-  await initDockerComposeFile(honbuKey);
+  await initDockerComposeFile(
+    { key: honbuKey, port: honbuPort },
+    koujouPort,
+    mongoSettings?.port,
+  );
 
-  if (mongoSettings) if (!await upService("EbinaStationDB")) Deno.exit(1);
-  if (!await upService("Koujou")) Deno.exit(1);
-  if (!await upService("Jinji")) Deno.exit(1);
+  if (mongoSettings) if (!await upService(ServiceName.mongodb)) Deno.exit(1);
+  if (!await upService(ServiceName.Koujou)) Deno.exit(1);
+  if (!await upService(ServiceName.Jinji)) Deno.exit(1);
 
   readReader(Deno.stdin, (msg: string) => {
     if (msg === "q") {
@@ -186,21 +105,9 @@ const main = async () => {
     }
   });
 
-  const router = new oak.Router();
-  router.post("/ping", async (ctx) => {
-    const body = await ctx.request.body({ type: "json" }).value;
-    if (body.key === honbuKey) {
-      console.log("ok from ", ctx.request.ip);
-      ctx.response.status = 200;
-    } else {
-      console.log("wrong key");
-      ctx.response.status = 400;
-      ctx.response.body = "wrong key";
-    }
-  });
-
   const app = new oak.Application();
-  app.use(router.routes(), router.allowedMethods());
+  const honbuRouter = createHonbuRouter(honbuKey);
+  app.use(honbuRouter.routes(), honbuRouter.allowedMethods());
   app.listen({ port: honbuPort });
 };
 

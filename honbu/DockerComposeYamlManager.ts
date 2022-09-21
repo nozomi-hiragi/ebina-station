@@ -44,7 +44,7 @@ export class DockerComposeYamlManager {
     }
   }
 
-  saveToFile(path: string) {
+  saveToFile(path = "docker-compose.yml") {
     try {
       Deno.writeTextFileSync(path, this.toYamlString());
       return true;

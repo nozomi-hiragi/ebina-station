@@ -22,7 +22,19 @@ class DockerCommandRm {
   }
 }
 
-type DockerComposeCommand = DockerCommandUp | DockerCommandRm;
+class DockerCommandRestart {
+  containerName: string;
+  timeout?: number;
+  constructor(containerName: string, timeout?: number) {
+    this.containerName = containerName;
+    this.timeout = timeout;
+  }
+}
+
+type DockerComposeCommand =
+  | DockerCommandUp
+  | DockerCommandRm
+  | DockerCommandRestart;
 
 const buildDockerComposeCommand = (command: DockerComposeCommand) => {
   const cmd = ["docker-compose"] as string[];
@@ -36,6 +48,14 @@ const buildDockerComposeCommand = (command: DockerComposeCommand) => {
     cmd.push("rm");
     if (command.forceRemove) cmd.push("-f");
     if (command.beforeStop) cmd.push("-s");
+    cmd.push(command.containerName);
+  } else if (command instanceof DockerCommandRestart) {
+    if (command.containerName === "") throw new Error("no container name");
+    cmd.push("restart");
+    if (command.timeout) {
+      cmd.push("-t");
+      cmd.push(`${command.timeout}`);
+    }
     cmd.push(command.containerName);
   }
   return cmd;
@@ -57,3 +77,6 @@ export const upService = (containerName: string) =>
 
 export const rmService = (containerName: string) =>
   execDockerCompose(new DockerCommandRm(containerName));
+
+export const restartService = (containerName: string) =>
+  execDockerCompose(new DockerCommandRestart(containerName));
