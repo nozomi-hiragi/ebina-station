@@ -2,6 +2,7 @@ import { AttestationConveyancePreference } from "../utils/webauthn/types.ts";
 
 export const PROJECT_PATH = "./project";
 export const APPS_DIR = `${PROJECT_PATH}/apps`;
+export const NGINX_DIR = `${PROJECT_PATH}/nginx`;
 export const GOMI_DIR = `${PROJECT_PATH}/gomi`;
 
 const SETTINGS_FILE_PATH = `${PROJECT_PATH}/settings.json`;

@@ -31,10 +31,20 @@ class DockerCommandRestart {
   }
 }
 
+class DockerCommandPs {
+  containerName: string;
+  quiet?: boolean;
+  constructor(containerName: string, quiet?: boolean) {
+    this.containerName = containerName;
+    this.quiet = quiet;
+  }
+}
+
 type DockerComposeCommand =
   | DockerCommandUp
   | DockerCommandRm
-  | DockerCommandRestart;
+  | DockerCommandRestart
+  | DockerCommandPs;
 
 const buildDockerComposeCommand = (command: DockerComposeCommand) => {
   const cmd = ["docker-compose"] as string[];
@@ -57,19 +67,25 @@ const buildDockerComposeCommand = (command: DockerComposeCommand) => {
       cmd.push(`${command.timeout}`);
     }
     cmd.push(command.containerName);
+  } else if (command instanceof DockerCommandPs) {
+    if (command.containerName === "") throw new Error("no container name");
+    cmd.push("ps");
+    if (command.quiet) cmd.push("-q");
+    cmd.push(command.containerName);
   }
   return cmd;
 };
 
 const execDockerCompose = async (command: DockerComposeCommand) => {
   const cmd = buildDockerComposeCommand(command);
-  const process = Deno.run({ cmd, stderr: "piped" });
+  const process = Deno.run({ cmd, stdout: "piped", stderr: "piped" });
   const status = await process.status();
+  const output = new TextDecoder().decode(await process.output());
   if (status.code !== 0) {
-    console.log(new TextDecoder().decode(await process.stderrOutput()));
+    throw new TextDecoder().decode(await process.stderrOutput());
   }
 
-  return status.success;
+  return { output, ...status };
 };
 
 export const upService = (containerName: string) =>
@@ -80,3 +96,6 @@ export const rmService = (containerName: string) =>
 
 export const restartService = (containerName: string) =>
   execDockerCompose(new DockerCommandRestart(containerName));
+
+export const psService = (containerName: string) =>
+  execDockerCompose(new DockerCommandPs(containerName));

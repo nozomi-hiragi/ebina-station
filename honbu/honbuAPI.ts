@@ -1,5 +1,10 @@
 import * as oak from "https://deno.land/x/oak@v10.6.0/mod.ts";
-import { restartService } from "./DockerComposeController.ts";
+import {
+  psService,
+  restartService,
+  rmService,
+  upService,
+} from "./DockerComposeController.ts";
 import { ServiceName } from "./EbinaService.ts";
 import { isExist } from "./utils.ts";
 
@@ -88,15 +93,61 @@ export const createHonbuRouter = (honbuKey: string) => {
     const body = await ctx.request.body({ type: "json" }).value;
     const status = body.status;
     switch (status) {
-      case "restart":
+      case "up": {
         generateNginxConfsFromJson();
-        restartService(ServiceName.Jinji);
+        ctx.response.status = await upService(ServiceName.Jinji)
+          .then(() => 200)
+          .catch((msg) => {
+            console.log(msg);
+            return 500;
+          });
         break;
-
+      }
+      case "restart": {
+        generateNginxConfsFromJson();
+        ctx.response.status = await restartService(ServiceName.Jinji)
+          .then(() => 200)
+          .catch((msg) => {
+            console.log(msg);
+            return 500;
+          });
+        break;
+      }
+      case "rm": {
+        generateNginxConfsFromJson();
+        ctx.response.status = await rmService(ServiceName.Jinji)
+          .then(() => 200)
+          .catch((msg) => {
+            console.log(msg);
+            return 500;
+          });
+        break;
+      }
       default:
         return ctx.response.status = 400;
     }
-    ctx.response.status = 200;
+  });
+
+  router.get("/dockercompose/ps/:name", authKey, async (ctx) => {
+    const name = ctx.params.name;
+    const ret = await psService(name).catch((msg) => {
+      console.log(msg);
+      return undefined;
+    });
+    if (ret) {
+      const retArray = ret.output.split("\n");
+      if (retArray.length <= 3) {
+        ctx.response.body = "Removed";
+      } else {
+        const stateIdx = retArray[0].indexOf("State");
+        const stateEndIdx = retArray[2].indexOf(" ", stateIdx);
+        const state = retArray[2].substring(stateIdx, stateEndIdx);
+        ctx.response.body = state; // Up Paused Exit
+      }
+      ctx.response.status = 200;
+    } else {
+      ctx.response.status = 500;
+    }
   });
 
   return router;

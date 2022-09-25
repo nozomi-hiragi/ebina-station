@@ -13,8 +13,8 @@ const honbuPort = projectSettings.getHonbuPortNumber();
 
 const removeBaseServices = () =>
   Promise.all([
-    rmService(ServiceName.Koujou),
-    rmService(ServiceName.Jinji),
+    rmService(ServiceName.Koujou).catch((msg) => console.error(msg)),
+    rmService(ServiceName.Jinji).catch((msg) => console.error(msg)),
   ]);
 
 const exitHonbu = () =>
