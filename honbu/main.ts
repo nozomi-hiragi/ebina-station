@@ -1,15 +1,17 @@
 import * as oak from "https://deno.land/x/oak@v10.6.0/mod.ts";
-import { readReader } from "./utils.ts";
+import { isExist, readReader } from "./utils.ts";
 import { crypto } from "https://deno.land/std@0.152.0/crypto/mod.ts";
 import { rmService, upService } from "./DockerComposeController.ts";
 import { initDockerComposeFile, ServiceName } from "./EbinaService.ts";
 import { createHonbuRouter } from "./honbuAPI.ts";
-import { getSettings } from "../koujou/settings/settings.ts";
+import { getSettings, PROJECT_PATH } from "../koujou/settings/settings.ts";
 
-const projectSettings = getSettings();
-const mongoSettings = projectSettings.mongodb;
-const koujouPort = projectSettings.getPortNumber();
-const honbuPort = projectSettings.getHonbuPortNumber();
+const pjInfo = isExist(PROJECT_PATH);
+if (pjInfo) {
+  if (!pjInfo.isDirectory) throw new Error("project is not directory");
+} else {
+  Deno.mkdir(PROJECT_PATH, { recursive: true });
+}
 
 const removeBaseServices = () =>
   Promise.all([
@@ -24,6 +26,11 @@ const exitHonbu = () =>
   });
 
 const main = async () => {
+  const projectSettings = getSettings();
+  const mongoSettings = projectSettings.mongodb;
+  const koujouPort = projectSettings.getPortNumber();
+  const honbuPort = projectSettings.getHonbuPortNumber();
+
   const honbuKey = crypto.randomUUID() ?? "honbukey";
   await initDockerComposeFile(
     { key: honbuKey, port: honbuPort },

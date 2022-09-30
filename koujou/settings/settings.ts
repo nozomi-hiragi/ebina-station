@@ -28,12 +28,18 @@ class Settings {
   port?: "env" | number;
   honbuPort?: number;
   // membersEncryption = false;
-  origins: string[] | string = [];
+  origins: string[] = [];
   WebAuthn?: WebAuthnSetting;
   mongodb?: MongoBD;
 
   constructor(init?: Partial<Settings>) {
-    Object.assign(this, init);
+    if (init) {
+      Object.assign(this, init);
+    } else {
+      this.origins.push("https://nozomi-hiragi.github.io");
+      this.port = DEFAULT_PORT_NUM;
+      this.honbuPort = DEFAULT_HONBU_PORT_NUM;
+    }
 
     const mongodb = this.mongodb;
     if (mongodb) {
@@ -79,7 +85,9 @@ class Settings {
   }
 }
 
-let settings: Settings = (() => {
+let settings: Settings;
+
+const loadFromFile = () => {
   try {
     return new Settings(
       JSON.parse(Deno.readTextFileSync(SETTINGS_FILE_PATH)),
@@ -92,9 +100,9 @@ let settings: Settings = (() => {
     );
     return settings;
   }
-})();
+};
 
-export const getSettings = () => settings;
+export const getSettings = () => settings ?? (settings = loadFromFile());
 
 const saveToFile = () => {
   if (!settings) return false;

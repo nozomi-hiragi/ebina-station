@@ -77,12 +77,12 @@ const createJinjiSettings = () => {
       generateNginxConfsFromJson();
     }
   } catch {
-    throw "no nginx conf file";
+    Deno.mkdirSync("./project/nginx/", { recursive: true });
+    Deno.copyFileSync("./nginx.conf.base", "./project/nginx/nginx.conf");
   }
 
   const volumes = [
     "./project/nginx/nginx.conf:/etc/nginx/nginx.conf",
-    "./project/nginx/sites-enabled:/etc/nginx/sites-enabled",
     "./project/nginx/generate:/etc/nginx/generate",
   ].concat(volumesLetsencrypt);
   if (isExist("/etc/ssl/certs/dhparam.pem")) {
@@ -113,10 +113,10 @@ export const initDockerComposeFile = async (
   mongodbPort?: number,
 ) => {
   await Promise.all([
-    rmService(ServiceName.Koujou),
-    rmService(ServiceName.Jinji),
-    rmService(ServiceName.mongodb),
-    rmService(ServiceName.certbot),
+    rmService(ServiceName.Koujou).catch(() => {}),
+    rmService(ServiceName.Jinji).catch(() => {}),
+    rmService(ServiceName.mongodb).catch(() => {}),
+    rmService(ServiceName.certbot).catch(() => {}),
   ]);
 
   const koujouEnv = config({ path: "./koujou/.env" });

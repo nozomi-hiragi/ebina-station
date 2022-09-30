@@ -22,7 +22,6 @@ const iRouter = new oak.Router();
 // :id
 // 200 オプション
 // 400 情報足りない
-// 500 WebAuthnの設定おかしい
 iRouter.get("/login/:id", async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   const { id } = ctx.params;
@@ -43,6 +42,7 @@ iRouter.get("/login/:id", async (ctx) => {
     switch (err.status) {
       case 404:
       case 406:
+      case 500:
         return ctx.response.body = { type: "password" };
       default:
         ctx.response.status = err.status;
