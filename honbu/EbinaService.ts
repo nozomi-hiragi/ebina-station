@@ -83,6 +83,7 @@ const createJinjiSettings = () => {
 
   const volumes = [
     "./project/nginx/nginx.conf:/etc/nginx/nginx.conf",
+    "./project/nginx/sites-enabled:/etc/nginx/sites-enabled",
     "./project/nginx/generate:/etc/nginx/generate",
   ].concat(volumesLetsencrypt);
   if (isExist("/etc/ssl/certs/dhparam.pem")) {
