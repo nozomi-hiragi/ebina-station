@@ -1,5 +1,4 @@
-import { config } from "https://deno.land/x/dotenv@v3.2.0/mod.ts";
-import { getNetworkAddr } from "https://deno.land/x/local_ip@0.0.3/mod.ts";
+import { config, getNetworkAddr } from "./deps.ts";
 import { rmService } from "./DockerComposeController.ts";
 import {
   DockerComposeYamlManager,

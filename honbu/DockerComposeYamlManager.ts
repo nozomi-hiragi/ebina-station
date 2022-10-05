@@ -1,7 +1,4 @@
-import {
-  parse,
-  stringify,
-} from "https://deno.land/std@0.151.0/encoding/yaml.ts";
+import { parse, stringify } from "./deps.ts";
 
 type DockerComposeYamlBase = {
   version: string;

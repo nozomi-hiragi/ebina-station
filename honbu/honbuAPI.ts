@@ -1,4 +1,4 @@
-import * as oak from "https://deno.land/x/oak@v10.6.0/mod.ts";
+import { oak } from "./deps.ts";
 import {
   psService,
   restartService,

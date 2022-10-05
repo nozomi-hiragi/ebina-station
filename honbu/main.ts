@@ -1,6 +1,5 @@
-import * as oak from "https://deno.land/x/oak@v10.6.0/mod.ts";
+import { oak } from "./deps.ts";
 import { isExist, readReader } from "./utils.ts";
-import { crypto } from "https://deno.land/std@0.152.0/crypto/mod.ts";
 import { rmService, upService } from "./DockerComposeController.ts";
 import { initDockerComposeFile, ServiceName } from "./EbinaService.ts";
 import { createHonbuRouter } from "./honbuAPI.ts";
