@@ -62,8 +62,14 @@ webauthnRouter.post("/regist", authToken, async (ctx) => {
   if (!deviceName) return ctx.response.status = 400;
 
   try {
-    await verifyRegistChallenge(origin, member, deviceName, body);
+    const enabledDevices = await verifyRegistChallenge(
+      origin,
+      member,
+      deviceName,
+      body,
+    );
     ctx.response.status = 200;
+    ctx.response.body = enabledDevices;
   } catch (err) {
     if (err instanceof HttpExeption) {
       ctx.response.status = err.status;

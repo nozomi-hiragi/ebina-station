@@ -152,6 +152,8 @@ export const verifyRegistChallenge = async (
   webAuthnItem.enableDevices.push(deviceName);
   member.setWebAuthnItem(rpID, webAuthnItem);
   getMembers().setMember(member);
+
+  return webAuthnItem.enableDevices;
 };
 
 export const createLoginOptions = async (

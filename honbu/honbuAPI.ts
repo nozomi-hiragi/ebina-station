@@ -49,22 +49,28 @@ server {
 
 export const generateNginxConfsFromJson = () => {
   const confsFilePath = "./project/nginx/confs.json";
-  if (!isExist(confsFilePath)) return;
+  const generateDir = "./project/nginx/generate";
 
-  Deno.removeSync("./project/nginx/generate", { recursive: true });
-  Deno.mkdir("./project/nginx/generate", { recursive: true });
+  if (isExist(generateDir)) Deno.removeSync(generateDir, { recursive: true });
+  Deno.mkdirSync(generateDir, { recursive: true });
+
   const includes: string[] = [];
 
-  const confs = JSON.parse(Deno.readTextFileSync(confsFilePath));
-  if (confs) {
-    Object.keys(confs).forEach((name) => {
-      const ret = generateNginxConf(name, confs[name]);
-      if (ret) console.log(ret);
-      else includes.push(`include ${generateDirPathInContainer}/${name}.conf;`);
-    });
+  if (isExist(confsFilePath)) {
+    const confs = JSON.parse(Deno.readTextFileSync(confsFilePath));
+    if (confs) {
+      Object.keys(confs).forEach((name) => {
+        const err = generateNginxConf(name, confs[name]);
+        if (err) {
+          console.log(err);
+        } else {
+          includes.push(`include ${generateDirPathInContainer}/${name}.conf;`);
+        }
+      });
+    }
   }
 
-  const includesConfPath = "./project/nginx/generate/includes.conf";
+  const includesConfPath = `${generateDir}/includes.conf`;
   Deno.writeTextFileSync(includesConfPath, includes.join("\n"));
 };
 

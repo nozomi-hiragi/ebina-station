@@ -1,7 +1,6 @@
-export const mkdirIfNotExist = async (path: string) => {
+export const mkdirIfNotExist = (path: string) => {
   try {
-    await Deno.stat(path);
-    return undefined;
+    return Deno.statSync(path);
   } catch {
     Deno.mkdirSync(path, { recursive: true });
   }

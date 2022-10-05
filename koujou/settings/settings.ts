@@ -10,7 +10,7 @@ const DEFAULT_PORT_NUM = 3456;
 const DEFAULT_HONBU_PORT_NUM = 9876;
 const DEFAULT_MONGODB_PORT = 27017;
 
-type WebAuthnSetting = {
+export type WebAuthnSetting = {
   rpName: string;
   rpIDType: "variable" | "static";
   rpID?: string;
@@ -30,20 +30,25 @@ class Settings {
   // membersEncryption = false;
   origins: string[] = [];
   WebAuthn?: WebAuthnSetting;
-  mongodb?: MongoBD;
+  mongodb: MongoBD = {
+    port: DEFAULT_MONGODB_PORT,
+    username: "env",
+    password: "env",
+    databaseFilter: {
+      admin: { enable: true },
+      config: { enable: true },
+      local: { enable: true },
+    },
+  };
 
   constructor(init?: Partial<Settings>) {
     if (init) {
       Object.assign(this, init);
     } else {
       this.origins.push("https://nozomi-hiragi.github.io");
+      this.origins.push("http://localhost:3000");
       this.port = DEFAULT_PORT_NUM;
       this.honbuPort = DEFAULT_HONBU_PORT_NUM;
-    }
-
-    const mongodb = this.mongodb;
-    if (mongodb) {
-      if (mongodb.port === undefined) mongodb.port = DEFAULT_MONGODB_PORT;
     }
   }
 

@@ -13,10 +13,12 @@ const appRouter = new oak.Router();
 
 const getAppList = () => {
   const appList = [];
-  for (const dirEntry of Deno.readDirSync(APPS_DIR)) {
-    if (dirEntry.isDirectory) {
-      appList.push(dirEntry.name);
+  try {
+    for (const dirEntry of Deno.readDirSync(APPS_DIR)) {
+      if (dirEntry.isDirectory) appList.push(dirEntry.name);
     }
+  } catch {
+    console.log("no app dir");
   }
   if (appList.length === 0) {
     mkdirIfNotExist(`${APPS_DIR}/${FIRST_APP_NAME}`);
