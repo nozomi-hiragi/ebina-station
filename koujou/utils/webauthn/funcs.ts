@@ -267,6 +267,8 @@ export const verifyLoginChallenge = async (
     ?.get("counter");
   member.setWebAuthnItem(rpID, webAuthnItem);
   getMembers().setMember(member);
+
+  return result;
 };
 
 export const getAuthenticatorNames = (origin: string, member: Member) => {

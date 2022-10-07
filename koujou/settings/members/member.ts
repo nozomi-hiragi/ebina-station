@@ -50,6 +50,10 @@ export class Member {
     }
   }
 
+  setPassword(password: PasswordAuth) {
+    this.value.auth.password = password;
+  }
+
   cleanFlags() {
     const flags = this.value.flags;
     if (!flags) return;
@@ -68,6 +72,12 @@ export class Member {
     const passwordAuth = this.value.auth.password;
     if (!passwordAuth) return undefined;
     return authPassword(passwordAuth, pass);
+  }
+
+  updatePassword(current: string, _new: string) {
+    const ret = this.authMemberWithPassword(current);
+    if (ret) this.setPassword(createPasswordAuth(_new));
+    return ret;
   }
 
   hasWebAuthn(hostname: string) {

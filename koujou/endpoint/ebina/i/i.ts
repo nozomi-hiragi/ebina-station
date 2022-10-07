@@ -14,8 +14,14 @@ import {
 } from "../../../utils/webauthn/funcs.ts";
 import { HttpExeption } from "../../../utils/utils.ts";
 import webauthnRouter from "./webauthn/index.ts";
+import {
+  createPasswordAuth,
+  PasswordAuth,
+} from "../../../settings/members/auth/password.ts";
 
 const iRouter = new oak.Router();
+
+const tmpPassword: { [key: string]: PasswordAuth | undefined } = {};
 
 // プレログイン
 // origin:
@@ -149,6 +155,71 @@ iRouter.post("/verify", authToken, (ctx) => {
   const payload = ctx.state.payload;
   if (!payload) return ctx.response.status = 500;
   ctx.response.body = payload;
+});
+
+// パスワード更新
+// 200 変えれた
+// 202 認証して
+// 400 足らない
+// 401 認証できてない
+// 403 許可されてない
+// 404 データない
+// 405 パスワードのデータおかしい
+iRouter.put("/password", authToken, async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload = ctx.state.payload;
+  if (!payload) return ctx.response.status = 401;
+  const member = getMembers().getMember(payload.id);
+  if (!member) return ctx.response.status = 404;
+
+  const body = await ctx.request.body({ type: "json" }).value;
+  if (body.type === "public-key") {
+    try {
+      const ret = await verifyLoginChallenge(origin, member, body);
+      const challenge: string | undefined = ret.clientData?.get("challenge");
+      if (!challenge) return ctx.response.status = 403;
+      const password = tmpPassword[challenge];
+      if (!password) return ctx.response.status = 404;
+      delete tmpPassword[challenge];
+      member.setPassword(password);
+      getMembers().setMember(member);
+      return ctx.response.status = 200;
+    } catch {
+      return ctx.response.status = 401;
+    }
+  } else {
+    const current: string | undefined = body.current;
+    const _new: string | undefined = body.new;
+    if (!current || !_new) return ctx.response.status = 400;
+    try {
+      if (!ctx.request.secure && ctx.request.url.hostname !== "localhost") {
+        throw new Error("no secure");
+      }
+      const options = await createLoginOptions(origin, member, []);
+      ctx.response.body = options;
+
+      if (member.authMemberWithPassword(current)) {
+        tmpPassword[options.challenge] = createPasswordAuth(_new);
+      }
+
+      return ctx.response.status = 202;
+    } catch (err) {
+      if (err instanceof HttpExeption || err.message === "no secure") {
+        switch (member.updatePassword(current, _new)) {
+          case true:
+            getMembers().setMember(member);
+            return ctx.response.status = 200;
+          case false:
+            return ctx.response.status = 401;
+          case undefined:
+            return ctx.response.status = 405;
+        }
+      } else {
+        return ctx.response.status = 403;
+      }
+    }
+  }
 });
 
 iRouter.use("/webauthn", webauthnRouter.routes());
