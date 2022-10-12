@@ -7,9 +7,8 @@ import { exist, mkdirIfNotExist } from "../../../utils/utils.ts";
 const scriptsDir = "scripts";
 const jsRouter = new oak.Router();
 
-const initFolder = (appName: string) => {
+const initFolder = (appName: string) =>
   mkdirIfNotExist(`${APPS_DIR}/${appName}/${scriptsDir}`);
-};
 
 // スクリプトファイル一覧取得
 // 200 一覧

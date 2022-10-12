@@ -22,7 +22,7 @@ export const initHonbuDelegate = async () => {
 
   const ret = await fetch(`${honbuAddress}/ping`, {
     method: "POST",
-    body: JSON.stringify({ key: honbuKey }),
+    headers: { key: honbuKey },
   });
   if (ret.status !== 200) {
     throw new Error(`Honbu connection error: ${ret.status}`);
@@ -50,3 +50,20 @@ export const checkHonbuKey = async (
 };
 
 export const isEnableHonbu = () => honbuParams !== undefined;
+
+export const containerState = async (name: string) => {
+  if (!honbuParams) return undefined;
+  return await fetch(`${honbuParams.honbuAddress}/dockercompose/ps/${name}`, {
+    method: "GET",
+    headers: { key: honbuParams.honbuKey },
+  }).then((ret) => ret.text());
+};
+
+export const updateNginxStatus = async (status: string) => {
+  if (!honbuParams) return undefined;
+  return await fetch(`${honbuParams.honbuAddress}/nginx/status`, {
+    method: "PUT",
+    headers: { key: honbuParams.honbuKey },
+    body: JSON.stringify({ status }),
+  }).then((ret) => ret.status);
+};

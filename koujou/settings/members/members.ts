@@ -1,6 +1,5 @@
 import { PROJECT_PATH } from "../settings.ts";
 import { _TypeMember, Member } from "./member.ts";
-export type { WebAuthn, WebAuthnItem } from "./auth/webauthn.ts";
 
 const MEMBERS_FILE_PATH = `${PROJECT_PATH}/members.json`;
 

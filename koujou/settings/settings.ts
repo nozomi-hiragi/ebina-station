@@ -1,7 +1,8 @@
-import { AttestationConveyancePreference } from "../utils/webauthn/types.ts";
+import { AttestationConveyancePreference } from "../utils/webauthn/fido2Wrap.ts";
 
 export const PROJECT_PATH = "./project";
 export const APPS_DIR = `${PROJECT_PATH}/apps`;
+export const NGINX_DIR = `${PROJECT_PATH}/nginx`;
 export const GOMI_DIR = `${PROJECT_PATH}/gomi`;
 
 const SETTINGS_FILE_PATH = `${PROJECT_PATH}/settings.json`;
@@ -9,7 +10,7 @@ const DEFAULT_PORT_NUM = 3456;
 const DEFAULT_HONBU_PORT_NUM = 9876;
 const DEFAULT_MONGODB_PORT = 27017;
 
-type WebAuthnSetting = {
+export type WebAuthnSetting = {
   rpName: string;
   rpIDType: "variable" | "static";
   rpID?: string;
@@ -27,16 +28,27 @@ class Settings {
   port?: "env" | number;
   honbuPort?: number;
   // membersEncryption = false;
-  origins: string[] | string = [];
+  origins: string[] = [];
   WebAuthn?: WebAuthnSetting;
-  mongodb?: MongoBD;
+  mongodb: MongoBD = {
+    port: DEFAULT_MONGODB_PORT,
+    username: "env",
+    password: "env",
+    databaseFilter: {
+      admin: { enable: true },
+      config: { enable: true },
+      local: { enable: true },
+    },
+  };
 
   constructor(init?: Partial<Settings>) {
-    Object.assign(this, init);
-
-    const mongodb = this.mongodb;
-    if (mongodb) {
-      if (mongodb.port === undefined) mongodb.port = DEFAULT_MONGODB_PORT;
+    if (init) {
+      Object.assign(this, init);
+    } else {
+      this.origins.push("https://nozomi-hiragi.github.io");
+      this.origins.push("http://localhost:3000");
+      this.port = DEFAULT_PORT_NUM;
+      this.honbuPort = DEFAULT_HONBU_PORT_NUM;
     }
   }
 
@@ -53,6 +65,8 @@ class Settings {
     return this.honbuPort ?? DEFAULT_HONBU_PORT_NUM;
   }
 
+  hasWebAuthn = () => this.WebAuthn !== undefined;
+
   isRPIDStatic() {
     switch (this.WebAuthn?.rpIDType) {
       case "variable":
@@ -61,6 +75,13 @@ class Settings {
       case "static":
         return true;
     }
+  }
+
+  getWebAuthnRPID(origin: string) {
+    if (!this.WebAuthn) return undefined;
+    const { hostname } = new URL(origin);
+    const rpID = settings.isRPIDStatic() ? this.WebAuthn.rpID : hostname;
+    return rpID;
   }
 
   getMongodbUsername() {
@@ -78,7 +99,9 @@ class Settings {
   }
 }
 
-let settings: Settings = (() => {
+let settings: Settings;
+
+const loadFromFile = () => {
   try {
     return new Settings(
       JSON.parse(Deno.readTextFileSync(SETTINGS_FILE_PATH)),
@@ -91,9 +114,9 @@ let settings: Settings = (() => {
     );
     return settings;
   }
-})();
+};
 
-export const getSettings = () => settings;
+export const getSettings = () => settings ?? (settings = loadFromFile());
 
 const saveToFile = () => {
   if (!settings) return false;
