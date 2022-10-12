@@ -3,10 +3,10 @@ import { getMembers } from "../../../../settings/members/members.ts";
 import { authToken, JwtPayload } from "../../../../utils/auth.ts";
 import { HttpExeption } from "../../../../utils/utils.ts";
 import {
-  createLoginOptions,
-  createRegistOptions,
-  verifyLoginChallenge,
-  verifyRegistChallenge,
+  createOptionsForAuth,
+  createOptionsForRegist,
+  verifyChallengeForAuth,
+  verifyChallengeForRegist,
 } from "../../../../utils/webauthn/funcs.ts";
 import deviceRouter from "./device.ts";
 
@@ -27,7 +27,7 @@ webauthnRouter.get("/regist", authToken, async (ctx) => {
   if (!member) return ctx.response.status = 404;
 
   try {
-    const options = await createRegistOptions(origin, member);
+    const options = await createOptionsForRegist(origin, member);
     ctx.response.body = options;
   } catch (err) {
     if (err instanceof HttpExeption) {
@@ -62,7 +62,7 @@ webauthnRouter.post("/regist", authToken, async (ctx) => {
   if (!deviceName) return ctx.response.status = 400;
 
   try {
-    const enabledDevices = await verifyRegistChallenge(
+    const enabledDevices = await verifyChallengeForRegist(
       origin,
       member,
       deviceName,
@@ -95,14 +95,16 @@ webauthnRouter.get("/verify", authToken, async (ctx) => {
   const member = getMembers().getMember(memberId);
   if (!member) return ctx.response.status = 404;
 
-  const queryDeviceNames = ctx.request.url.searchParams.get("deviceNames") ??
-    "";
+  const queryDeviceNames = ctx.request.url.searchParams
+    .get("deviceNames") ?? "";
 
   try {
-    const options = await createLoginOptions(
+    const options = await createOptionsForAuth(
       origin,
+      memberId,
+      undefined,
       member,
-      queryDeviceNames === "" ? [] : queryDeviceNames.split(","),
+      queryDeviceNames ? queryDeviceNames.split(",") : undefined,
     );
     ctx.response.body = options;
   } catch (err) {
@@ -137,7 +139,7 @@ webauthnRouter.post("/verify", authToken, async (ctx) => {
   const body = await ctx.request.body({ type: "json" }).value;
 
   try {
-    await verifyLoginChallenge(origin, member, body);
+    await verifyChallengeForAuth(origin, member, body, memberId);
     ctx.response.status = 200;
   } catch (err) {
     if (err instanceof HttpExeption) {

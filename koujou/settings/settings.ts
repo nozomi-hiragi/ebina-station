@@ -1,4 +1,4 @@
-import { AttestationConveyancePreference } from "../utils/webauthn/types.ts";
+import { AttestationConveyancePreference } from "../utils/webauthn/fido2Wrap.ts";
 
 export const PROJECT_PATH = "./project";
 export const APPS_DIR = `${PROJECT_PATH}/apps`;
@@ -65,6 +65,8 @@ class Settings {
     return this.honbuPort ?? DEFAULT_HONBU_PORT_NUM;
   }
 
+  hasWebAuthn = () => this.WebAuthn !== undefined;
+
   isRPIDStatic() {
     switch (this.WebAuthn?.rpIDType) {
       case "variable":
@@ -73,6 +75,13 @@ class Settings {
       case "static":
         return true;
     }
+  }
+
+  getWebAuthnRPID(origin: string) {
+    if (!this.WebAuthn) return undefined;
+    const { hostname } = new URL(origin);
+    const rpID = settings.isRPIDStatic() ? this.WebAuthn.rpID : hostname;
+    return rpID;
   }
 
   getMongodbUsername() {

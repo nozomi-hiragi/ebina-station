@@ -1,3 +1,5 @@
+import { base64 } from "../deps.ts";
+
 export const mkdirIfNotExist = (path: string) => {
   try {
     return Deno.statSync(path);
@@ -22,3 +24,9 @@ export class HttpExeption extends Error {
     this.status = status;
   }
 }
+
+export const randomString = (len: number) => {
+  const bytes = new Uint8Array((len * 6) / 8);
+  crypto.getRandomValues(bytes);
+  return base64.encode(bytes);
+};

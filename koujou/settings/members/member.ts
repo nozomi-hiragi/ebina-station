@@ -3,7 +3,11 @@ import {
   createPasswordAuth,
   PasswordAuth,
 } from "./auth/password.ts";
-import { hasHostname, WebAuthn, WebAuthnItem } from "./auth/webauthn.ts";
+import {
+  hasHostname,
+  WebAuthn,
+  WebAuthnItemController,
+} from "./auth/webauthn.ts";
 
 type Flags = {
   admin?: boolean;
@@ -35,13 +39,15 @@ export class Member {
   hasWebAuthnAuth = () => this.value.auth.webAuthn !== undefined;
   getWebAuthnItem(rpID: string) {
     if (!this.value.auth.webAuthn) return undefined;
-    return this.value.auth.webAuthn[rpID];
+    const item = this.value.auth.webAuthn[rpID];
+    if (!item) return undefined;
+    return new WebAuthnItemController(item);
   }
 
-  setWebAuthnItem(rpID: string, webAuthnItem: WebAuthnItem) {
+  setWebAuthnItem(rpID: string, webAuthnItem: WebAuthnItemController) {
     if (!this.value.auth.webAuthn) this.value.auth.webAuthn = {};
-    if (Object.values(webAuthnItem.authenticators).length) {
-      this.value.auth.webAuthn[rpID] = webAuthnItem;
+    if (webAuthnItem.hasAuthenticator()) {
+      this.value.auth.webAuthn[rpID] = webAuthnItem.getRawItem();
     } else {
       delete this.value.auth.webAuthn[rpID];
     }

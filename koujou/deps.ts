@@ -5,7 +5,7 @@ export * as oak from "https://deno.land/x/oak@v11.1.0/mod.ts";
 export { oakCors } from "https://deno.land/x/cors@v1.2.2/mod.ts";
 export * as bcrypt from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
 export * as djwt from "https://deno.land/x/djwt@v2.7/mod.ts";
-export { Fido2Lib } from "https://deno.land/x/fido2@3.3.4/dist/main.js";
+export * from "https://deno.land/x/fido2@3.3.4/dist/main.js";
 export * as mongodb from "https://deno.land/x/mongo@v0.31.1/mod.ts";
 export { Cron } from "https://deno.land/x/croner@5.1.1/src/croner.js";
 export { Mutex } from "https://deno.land/x/semaphore@v1.1.0/mod.ts";

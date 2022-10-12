@@ -7,54 +7,88 @@ import {
 } from "../../../utils/auth.ts";
 import { logApi } from "../../../utils/log.ts";
 import { getMembers } from "../../../settings/members/members.ts";
-import { Member } from "../../../settings/members/member.ts";
 import {
-  createLoginOptions,
-  verifyLoginChallenge,
+  createOptionsForAuth,
+  verifyChallengeForAuth,
 } from "../../../utils/webauthn/funcs.ts";
-import { HttpExeption } from "../../../utils/utils.ts";
+import { HttpExeption, randomString } from "../../../utils/utils.ts";
 import webauthnRouter from "./webauthn/index.ts";
-import {
-  createPasswordAuth,
-  PasswordAuth,
-} from "../../../settings/members/auth/password.ts";
+import { createPasswordAuth } from "../../../settings/members/auth/password.ts";
 
 const iRouter = new oak.Router();
 
-const tmpPassword: { [key: string]: PasswordAuth | undefined } = {};
-
-// プレログイン
+// ログインオプション
 // origin:
 // :id
-// 200 オプション
+// 202 オプション
+// 204 なし
 // 400 情報足りない
-iRouter.get("/login/:id", async (ctx) => {
+iRouter.post("/login/option", async (ctx) => {
   const origin = ctx.request.headers.get("origin");
-  const { id } = ctx.params;
-  if (!origin || !id) return ctx.response.status = 400;
-
-  const member = getMembers().getMember(id);
-  if (!member) {
-    console.log("unknown member id");
-    return ctx.response.body = { type: "password" };
-  }
+  if (!origin) return ctx.response.status = 400;
+  const body = await ctx.request.body({ type: "json" }).value;
+  const id: string = body.id;
 
   try {
-    const options = await createLoginOptions(origin, member, []);
-    ctx.response.body = { type: "WebAuthn", options };
+    let member = undefined;
+    if (id) {
+      member = getMembers().getMember(id);
+      if (!member) {
+        console.log("unknown member id");
+        throw new HttpExeption(404, "no member");
+      }
+    }
+    const sessionId = randomString(16);
+    const options = await createOptionsForAuth(
+      origin,
+      sessionId,
+      undefined,
+      member,
+    );
+    ctx.response.status = 202;
+    ctx.response.body = { type: "WebAuthn", options, sessionId };
   } catch (err) {
     if (!(err instanceof HttpExeption)) throw err;
-
     switch (err.status) {
       case 404:
       case 406:
       case 500:
-        return ctx.response.body = { type: "password" };
+        ctx.response.status = 204;
+        break;
       default:
         ctx.response.status = err.status;
         ctx.response.body = err.message;
     }
   }
+});
+
+// 認証でログイン
+// { ...ret, response.serHandle }
+// 200 ユーザーとトークン
+// 400 情報足らない
+// 404 メンバーない
+// 500 WebAuthn設定おかしい
+iRouter.post("/login/verify", async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const body = await ctx.request.body({ type: "json" }).value;
+  const { sessionId, result } = body;
+  if (!sessionId || !result) return ctx.response.status = 400;
+
+  const id = result.response.userHandle;
+  const member = getMembers().getMember(id);
+  if (!member) return ctx.response.status = 404;
+  try {
+    await verifyChallengeForAuth(origin, member, result, sessionId);
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+      return;
+    } else throw err;
+  }
+  const tokens = await generateTokens(member.getId());
+  ctx.response.body = { member: { ...member.getValue(), id: id }, tokens };
 });
 
 // パスワードでログイン
@@ -64,62 +98,35 @@ iRouter.get("/login/:id", async (ctx) => {
 // 401 パスワードが違う
 // 404 メンバーない
 // 405 パスワードが設定されてない
+// 406 パスワードはだめ
 iRouter.post("/login", async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
   const hostname = new URL(origin).hostname;
   const body = await ctx.request.body({ type: "json" }).value;
 
-  let member: Member | undefined;
-  switch (body.type as string) {
-    default:
-      return ctx.response.status = 400;
-
-    case "public-key": {
-      const id = body.response.userHandle;
-      member = getMembers().getMember(id);
-      if (!member) return ctx.response.status = 404;
-      try {
-        await verifyLoginChallenge(origin, member, body);
-      } catch (err) {
-        if (err instanceof HttpExeption) {
-          ctx.response.status = err.status;
-          ctx.response.body = err.message;
-        } else {
-          throw err;
-        }
-        return;
-      }
-      break;
-    }
-
-    case "password": {
-      const id = body.id;
-      const pass: string = body.pass;
-      if (!id || !pass) return ctx.response.status = 400;
-      member = getMembers().getMember(id);
-      if (!member) {
-        logApi.info(["post", "member/login", "not exist member", id]);
-        return ctx.response.status = 404;
-      }
-      if (member.hasWebAuthn(hostname)) {
-        logApi.info(["post", "member/login", "you have webauthn", id]);
-        return ctx.response.status = 400;
-      }
-      switch (member.authMemberWithPassword(pass)) {
-        case true:
-          break;
-        case false:
-          return ctx.response.status = 401;
-        case undefined:
-          return ctx.response.status = 405;
-      }
-      break;
-    }
+  const id: string = body.id;
+  const pass: string = body.pass;
+  if (!id || !pass) return ctx.response.status = 400;
+  const member = getMembers().getMember(id);
+  if (!member) {
+    logApi.info(["post", "member/login", "not exist member", id]);
+    return ctx.response.status = 404;
   }
-
+  if (member.hasWebAuthn(hostname)) {
+    logApi.info(["post", "member/login", "you have webauthn", id]);
+    return ctx.response.status = 406;
+  }
+  switch (member.authMemberWithPassword(pass)) {
+    case true:
+      break;
+    case false:
+      return ctx.response.status = 401;
+    case undefined:
+      return ctx.response.status = 405;
+  }
   const tokens = await generateTokens(member.getId());
-  ctx.response.body = { member: member.getValue(), tokens };
+  ctx.response.body = { member: { ...member.getValue(), id: id }, tokens };
 });
 
 // ログアウト サーバー内のトークン消す
@@ -176,14 +183,13 @@ iRouter.put("/password", authToken, async (ctx) => {
   const body = await ctx.request.body({ type: "json" }).value;
   if (body.type === "public-key") {
     try {
-      const ret = await verifyLoginChallenge(origin, member, body);
-      const challenge: string | undefined = ret.clientData?.get("challenge");
-      if (!challenge) return ctx.response.status = 403;
-      const password = tmpPassword[challenge];
-      if (!password) return ctx.response.status = 404;
-      delete tmpPassword[challenge];
-      member.setPassword(password);
-      getMembers().setMember(member);
+      const ret = await verifyChallengeForAuth(
+        origin,
+        member,
+        body,
+        payload.id,
+      );
+      if (!ret.didAction) throw new Error("No action registed");
       return ctx.response.status = 200;
     } catch {
       return ctx.response.status = 401;
@@ -196,12 +202,17 @@ iRouter.put("/password", authToken, async (ctx) => {
       if (!ctx.request.secure && ctx.request.url.hostname !== "localhost") {
         throw new Error("no secure");
       }
-      const options = await createLoginOptions(origin, member, []);
-      ctx.response.body = options;
 
-      if (member.authMemberWithPassword(current)) {
-        tmpPassword[options.challenge] = createPasswordAuth(_new);
-      }
+      const action = member.authMemberWithPassword(current)
+        ? createPasswordAuth(_new)
+        : undefined;
+      const options = await createOptionsForAuth(
+        origin,
+        payload.id,
+        action,
+        member,
+      );
+      ctx.response.body = options;
 
       return ctx.response.status = 202;
     } catch (err) {

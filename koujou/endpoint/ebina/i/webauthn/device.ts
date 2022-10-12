@@ -4,10 +4,9 @@ import { authToken, JwtPayload } from "../../../../utils/auth.ts";
 import { HttpExeption } from "../../../../utils/utils.ts";
 import {
   deleteAuthenticators,
-  disableAuthenticator,
-  enableAuthenticator,
-  getAuthenticatorNames,
-  getEnableAuthenticators,
+  getRawEnableAuthenticators,
+  getRPID,
+  switchEnableAuthenticator,
 } from "../../../../utils/webauthn/funcs.ts";
 
 const deviceRouter = new oak.Router();
@@ -30,7 +29,10 @@ deviceRouter.get("/", authToken, (ctx) => {
     ctx.request.url.searchParams.get("deviceNames")?.split(",") ?? [];
 
   try {
-    const authenticatorNames = getAuthenticatorNames(origin, member);
+    const rpID = getRPID(origin);
+    const webatuhnItem = member.getWebAuthnItem(rpID);
+    const authenticatorNames = webatuhnItem?.getAuthenticatorNames() ?? [];
+
     ctx.response.body = deviceNames.length === 0
       ? authenticatorNames
       : authenticatorNames.filter((name) => deviceNames.includes(name));
@@ -60,13 +62,13 @@ deviceRouter.delete("/", authToken, (ctx) => {
   if (!member) return ctx.response.status = 404;
 
   const deviceNames = ctx.request.url.searchParams
-    .get("deviceNames")?.split(",") ?? [];
+    .get("deviceNames")?.split(",");
 
   try {
     const failedNames = deleteAuthenticators(origin, member, deviceNames);
     if (failedNames.length === 0) {
       ctx.response.status = 200;
-    } else if (failedNames.length === deviceNames.length) {
+    } else if (failedNames.length === deviceNames?.length) {
       ctx.response.status = 404;
       ctx.response.body = { message: "Can't find all devices" };
     } else {
@@ -102,7 +104,10 @@ deviceRouter.get("/:deviceName", authToken, (ctx) => {
   if (!deviceName) return ctx.response.status = 400;
 
   try {
-    const authenticatorNames = getAuthenticatorNames(origin, member);
+    const rpID = getRPID(origin);
+    const webatuhnItem = member.getWebAuthnItem(rpID);
+    const authenticatorNames = webatuhnItem?.getAuthenticatorNames() ?? [];
+
     if (authenticatorNames.includes(deviceName)) {
       ctx.response.body = deviceName;
     } else {
@@ -165,12 +170,10 @@ deviceRouter.get("/:deviceName/enable", authToken, (ctx) => {
   const memberId = payload.id;
   const member = getMembers().getMember(memberId);
   if (!member) return ctx.response.status = 404;
-
   const { deviceName } = ctx.params;
-  if (!deviceName) return ctx.response.status = 400;
 
   try {
-    const enableDevices = getEnableAuthenticators(origin, member);
+    const enableDevices = getRawEnableAuthenticators(origin, member);
     ctx.response.body = enableDevices.includes(deviceName);
   } catch (err) {
     if (err instanceof HttpExeption) {
@@ -196,12 +199,10 @@ deviceRouter.post("/:deviceName/enable", authToken, (ctx) => {
   const memberId = payload.id;
   const member = getMembers().getMember(memberId);
   if (!member) return ctx.response.status = 404;
-
   const { deviceName } = ctx.params;
-  if (!deviceName) return ctx.response.status = 400;
 
   try {
-    if (enableAuthenticator(origin, member, deviceName)) {
+    if (switchEnableAuthenticator(origin, member, deviceName, true)) {
       ctx.response.status = 200;
     } else {
       ctx.response.status = 208;
@@ -230,12 +231,10 @@ deviceRouter.post("/:deviceName/disable", authToken, (ctx) => {
   const memberId = payload.id;
   const member = getMembers().getMember(memberId);
   if (!member) return ctx.response.status = 404;
-
   const { deviceName } = ctx.params;
-  if (!deviceName) return ctx.response.status = 400;
 
   try {
-    if (disableAuthenticator(origin, member, deviceName)) {
+    if (switchEnableAuthenticator(origin, member, deviceName, false)) {
       ctx.response.status = 200;
     } else {
       ctx.response.status = 208;
