@@ -1,13 +1,11 @@
 import { oak, oakCors } from "./deps.ts";
-import ebinaRouter from "./ebinaAPI/index.ts";
-import { getSettings } from "./project_data/settings.ts";
+import ebinaRouter from "./endpoint/ebina/ebina.ts";
+import { getSettings } from "./settings/settings.ts";
 import { logKoujou } from "./utils/log.ts";
 import { JwtPayload } from "./utils/auth.ts";
-import { startCrons } from "./project_data/cron.ts";
-import {
-  honbuDelegateRouter,
-  initHonbuDelegate,
-} from "./utils/honbuDelegate.ts";
+import { startCrons } from "./settings/cron.ts";
+import { initHonbuDelegate } from "./utils/honbuDelegate.ts";
+import honbuRouter from "./endpoint/honbu/honbu.ts";
 
 export type States = {
   token?: string;
@@ -30,7 +28,7 @@ if (settings.origins) {
 
 const router = new oak.Router();
 router.use("/ebina", ebinaRouter.routes());
-router.use("/honbu", honbuDelegateRouter.routes());
+router.use("/honbu", honbuRouter.routes());
 app.use(router.routes(), router.allowedMethods());
 
 app.listen({ port });

@@ -24,3 +24,11 @@ const getDockerEdition = async () => {
 
 export const isDockerDesktop = async () =>
   await getDockerEdition().then((e) => e?.includes("Desktop") ?? false);
+
+export const isExist = (path: string) => {
+  try {
+    return Deno.statSync(path);
+  } catch {
+    return false;
+  }
+};
