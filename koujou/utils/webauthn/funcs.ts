@@ -40,12 +40,14 @@ export const getRPID = (origin: string) => {
   return rpID;
 };
 
-const createF2L = (options: Fido2LibOptions = {
-  challengeSize: 128,
-  cryptoParams: [-7, -35, -36, -37, -38, -39, -257, -258, -259],
-  authenticatorRequireResidentKey: false,
-  authenticatorUserVerification: "required",
-}) => new Fido2Wrap(options);
+const createF2L = (options: Fido2LibOptions) =>
+  new Fido2Wrap({
+    challengeSize: 128,
+    cryptoParams: [-7, -35, -36, -37, -38, -39, -257, -258, -259],
+    authenticatorRequireResidentKey: false,
+    authenticatorUserVerification: "required",
+    ...options,
+  });
 
 const getF2L = (rpId: string) => {
   const settings = getSettings();
