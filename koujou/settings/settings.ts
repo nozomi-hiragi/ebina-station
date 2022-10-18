@@ -25,11 +25,17 @@ export type MongoBD = {
 };
 
 class Settings {
-  port?: "env" | number;
-  honbuPort?: number;
+  port: "env" | number = DEFAULT_PORT_NUM;
+  honbuPort: number = DEFAULT_HONBU_PORT_NUM;
   // membersEncryption = false;
-  origins: string[] = [];
-  WebAuthn?: WebAuthnSetting;
+  origins: string[] = [
+    "https://nozomi-hiragi.github.io",
+    "http://localhost:3000",
+  ];
+  WebAuthn: WebAuthnSetting = {
+    rpName: "EbinaStation",
+    rpIDType: "variable",
+  };
   mongodb: MongoBD = {
     port: DEFAULT_MONGODB_PORT,
     username: "env",
@@ -42,14 +48,7 @@ class Settings {
   };
 
   constructor(init?: Partial<Settings>) {
-    if (init) {
-      Object.assign(this, init);
-    } else {
-      this.origins.push("https://nozomi-hiragi.github.io");
-      this.origins.push("http://localhost:3000");
-      this.port = DEFAULT_PORT_NUM;
-      this.honbuPort = DEFAULT_HONBU_PORT_NUM;
-    }
+    if (init) Object.assign(this, init);
   }
 
   getPortNumber() {

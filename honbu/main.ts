@@ -1,16 +1,9 @@
 import { oak } from "./deps.ts";
-import { isExist, readReader } from "./utils.ts";
+import { initProjectSettingsInteract, isExist, readReader } from "./utils.ts";
 import { rmService, upService } from "./DockerComposeController.ts";
 import { initDockerComposeFile, ServiceName } from "./EbinaService.ts";
 import { createHonbuRouter } from "./honbuAPI.ts";
 import { getSettings, PROJECT_PATH } from "../koujou/settings/settings.ts";
-
-const pjInfo = isExist(PROJECT_PATH);
-if (pjInfo) {
-  if (!pjInfo.isDirectory) throw new Error("project is not directory");
-} else {
-  Deno.mkdir(PROJECT_PATH, { recursive: true });
-}
 
 const removeBaseServices = () =>
   Promise.all([
@@ -25,6 +18,14 @@ const exitHonbu = () =>
   });
 
 const main = async () => {
+  const pjInfo = isExist(PROJECT_PATH);
+  if (pjInfo) {
+    if (!pjInfo.isDirectory) throw new Error("project is not directory");
+  } else {
+    Deno.mkdir(PROJECT_PATH, { recursive: true });
+    await initProjectSettingsInteract();
+  }
+
   const projectSettings = getSettings();
   const mongoSettings = projectSettings.mongodb;
   const koujouPort = projectSettings.getPortNumber();
@@ -115,6 +116,7 @@ const main = async () => {
   const honbuRouter = createHonbuRouter(honbuKey);
   app.use(honbuRouter.routes(), honbuRouter.allowedMethods());
   app.listen({ port: honbuPort });
+  console.log("Connect to Koujou...");
 };
 
 main();
