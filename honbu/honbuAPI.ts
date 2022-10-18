@@ -89,13 +89,17 @@ const createAuthKeyFunc = (honbuKey: string) => {
   };
 };
 
-export const createHonbuRouter = (honbuKey: string) => {
+export const createHonbuRouter = (
+  honbuKey: string,
+  onConnectedKoujou?: () => void,
+) => {
   const authKey = createAuthKeyFunc(honbuKey);
   const router = new oak.Router();
 
   router.post("/ping", authKey, (ctx) => {
     console.log("ok from ", ctx.request.ip);
     ctx.response.status = 200;
+    onConnectedKoujou && onConnectedKoujou();
   });
 
   router.put("/nginx/status", authKey, async (ctx) => {
