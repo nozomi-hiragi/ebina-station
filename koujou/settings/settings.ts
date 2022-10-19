@@ -32,6 +32,7 @@ class Settings {
     "https://nozomi-hiragi.github.io",
     "http://localhost:3000",
   ];
+  allowRegistMember = true;
   WebAuthn: WebAuthnSetting = {
     rpName: "EbinaStation",
     rpIDType: "variable",

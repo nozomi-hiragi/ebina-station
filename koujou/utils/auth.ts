@@ -2,8 +2,17 @@ import { djwt, oak } from "../deps.ts";
 import { logKoujou } from "./log.ts";
 import { States } from "../index.ts";
 
-const userTokens: { [key: string]: { token: string; refreshToken: string } } =
-  {};
+type JwtToken = {
+  token: string;
+  refreshToken: string;
+};
+
+// deno-lint-ignore no-explicit-any
+export const isJwtToken = (obj: any): obj is JwtToken =>
+  "token" in obj && typeof obj.token === "string" &&
+  "refreshToken" in obj && typeof obj.refreshToken === "string";
+
+const userTokens: { [key: string]: JwtToken } = {};
 
 export type JwtPayload = {
   id: string;
@@ -50,7 +59,7 @@ export const generateJwtToken = async (payload: JwtPayload) => {
     { ...payload, exp: djwt.getNumericDate(60 * 60 * 24 * 30) },
     refreshKey,
   );
-  return { token: token, refreshToken: refreshToken };
+  return { token, refreshToken };
 };
 
 const verifyAuthToken = async (token: string) => {

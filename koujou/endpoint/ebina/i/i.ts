@@ -2,6 +2,7 @@ import { oak } from "../../../deps.ts";
 import {
   authToken,
   generateTokens,
+  isJwtToken,
   refreshTokens,
   removeToken,
 } from "../../../utils/auth.ts";
@@ -13,7 +14,11 @@ import {
 } from "../../../utils/webauthn/funcs.ts";
 import { HttpExeption, randomString } from "../../../utils/utils.ts";
 import webauthnRouter from "./webauthn/index.ts";
-import { createPasswordAuth } from "../../../settings/members/auth/password.ts";
+import {
+  createPasswordAuth,
+  isPasswordAuth,
+} from "../../../settings/members/auth/password.ts";
+import { getSettings } from "../../../settings/settings.ts";
 
 const iRouter = new oak.Router();
 
@@ -21,18 +26,26 @@ const iRouter = new oak.Router();
 // origin:
 // :id
 // 202 オプション
-// 204 なし
 // 400 情報足りない
 iRouter.post("/login/option", async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
   const body = await ctx.request.body({ type: "json" }).value;
   const id: string = body.id;
+  const members = getMembers();
 
   try {
+    if (id && !members.hasMember() && getSettings().allowRegistMember) {
+      const token = randomString(32);
+      members.setPreRequest(id, ctx.request.ip, token);
+      ctx.response.status = 202;
+      ctx.response.body = { type: "Regist", token };
+      return;
+    }
+
     let member = undefined;
     if (id) {
-      member = getMembers().getMember(id);
+      member = members.getMember(id);
       if (!member) {
         console.log("unknown member id");
         throw new HttpExeption(404, "no member");
@@ -42,7 +55,7 @@ iRouter.post("/login/option", async (ctx) => {
     const options = await createOptionsForAuth(
       origin,
       sessionId,
-      undefined,
+      async (member) => await generateTokens(member.getId()),
       member,
     );
     ctx.response.status = 202;
@@ -53,7 +66,8 @@ iRouter.post("/login/option", async (ctx) => {
       case 404:
       case 406:
       case 500:
-        ctx.response.status = 204;
+        ctx.response.status = 202;
+        ctx.response.body = { type: "Password" };
         break;
       default:
         ctx.response.status = err.status;
@@ -79,7 +93,11 @@ iRouter.post("/login/verify", async (ctx) => {
   const member = getMembers().getMember(id);
   if (!member) return ctx.response.status = 404;
   try {
-    await verifyChallengeForAuth(origin, member, result, sessionId);
+    const ret = await verifyChallengeForAuth(origin, member, result, sessionId);
+    if (!ret.actionResult) throw new Error("Verify failed");
+    if (!isJwtToken(ret.actionResult)) throw new Error("Recieve wrong result");
+    const tokens = ret.actionResult;
+    ctx.response.body = { member: { ...member.getValue(), id }, tokens };
   } catch (err) {
     if (err instanceof HttpExeption) {
       ctx.response.status = err.status;
@@ -87,8 +105,6 @@ iRouter.post("/login/verify", async (ctx) => {
       return;
     } else throw err;
   }
-  const tokens = await generateTokens(member.getId());
-  ctx.response.body = { member: { ...member.getValue(), id: id }, tokens };
 });
 
 // パスワードでログイン
@@ -177,7 +193,8 @@ iRouter.put("/password", authToken, async (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload = ctx.state.payload;
   if (!payload) return ctx.response.status = 401;
-  const member = getMembers().getMember(payload.id);
+  const members = getMembers();
+  const member = members.getMember(payload.id);
   if (!member) return ctx.response.status = 404;
 
   const body = await ctx.request.body({ type: "json" }).value;
@@ -189,7 +206,12 @@ iRouter.put("/password", authToken, async (ctx) => {
         body,
         payload.id,
       );
-      if (!ret.didAction) throw new Error("No action registed");
+      if (!ret.actionResult) throw new Error("No action registed");
+      if (!isPasswordAuth(ret.actionResult)) {
+        throw new Error("Recieve wrong action result");
+      }
+      member.setPassword(ret.actionResult);
+      members.setMember(member);
       return ctx.response.status = 200;
     } catch {
       return ctx.response.status = 401;
@@ -204,7 +226,7 @@ iRouter.put("/password", authToken, async (ctx) => {
       }
 
       const action = member.authMemberWithPassword(current)
-        ? createPasswordAuth(_new)
+        ? () => Promise.resolve(createPasswordAuth(_new))
         : undefined;
       const options = await createOptionsForAuth(
         origin,
