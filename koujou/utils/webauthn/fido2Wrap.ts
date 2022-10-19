@@ -234,6 +234,12 @@ export class Fido2Wrap {
       userHandle: expectations.userHandle
         ? base64.encode(expectations.userHandle)
         : undefined,
+
+      // Level3暫定対応
+      allowCredentials: expectations.allowCredentials?.map((it) => ({
+        ...it,
+        transports: it.transports?.filter((t) => t !== "hybrid") ?? [],
+      })),
     });
   }
 }
