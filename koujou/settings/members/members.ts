@@ -87,6 +87,10 @@ class Members {
     return this.temp[id];
   }
 
+  getTempMembers() {
+    return this.temp;
+  }
+
   setTempMember(member: Member) {
     this.temp[member.getId()] = member;
     this.saveMembersToFile();
@@ -102,6 +106,15 @@ class Members {
     const member = Member.create(id, name, pass, admin);
     this.setTempMember(member);
     return member;
+  }
+
+  approveTempMember(id: string) {
+    const temp = this.getTempMember(id);
+    if (!temp) return undefined;
+    if (this.getMember(id)) return false;
+    delete this.temp[id];
+    this.setMember(temp);
+    return true;
   }
 
   setPreRequest(id: string, ip: string, token: string) {
