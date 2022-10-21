@@ -71,7 +71,7 @@ const verifyAuthToken = async (token: string) => {
   }
 };
 
-const verifyRefreshToken = async (token: string) => {
+export const verifyRefreshToken = async (token: string) => {
   try {
     const key = await getKey("refreshtoken.key");
     return await djwt.verify(token, key) as JwtPayload;

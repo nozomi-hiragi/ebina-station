@@ -1,6 +1,7 @@
 import "https://deno.land/std@0.160.0/dotenv/load.ts";
 export * as base64 from "https://deno.land/std@0.160.0/encoding/base64url.ts";
 export * as log from "https://deno.land/std@0.160.0/log/mod.ts";
+export { isString } from "https://deno.land/std@0.158.0/encoding/_yaml/utils.ts";
 export * as oak from "https://deno.land/x/oak@v11.1.0/mod.ts";
 export { oakCors } from "https://deno.land/x/cors@v1.2.2/mod.ts";
 export * as bcrypt from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";

@@ -1,4 +1,4 @@
-import { oak } from "../../../deps.ts";
+import { isString, oak } from "../../../deps.ts";
 import { authToken } from "../../../utils/auth.ts";
 import { getMembers } from "../../../settings/members/members.ts";
 import {
@@ -6,7 +6,6 @@ import {
   verifyChallengeForRegist,
 } from "../../../utils/webauthn/funcs.ts";
 import { HttpExeption } from "../../../utils/utils.ts";
-import { isString } from "https://deno.land/std@0.158.0/encoding/_yaml/utils.ts";
 
 const memberRouter = new oak.Router();
 
