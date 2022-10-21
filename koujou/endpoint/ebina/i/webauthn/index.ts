@@ -5,6 +5,7 @@ import { HttpExeption } from "../../../../utils/utils.ts";
 import {
   createOptionsForAuth,
   createOptionsForRegist,
+  getRPID,
   verifyChallengeForAuth,
   verifyChallengeForRegist,
 } from "../../../../utils/webauthn/funcs.ts";
@@ -54,7 +55,8 @@ webauthnRouter.post("/regist", authToken, async (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload: JwtPayload = ctx.state.payload!;
   const memberId = payload.id;
-  const member = getMembers().getMember(memberId);
+  const members = getMembers();
+  const member = members.getMember(memberId);
   if (!member) return ctx.response.status = 404;
 
   const body = await ctx.request.body({ type: "json" }).value;
@@ -62,14 +64,17 @@ webauthnRouter.post("/regist", authToken, async (ctx) => {
   if (!deviceName) return ctx.response.status = 400;
 
   try {
-    const enabledDevices = await verifyChallengeForRegist(
+    const newMember = await verifyChallengeForRegist(
       origin,
       member,
       deviceName,
       body,
     );
+    members.setMember(newMember);
     ctx.response.status = 200;
-    ctx.response.body = enabledDevices;
+    ctx.response.body = newMember
+      .getWebAuthnItem(getRPID(origin))
+      ?.getEnableDeviceNames() ?? [];
   } catch (err) {
     if (err instanceof HttpExeption) {
       ctx.response.status = err.status;

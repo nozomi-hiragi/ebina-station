@@ -4,6 +4,7 @@ import { rmService, upService } from "./DockerComposeController.ts";
 import { initDockerComposeFile, ServiceName } from "./EbinaService.ts";
 import { createHonbuRouter } from "./honbuAPI.ts";
 import { getSettings, PROJECT_PATH } from "../koujou/settings/settings.ts";
+import { MemberTempActions } from "./CommandActions.ts";
 
 const removeBaseServices = () =>
   Promise.all([
@@ -27,7 +28,7 @@ const main = async () => {
   }
 
   const projectSettings = getSettings();
-  const mongoSettings = projectSettings.mongodb;
+  const mongoSettings = projectSettings.MongoDB;
   const koujouPort = projectSettings.getPortNumber();
   const honbuPort = projectSettings.getHonbuPortNumber();
 
@@ -42,71 +43,17 @@ const main = async () => {
   if (!await upService(ServiceName.Koujou)) Deno.exit(1);
   if (!await upService(ServiceName.Jinji)) Deno.exit(1);
 
+  const memberTempActions = new MemberTempActions(honbuKey, koujouPort);
+
   readReader(Deno.stdin, (msg: string) => {
+    const commands = msg.split(" ");
     if (msg === "q") {
       exitHonbu();
       return true;
-    } else if (!msg.indexOf("create")) {
-      const commands = msg.split(" ");
-      let paramType = undefined;
-      const params = {} as {
-        id?: string;
-        name?: string;
-        pass?: string;
-        admin?: boolean;
-      };
-      for (const it of commands) {
-        switch (paramType) {
-          case undefined:
-            paramType = it;
-            break;
-
-          case "create":
-            if (it !== "member") {
-              console.log("unsupport type");
-              return;
-            }
-            paramType = undefined;
-            break;
-
-          case "-u":
-            params.name = it;
-            paramType = undefined;
-            break;
-
-          case "-i":
-            params.id = it;
-            paramType = undefined;
-            break;
-
-          case "-p":
-            params.pass = it;
-            paramType = undefined;
-            break;
-
-          case "-f":
-            if (it === "admin") params.admin = true;
-            paramType = undefined;
-            break;
-        }
-      }
-      if (
-        params.name !== undefined &&
-        params.id !== undefined &&
-        params.pass !== undefined
-      ) {
-        fetch(`http://${"localhost"}:${koujouPort}/honbu/member/new`, {
-          method: "POST",
-          body: JSON.stringify(params),
-          headers: { key: honbuKey },
-        }).then((ret) => {
-          if (ret.status !== 201) {
-            console.error("failed create member", ret);
-          }
-        });
-      } else {
-        console.log("params are wrong");
-      }
+    } else if (commands[0] === "member" && commands[1] === "temp") {
+      const action = memberTempActions.actionst[commands[2]];
+      if (action) action(commands[3]);
+      else console.log("list, admit or deny");
     } else {
       console.log("><");
     }

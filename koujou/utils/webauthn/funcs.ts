@@ -1,8 +1,5 @@
 import { base64 } from "../../deps.ts";
-import {
-  isPasswordAuth,
-  PasswordAuth,
-} from "../../settings/members/auth/password.ts";
+import { PasswordAuth } from "../../settings/members/auth/password.ts";
 import { WebAuthnItemController } from "../../settings/members/auth/webauthn.ts";
 import { Member } from "../../settings/members/member.ts";
 import { getMembers } from "../../settings/members/members.ts";
@@ -19,11 +16,16 @@ import {
 
 export type ChallengeAction = PasswordAuth;
 
+// @TODO  メンバー書き換えの方法見直したほうがいい
+
+// deno-lint-ignore no-explicit-any
+type AuthAction = (member: Member) => Promise<any>;
+
 class ChallengeItem {
   challenge: string;
   createdAt: Date;
-  action?: ChallengeAction;
-  constructor(params: { challenge: string; action?: ChallengeAction }) {
+  action?: AuthAction;
+  constructor(params: { challenge: string; action?: AuthAction }) {
     this.createdAt = new Date();
     this.challenge = params.challenge;
     this.action = params.action;
@@ -121,15 +123,14 @@ export const verifyChallengeForRegist = async (
     credentialType: "public-key",
   });
   member.setWebAuthnItem(rpID, webAuthnItem);
-  getMembers().setMember(member);
 
-  return webAuthnItem.getRawEnableDeviceNames();
+  return member;
 };
 
 export const createOptionsForAuth = async (
   origin: string,
   challengeId: string,
-  challengeAction?: ChallengeAction,
+  action?: AuthAction,
   member?: Member,
   deviceNames?: string[],
 ) => {
@@ -151,10 +152,7 @@ export const createOptionsForAuth = async (
 
   const ret = await getF2L(rpID).assertionOptions(options);
   const { challenge } = ret;
-  challenges[challengeId] = new ChallengeItem({
-    challenge,
-    action: challengeAction,
-  });
+  challenges[challengeId] = new ChallengeItem({ challenge, action });
   return ret;
 };
 
@@ -195,19 +193,12 @@ export const verifyChallengeForAuth = async (
   webAuthnItem.setAuthenticator(deviceName, authenticator);
   member.setWebAuthnItem(rpID, webAuthnItem);
 
-  let didAction = undefined;
-  if (challengeItem.action) {
-    if (isPasswordAuth(challengeItem.action)) {
-      member.setPassword(challengeItem.action);
-      didAction = true;
-    } else {
-      didAction = false;
-    }
-  }
-
   getMembers().setMember(member);
 
-  return { result, didAction };
+  return {
+    result,
+    actionResult: challengeItem.action && await challengeItem.action(member),
+  };
 };
 
 export const deleteAuthenticators = (

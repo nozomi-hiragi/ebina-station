@@ -1,24 +1,85 @@
 import { oak } from "../../../deps.ts";
 import { authToken } from "../../../utils/auth.ts";
-import { logApi } from "../../../utils/log.ts";
 import { getMembers } from "../../../settings/members/members.ts";
+import {
+  createOptionsForRegist,
+  verifyChallengeForRegist,
+} from "../../../utils/webauthn/funcs.ts";
+import { HttpExeption } from "../../../utils/utils.ts";
+import { isString } from "https://deno.land/std@0.158.0/encoding/_yaml/utils.ts";
 
 const memberRouter = new oak.Router();
 
-// メンバー作成
+// 仮登録
 // { id, name, pass }
-// 201 できた
-// 400 情報足らない
-// 406 IDがもうある˝
-memberRouter.post("/", authToken, async (ctx) => {
+// 201 オプションあげる
+// 400 パラメ足らん
+// 409 メンバ競合
+memberRouter.post("/regist/option", async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
   const { id, name, pass } = await ctx.request.body({ type: "json" }).value;
   if (!id || !name || !pass) return ctx.response.status = 400;
 
-  if (getMembers().registMember(id, name, pass)) {
+  const members = getMembers();
+  const tempMember = members.registTempMember(id, name, pass);
+  if (!tempMember) return ctx.response.status = 409;
+  try {
+    const option = await createOptionsForRegist(origin, tempMember);
+    ctx.response.body = option;
     ctx.response.status = 201;
-  } else {
-    logApi.info("member/regest", "already have this id", id);
-    ctx.response.status = 406;
+    return;
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
+});
+
+// 仮登録認証
+// { id, name, pass }
+// 200 できた
+// 400 パラメ足らん
+// 401 トークン違う
+// 404 いない
+memberRouter.post("/regist/verify", async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const body = await ctx.request.body({ type: "json" }).value;
+  const { id, result, token } = body;
+  if (!id || !isString(id) || !result || !token || !isString(token)) {
+    return ctx.response.status = 400;
+  }
+
+  const members = getMembers();
+
+  const preRequest = members.popPreRequest(id);
+  if (!preRequest) return ctx.response.status = 404;
+  if (preRequest.token !== token) return ctx.response.status = 401;
+
+  const tempMember = members.getTempMember(id);
+  if (!tempMember) return ctx.response.status = 404;
+
+  try {
+    const newMember = await verifyChallengeForRegist(
+      origin,
+      tempMember,
+      "FirstDevice",
+      result,
+    );
+    members.setTempMember(newMember);
+    ctx.response.status = 200;
+    return;
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
   }
 });
 
