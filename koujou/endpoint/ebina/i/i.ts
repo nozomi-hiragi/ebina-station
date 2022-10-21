@@ -1,10 +1,11 @@
-import { oak } from "../../../deps.ts";
+import { isString, oak } from "../../../deps.ts";
 import {
   authToken,
   generateTokens,
   isJwtToken,
   refreshTokens,
   removeToken,
+  verifyRefreshToken,
 } from "../../../utils/auth.ts";
 import { logApi } from "../../../utils/log.ts";
 import { getMembers } from "../../../settings/members/members.ts";
@@ -154,20 +155,109 @@ iRouter.post("/logout", authToken, (ctx) => {
   ctx.response.status = removeToken(payload.id) ? 200 : 401;
 });
 
-// トークン更新
+// トークン更新申請
 // { refreshToken }
-// 200 新トークン
-// 400 リフレッシュトークンない
-// 401 リフレッシュトークンおかしい
-iRouter.post("/refresh", async (ctx) => {
+// 202 passかwebauthnか
+// 400 情報不足
+// 401 トークンおかしい
+// 404 いない
+iRouter.post("/refresh/option", async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
   const { refreshToken } = await ctx.request.body({ type: "json" }).value;
-  if (!refreshToken) return ctx.response.status = 400;
+  if (!refreshToken || !isString(refreshToken)) {
+    return ctx.response.status = 400;
+  }
+  const payload = await verifyRefreshToken(refreshToken);
+  if (!payload) return ctx.response.status = 401;
+  const { id } = payload;
+  const members = getMembers();
+  const member = members.getMember(id);
+  if (!member) return ctx.response.status = 404;
 
-  const tokens = await refreshTokens(refreshToken);
-  if (tokens) {
-    ctx.response.body = tokens;
-  } else {
-    ctx.response.status = 401;
+  try {
+    const options = await createOptionsForAuth(
+      origin,
+      refreshToken,
+      async () => await refreshTokens(refreshToken),
+      member,
+    );
+    ctx.response.status = 202;
+    ctx.response.body = { type: "WebAuthn", options };
+  } catch (err) {
+    if (!(err instanceof HttpExeption)) throw err;
+    switch (err.status) {
+      case 406:
+      case 500:
+        ctx.response.status = 202;
+        ctx.response.body = { type: "Password" };
+        break;
+      default:
+        ctx.response.status = err.status;
+        ctx.response.body = err.message;
+    }
+  }
+});
+
+// トークン更新
+// { refreshToken, result?, pass? }
+// 200 トークン
+// 400 情報不足
+// 401 認証おかしい
+// 404 いない
+iRouter.post("/refresh/verify", async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const body = await ctx.request.body({ type: "json" }).value;
+  const { refreshToken, result, pass } = body;
+  if (!refreshToken || !isString(refreshToken)) {
+    return ctx.response.status = 400;
+  }
+  const payload = await verifyRefreshToken(refreshToken);
+  if (!payload) return ctx.response.status = 401;
+  const { id } = payload;
+  const members = getMembers();
+  const member = members.getMember(id);
+  if (!member) return ctx.response.status = 404;
+
+  if (result) {
+    try {
+      const ret = await verifyChallengeForAuth(
+        origin,
+        member,
+        result,
+        refreshToken,
+      );
+      if (!ret.actionResult) return ctx.response.status = 401;
+      if (!isJwtToken(ret.actionResult)) return ctx.response.status = 400;
+      const tokens = ret.actionResult;
+      ctx.response.status = 200;
+      ctx.response.body = tokens;
+      return;
+    } catch (err) {
+      if (err instanceof HttpExeption) {
+        ctx.response.status = err.status;
+        ctx.response.body = err.message;
+        return;
+      } else throw err;
+    }
+  } else if (pass && isString(pass)) {
+    switch (member.authMemberWithPassword(pass)) {
+      case true:
+        break;
+      case false:
+        return ctx.response.status = 401;
+      case undefined:
+        return ctx.response.status = 405;
+    }
+    const tokens = await refreshTokens(refreshToken);
+    if (tokens) {
+      ctx.response.status = 200;
+      ctx.response.body = tokens;
+      return;
+    } else {
+      return ctx.response.status = 401;
+    }
   }
 });
 

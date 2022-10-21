@@ -1,5 +1,4 @@
-import { isString } from "https://deno.land/std@0.158.0/encoding/_yaml/utils.ts";
-import { oak } from "../../deps.ts";
+import { isString, oak } from "../../deps.ts";
 import { getMembers } from "../../settings/members/members.ts";
 import { checkHonbuKey } from "../../utils/honbuDelegate.ts";
 
