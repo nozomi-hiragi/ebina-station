@@ -35,18 +35,18 @@ iRouter.post("/login/option", async (ctx) => {
   const members = getMembers();
 
   try {
-    if (id && !members.hasMember() && getSettings().allowRegistMember) {
-      const token = randomString(32);
-      members.setPreRequest(id, ctx.request.ip, token);
-      ctx.response.status = 202;
-      ctx.response.body = { type: "Regist", token };
-      return;
-    }
-
     let member = undefined;
     if (id) {
       member = members.getMember(id);
       if (!member) {
+        const allMemberCount = members.allMemberCount();
+        if (getSettings().canRegistNewMember(allMemberCount)) {
+          const token = randomString(32);
+          members.setPreRequest(id, ctx.request.ip, token);
+          ctx.response.status = 202;
+          ctx.response.body = { type: "Regist", token };
+          return;
+        }
         console.log("unknown member id");
         throw new HttpExeption(404, "no member");
       }

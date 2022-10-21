@@ -28,7 +28,7 @@ const main = async () => {
   }
 
   const projectSettings = getSettings();
-  const mongoSettings = projectSettings.mongodb;
+  const mongoSettings = projectSettings.MongoDB;
   const koujouPort = projectSettings.getPortNumber();
   const honbuPort = projectSettings.getHonbuPortNumber();
 
@@ -53,7 +53,7 @@ const main = async () => {
     } else if (commands[0] === "member" && commands[1] === "temp") {
       const action = memberTempActions.actionst[commands[2]];
       if (action) action(commands[3]);
-      else console.log("list or approve");
+      else console.log("list, admit or deny");
     } else {
       console.log("><");
     }

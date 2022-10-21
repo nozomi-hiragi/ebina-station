@@ -81,7 +81,11 @@ class Members {
     );
   }
 
-  hasMember = () => Object.keys(this.members).length !== 0;
+  memberCount = () => Object.keys(this.members).length;
+  tempMemberCount = () => Object.keys(this.temp).length;
+  allMemberCount = () => this.memberCount() + this.tempMemberCount();
+
+  hasMember = () => this.memberCount() !== 0;
 
   getTempMember(id: string) {
     return this.temp[id];
@@ -96,24 +100,37 @@ class Members {
     this.saveMembersToFile();
   }
 
+  addTempMember(member: Member) {
+    if (this.temp[member.getId()]) return false;
+    this.setTempMember(member);
+    return true;
+  }
+
   registTempMember(
     id: string,
     name: string,
     pass: string,
     admin?: boolean,
   ) {
-    if (this.getMember(id)) return false;
+    if (this.getMember(id)) return undefined;
     const member = Member.create(id, name, pass, admin);
-    this.setTempMember(member);
-    return member;
+    return this.addTempMember(member) ? member : undefined;
   }
 
-  approveTempMember(id: string) {
+  admitTempMember(id: string) {
     const temp = this.getTempMember(id);
     if (!temp) return undefined;
     if (this.getMember(id)) return false;
     delete this.temp[id];
     this.setMember(temp);
+    return true;
+  }
+
+  denyTempMember(id: string) {
+    const temp = this.getTempMember(id);
+    if (!temp) return undefined;
+    delete this.temp[id];
+    this.saveMembersToFile();
     return true;
   }
 

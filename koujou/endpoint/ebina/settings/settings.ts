@@ -27,7 +27,7 @@ projectRouter.post("/webauthn", authToken, async (ctx) => {
 
 projectRouter.get("/mongodb", authToken, (ctx) => {
   const settings = getSettings();
-  const mongodbSettings = settings.mongodb;
+  const mongodbSettings = settings.MongoDB;
   if (!mongodbSettings) {
     return ctx.response.status = 503;
   }

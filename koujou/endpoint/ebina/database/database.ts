@@ -9,7 +9,7 @@ const mutex = new Mutex();
 
 const initClient = async () => {
   const settings = getSettings();
-  const mongodbSettings = settings.mongodb;
+  const mongodbSettings = settings.MongoDB;
   if (!mongodbSettings) return;
   await mutex.use(async () => {
     if (client.buildInfo) return;
@@ -37,7 +37,7 @@ const initClient = async () => {
 
 databaseRouter.get("/", authToken, async (ctx) => {
   await initClient();
-  const mongodbSettings = getSettings().mongodb;
+  const mongodbSettings = getSettings().MongoDB;
   let filter: mongodb.Document | undefined = undefined;
   if (mongodbSettings) {
     const names = Object.keys(mongodbSettings.databaseFilter).filter((name) =>
@@ -51,7 +51,7 @@ databaseRouter.get("/", authToken, async (ctx) => {
 
 databaseRouter.get("/:db", authToken, async (ctx) => {
   const dbName = ctx.params.db;
-  const mongodbSettings = getSettings().mongodb;
+  const mongodbSettings = getSettings().MongoDB;
   if (mongodbSettings) {
     const filter = mongodbSettings.databaseFilter[dbName];
     if (filter && filter.enable) return ctx.response.status = 403;
@@ -64,7 +64,7 @@ databaseRouter.get("/:db", authToken, async (ctx) => {
 
 databaseRouter.get("/:db/:collection/find", authToken, async (ctx) => {
   const dbName = ctx.params.db;
-  const mongodbSettings = getSettings().mongodb;
+  const mongodbSettings = getSettings().MongoDB;
   if (mongodbSettings) {
     const filter = mongodbSettings.databaseFilter[dbName];
     if (filter && filter.enable) return ctx.response.status = 403;

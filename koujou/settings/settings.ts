@@ -32,12 +32,15 @@ class Settings {
     "https://nozomi-hiragi.github.io",
     "http://localhost:3000",
   ];
-  allowRegistMember = true;
+  Member = {
+    allowRegist: true,
+    maxMembers: 1,
+  };
   WebAuthn: WebAuthnSetting = {
     rpName: "EbinaStation",
     rpIDType: "variable",
   };
-  mongodb: MongoBD = {
+  MongoDB: MongoBD = {
     port: DEFAULT_MONGODB_PORT,
     username: "env",
     password: "env",
@@ -85,35 +88,42 @@ class Settings {
   }
 
   getMongodbUsername() {
-    const mongodb = this.mongodb;
+    const mongodb = this.MongoDB;
     if (!mongodb) return undefined;
     if (mongodb.username !== "env") return mongodb.username;
     return Deno.env.get("MONGO_INITDB_ROOT_USERNAME");
   }
 
   getMongodbPassword() {
-    const mongodb = this.mongodb;
+    const mongodb = this.MongoDB;
     if (!mongodb) return undefined;
     if (mongodb.password !== "env") return mongodb.password;
     return Deno.env.get("MONGO_INITDB_ROOT_PASSWORD");
+  }
+
+  canRegistNewMember(currentMemberCount: number) {
+    const settings = this.Member;
+    console.log(`${settings.allowRegist} ${settings.maxMembers} ${currentMemberCount}`)
+    return settings.allowRegist && (settings.maxMembers > currentMemberCount);
   }
 }
 
 let settings: Settings;
 
 const loadFromFile = () => {
+  let settings: Settings;
   try {
-    return new Settings(
+    settings = new Settings(
       JSON.parse(Deno.readTextFileSync(SETTINGS_FILE_PATH)),
     );
   } catch {
-    const settings = new Settings();
-    Deno.writeTextFileSync(
-      SETTINGS_FILE_PATH,
-      JSON.stringify(settings, undefined, 2),
-    );
-    return settings;
+    settings = new Settings();
   }
+  Deno.writeTextFileSync(
+    SETTINGS_FILE_PATH,
+    JSON.stringify(settings, undefined, 2),
+  );
+  return settings;
 };
 
 export const getSettings = () => settings ?? (settings = loadFromFile());
