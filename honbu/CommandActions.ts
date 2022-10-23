@@ -2,30 +2,27 @@ import { runService } from "./DockerComposeController.ts";
 
 /// ========== Member ==========
 export class MemberTempActions {
-  honbuKey: string;
-  koujouPort: number;
+  honbuURL: string;
+  headers: { key: string };
 
   constructor(honbuKey: string, koujouPort: number) {
-    this.honbuKey = honbuKey;
-    this.koujouPort = koujouPort;
+    this.honbuURL = `http://localhost:${koujouPort}/honbu`;
+    this.headers = { key: honbuKey };
   }
 
   showTempMemberList = () =>
-    fetch(`http://${"localhost"}:${this.koujouPort}/honbu/member/temp/list`, {
+    fetch(`${this.honbuURL}/member/temp/list`, {
       method: "GET",
-      headers: { key: this.honbuKey },
+      headers: this.headers,
     }).then((ret) => ret.json())
       .then((ret) => console.log(ret));
 
   admitTempMember = (id: string) =>
-    fetch(
-      `http://${"localhost"}:${this.koujouPort}/honbu/member/temp/admit`,
-      {
-        method: "POST",
-        body: JSON.stringify({ id }),
-        headers: { key: this.honbuKey },
-      },
-    ).then((ret) => {
+    fetch(`${this.honbuURL}/member/temp/admit`, {
+      method: "POST",
+      body: JSON.stringify({ id }),
+      headers: this.headers,
+    }).then((ret) => {
       switch (ret.status) {
         case 200:
           console.log("ok");
@@ -42,10 +39,10 @@ export class MemberTempActions {
     });
 
   denyTempMember = (id: string) =>
-    fetch(`http://${"localhost"}:${this.koujouPort}/honbu/member/temp/deny`, {
+    fetch(`${this.honbuURL}/member/temp/deny`, {
       method: "POST",
       body: JSON.stringify({ id }),
-      headers: { key: this.honbuKey },
+      headers: this.headers,
     }).then((ret) => {
       switch (ret.status) {
         case 200:
