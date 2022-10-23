@@ -1,10 +1,14 @@
 import { oak } from "./deps.ts";
 import { initProjectSettingsInteract, isExist, readReader } from "./utils.ts";
-import { rmService, upService } from "./DockerComposeController.ts";
+import {
+  DockerComposeControllerExeption,
+  rmService,
+  upService,
+} from "./DockerComposeController.ts";
 import { initDockerComposeFile, ServiceName } from "./EbinaService.ts";
 import { createHonbuRouter } from "./honbuAPI.ts";
 import { getSettings, PROJECT_PATH } from "../koujou/settings/settings.ts";
-import { MemberTempActions } from "./CommandActions.ts";
+import { MemberTempActions, runCertbotService } from "./CommandActions.ts";
 
 const removeBaseServices = () =>
   Promise.all([
@@ -43,7 +47,7 @@ const main = async () => {
   if (!await upService(ServiceName.Koujou)) Deno.exit(1);
   if (!await upService(ServiceName.Jinji)) Deno.exit(1);
 
-  const memberTempActions = new MemberTempActions(honbuKey, koujouPort);
+  let memberTempActions: MemberTempActions | undefined;
 
   readReader(Deno.stdin, (msg: string) => {
     const commands = msg.split(" ");
@@ -51,9 +55,19 @@ const main = async () => {
       exitHonbu();
       return true;
     } else if (commands[0] === "member" && commands[1] === "temp") {
+      if (!memberTempActions) {
+        memberTempActions = new MemberTempActions(honbuKey, koujouPort);
+      }
       const action = memberTempActions.actionst[commands[2]];
       if (action) action(commands[3]);
       else console.log("list, admit or deny");
+    } else if (commands[0] === "certbot") {
+      runCertbotService(commands)
+        .then((ret) => {
+          console.log(ret.output);
+        }).catch((err: DockerComposeControllerExeption) => {
+          console.log(err);
+        });
     } else {
       console.log("><");
     }
