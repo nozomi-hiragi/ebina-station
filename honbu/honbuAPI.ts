@@ -47,6 +47,7 @@ server {
   }
 };
 
+// @TODO ワイルドカードでいけるから消せ
 export const generateNginxConfsFromJson = () => {
   const confsFilePath = "./project/nginx/confs.json";
   const generateDir = "./project/nginx/generate";

@@ -1,3 +1,20 @@
+import { isString } from "./deps.ts";
+
+class DockerCommandRun {
+  containerName: string;
+  command: string[];
+  remove: boolean;
+  constructor(
+    containerName: string,
+    command: string | string[],
+    remove: boolean = true,
+  ) {
+    this.containerName = containerName;
+    this.command = isString(command) ? command.split(" ") : command;
+    this.remove = remove;
+  }
+}
+
 class DockerCommandUp {
   containerName: string;
   detach: boolean;
@@ -48,7 +65,13 @@ type DockerComposeCommand =
 
 const buildDockerComposeCommand = (command: DockerComposeCommand) => {
   const cmd = ["docker-compose"] as string[];
-  if (command instanceof DockerCommandUp) {
+  if (command instanceof DockerCommandRun) {
+    if (command.containerName === "") throw new Error("no container name");
+    cmd.push("run");
+    if (command.remove) cmd.push("--rm");
+    cmd.push(command.containerName);
+    cmd.push(...command.command);
+  } else if (command instanceof DockerCommandUp) {
     if (command.containerName === "") throw new Error("no container name");
     cmd.push("up");
     if (command.detach) cmd.push("-d");
@@ -76,17 +99,45 @@ const buildDockerComposeCommand = (command: DockerComposeCommand) => {
   return cmd;
 };
 
+export class DockerComposeControllerExeption extends Error {
+  command: string;
+  status: number;
+  output: string;
+  errorOutput: string;
+  constructor(
+    command: string,
+    status: number,
+    output: string,
+    errorOutput: string,
+  ) {
+    super(`${command}\nstatus: ${status}\no: ${output}\ne: ${errorOutput}`);
+    this.command = command;
+    this.output = output;
+    this.errorOutput = errorOutput;
+    this.status = status;
+  }
+}
+
 const execDockerCompose = async (command: DockerComposeCommand) => {
   const cmd = buildDockerComposeCommand(command);
   const process = Deno.run({ cmd, stdout: "piped", stderr: "piped" });
   const status = await process.status();
-  const output = new TextDecoder().decode(await process.output());
+  const decoder = new TextDecoder();
+  const output = decoder.decode(await process.output());
   if (status.code !== 0) {
-    throw new TextDecoder().decode(await process.stderrOutput());
+    throw new DockerComposeControllerExeption(
+      cmd.join(" "),
+      status.code,
+      output,
+      decoder.decode(await process.stderrOutput()),
+    );
   }
 
   return { output, ...status };
 };
+
+export const runService = (containerName: string, command: string | string[]) =>
+  execDockerCompose(new DockerCommandRun(containerName, command));
 
 export const upService = (containerName: string) =>
   execDockerCompose(new DockerCommandUp(containerName));

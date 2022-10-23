@@ -1,3 +1,6 @@
+import { runService } from "./DockerComposeController.ts";
+
+/// ========== Member ==========
 export class MemberTempActions {
   honbuKey: string;
   koujouPort: number;
@@ -68,3 +71,58 @@ export class MemberTempActions {
     },
   };
 }
+
+/// ========== Certbot ==========
+
+const createCertbotCmd = (certbotArgs: string[]) => {
+  switch (certbotArgs[0]) {
+    case "certonly": {
+      return createCertonlyCommand(certbotArgs.slice(1));
+    }
+    case "renew":
+      return ["renew"];
+    default:
+      return certbotArgs;
+  }
+};
+
+const createCertonlyCommand = (certonlyArgs: string[]) => {
+  const tmpCmd: string[] = [];
+  let agree = false;
+  const domains: string[] = [];
+  let email = "";
+  let state: "none" | "domain" | "email" = "none";
+  for (let i = 0; i < certonlyArgs.length; i++) {
+    const it = certonlyArgs[i];
+    switch (state) {
+      case "none":
+        if (it === "--agree-tos") agree = true;
+        else if (it === "-d") state = "domain";
+        else if (it === "-m") state = "email";
+        else tmpCmd.push(it);
+        break;
+      case "domain":
+        domains.push(`-d ${it}`);
+        state = "none";
+        break;
+      case "email":
+        email = it;
+        state = "none";
+        break;
+    }
+  }
+  return [
+    "certonly",
+    "-n",
+    agree ? "--agree-tos" : "",
+    email ? `-m ${email}` : "--register-unsafely-without-email",
+    "--webroot",
+    "-w",
+    "/var/www/html",
+    ...domains,
+    ...tmpCmd,
+  ].filter(Boolean);
+};
+
+export const runCertbotService = (commands: string[]) =>
+  runService("certbot", createCertbotCmd(commands.slice(1)));
