@@ -41,10 +41,11 @@ const createKoujouSettings = async (
       if (isDesktop) serviceKoujou.ports = [`${koujouPort}:${koujouPort}`];
       else serviceKoujou.network_mode = "host";
     }),
+    // 取れない時がある unstable外れたら変える
     getNetworkAddr().then((ipAddress) => {
       serviceKoujou.environment = env.concat([
         "HONBU=true",
-        `HONBU_ADDRESS=${ipAddress}`,
+        `HONBU_ADDRESS=${ipAddress ?? "localhost"}`,
         `HONBU_PORT=${honbuParams.port}`,
         `HONBU_KEY=${honbuParams.key}`,
       ]);
