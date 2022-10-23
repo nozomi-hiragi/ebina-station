@@ -71,17 +71,14 @@ const createMongoSettings = (port: number, env: string[]) => {
 };
 
 const createJinjiSettings = () => {
-  let nginxConf: string;
-  try {
-    nginxConf = Deno.readTextFileSync("./project/nginx/nginx.conf");
-  } catch {
+  const info = isExist("./project/nginx/nginx.conf");
+  if (!info) {
     Deno.mkdirSync("./project/nginx/", { recursive: true });
     Deno.copyFileSync("./nginx.conf.base", "./project/nginx/nginx.conf");
-    nginxConf = Deno.readTextFileSync("./project/nginx/nginx.conf");
+  } else if (!info.isFile) {
+    throw new Error(`"./project/nginx/nginx.conf" is not file`);
   }
-  if (nginxConf.includes("include /etc/nginx/generate/includes.conf;")) {
-    generateNginxConfsFromJson();
-  }
+  generateNginxConfsFromJson();
 
   const volumes = [
     "./project/nginx/nginx.conf:/etc/nginx/nginx.conf",

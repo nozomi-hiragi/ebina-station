@@ -7,7 +7,7 @@ import {
   updateNginxStatus,
 } from "../../../utils/honbuDelegate.ts";
 
-const nginxConfs = new NginxConfs();
+export const nginxConfs = new NginxConfs();
 
 const routingRouter = new oak.Router();
 

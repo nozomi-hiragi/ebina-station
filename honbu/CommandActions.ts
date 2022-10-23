@@ -1,29 +1,16 @@
-import { runService } from "./DockerComposeController.ts";
+import { restartService, runService } from "./DockerComposeController.ts";
+import { ServiceName } from "./EbinaService.ts";
+import { generateNginxConfsFromJson } from "./honbuAPI.ts";
+import { KoujouAPI } from "./KoujouAPI.ts";
 
 /// ========== Member ==========
 export class MemberTempActions {
-  honbuURL: string;
-  headers: { key: string };
+  static showTempMemberList = (api: KoujouAPI) =>
+    api.getTempMemberList().then((ret) => console.log(ret));
 
-  constructor(honbuKey: string, koujouPort: number) {
-    this.honbuURL = `http://localhost:${koujouPort}/honbu`;
-    this.headers = { key: honbuKey };
-  }
-
-  showTempMemberList = () =>
-    fetch(`${this.honbuURL}/member/temp/list`, {
-      method: "GET",
-      headers: this.headers,
-    }).then((ret) => ret.json())
-      .then((ret) => console.log(ret));
-
-  admitTempMember = (id: string) =>
-    fetch(`${this.honbuURL}/member/temp/admit`, {
-      method: "POST",
-      body: JSON.stringify({ id }),
-      headers: this.headers,
-    }).then((ret) => {
-      switch (ret.status) {
+  static admitTempMember = (api: KoujouAPI, id: string) =>
+    api.admitTempMember(id).then((ret) => {
+      switch (ret) {
         case 200:
           console.log("ok");
           break;
@@ -38,13 +25,9 @@ export class MemberTempActions {
       }
     });
 
-  denyTempMember = (id: string) =>
-    fetch(`${this.honbuURL}/member/temp/deny`, {
-      method: "POST",
-      body: JSON.stringify({ id }),
-      headers: this.headers,
-    }).then((ret) => {
-      switch (ret.status) {
+  static denyTempMember = (api: KoujouAPI, id: string) =>
+    api.denyTempMember(id).then((ret) => {
+      switch (ret) {
         case 200:
           console.log("ok");
           break;
@@ -56,14 +39,16 @@ export class MemberTempActions {
       }
     });
 
-  actionst: { [name: string]: (id: string) => Promise<void> } = {
-    "list": async () => await this.showTempMemberList(),
-    "admit": async (id: string) => {
-      if (id) await this.admitTempMember(id);
+  static actionst: {
+    [name: string]: (api: KoujouAPI, id: string) => Promise<void>;
+  } = {
+    "list": async (api: KoujouAPI) => await this.showTempMemberList(api),
+    "admit": async (api: KoujouAPI, id: string) => {
+      if (id) await this.admitTempMember(api, id);
       else console.log("id is required");
     },
-    "deny": async (id: string) => {
-      if (id) await this.denyTempMember(id);
+    "deny": async (api: KoujouAPI, id: string) => {
+      if (id) await this.denyTempMember(api, id);
       else console.log("id is required");
     },
   };
@@ -123,3 +108,72 @@ const createCertonlyCommand = (certonlyArgs: string[]) => {
 
 export const runCertbotService = (commands: string[]) =>
   runService("certbot", createCertbotCmd(commands.slice(1)));
+
+// ========== Route ==========
+
+export const executeAddRoute = (api: KoujouAPI, routeArgs: string[]) => {
+  const { restart, ...route } = parseRoute(routeArgs);
+  if (!route.name) return console.log("name is required");
+  if (!route.hostname) return console.log("hostname is required");
+  if (!route.port || Number.isNaN(route.port)) {
+    return console.log("port is required");
+  }
+
+  api.addRoute(route).then((ret) => {
+    switch (ret) {
+      case 201:
+        break;
+      case 400:
+        console.log("wrong params");
+        break;
+      case 409:
+        console.log("this name is already used");
+        break;
+    }
+  }).then(() => {
+    if (restart) {
+      generateNginxConfsFromJson();
+      restartService(ServiceName.Jinji).catch((msg) => console.log(msg));
+    }
+  });
+};
+
+const parseRoute = (routeArgs: string[]) => {
+  let name = "";
+  let hostname = "";
+  let port: number | "koujou" = 0;
+  let restart = false;
+  let state: "none" | "name" | "hostname" | "port" = "none";
+  for (let i = 0; i < routeArgs.length; i++) {
+    const it = routeArgs[i];
+    switch (state) {
+      case "none":
+        switch (it) {
+          case "-h":
+          case "--hostname":
+            state = "hostname";
+            break;
+          case "-p":
+          case "--port":
+            state = "port";
+            break;
+          case "-r":
+          case "--restart":
+            restart = true;
+            break;
+          default:
+            name = it;
+        }
+        break;
+      case "hostname":
+        hostname = it;
+        state = "none";
+        break;
+      case "port":
+        port = it === "koujou" ? "koujou" : Number(it);
+        state = "none";
+        break;
+    }
+  }
+  return { name, hostname, port, restart };
+};

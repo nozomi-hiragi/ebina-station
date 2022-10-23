@@ -3,7 +3,7 @@ import { exist } from "../utils/utils.ts";
 
 export type NginxConf = {
   hostname: string;
-  port: number;
+  port: number | "koujou";
   www?: boolean;
 };
 

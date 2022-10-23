@@ -8,7 +8,12 @@ import {
 import { initDockerComposeFile, ServiceName } from "./EbinaService.ts";
 import { createHonbuRouter } from "./honbuAPI.ts";
 import { getSettings, PROJECT_PATH } from "../koujou/settings/settings.ts";
-import { MemberTempActions, runCertbotService } from "./CommandActions.ts";
+import {
+  executeAddRoute,
+  MemberTempActions,
+  runCertbotService,
+} from "./CommandActions.ts";
+import { KoujouAPI } from "./KoujouAPI.ts";
 
 const removeBaseServices = () =>
   Promise.all([
@@ -47,7 +52,7 @@ const main = async () => {
   if (!await upService(ServiceName.Koujou)) Deno.exit(1);
   if (!await upService(ServiceName.Jinji)) Deno.exit(1);
 
-  let memberTempActions: MemberTempActions | undefined;
+  const koujouAPI = new KoujouAPI(honbuKey, koujouPort);
 
   readReader(Deno.stdin, (msg: string) => {
     const commands = msg.split(" ");
@@ -55,11 +60,8 @@ const main = async () => {
       exitHonbu();
       return true;
     } else if (commands[0] === "member" && commands[1] === "temp") {
-      if (!memberTempActions) {
-        memberTempActions = new MemberTempActions(honbuKey, koujouPort);
-      }
-      const action = memberTempActions.actionst[commands[2]];
-      if (action) action(commands[3]);
+      const action = MemberTempActions.actionst[commands[2]];
+      if (action) action(koujouAPI, commands[3]);
       else console.log("list, admit or deny");
     } else if (commands[0] === "certbot") {
       runCertbotService(commands)
@@ -68,6 +70,9 @@ const main = async () => {
         }).catch((err: DockerComposeControllerExeption) => {
           console.log(err);
         });
+    } else if (commands[0] === "route") {
+      if (commands[1] === "add") executeAddRoute(koujouAPI, commands.slice(2));
+      else console.log(`sub command "add"`);
     } else {
       console.log("><");
     }

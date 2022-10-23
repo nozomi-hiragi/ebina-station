@@ -7,22 +7,24 @@ import {
 } from "./DockerComposeController.ts";
 import { ServiceName } from "./EbinaService.ts";
 import { isExist } from "./utils.ts";
-
-const generateDirPathInContainer = "/etc/nginx/generate";
+import { getSettings } from "../koujou/settings/settings.ts";
 
 type NginxConf = {
   hostname: string;
-  port: number;
+  port: number | "koujou";
   www?: boolean;
 };
 
 const generateNginxConf = (name: string, conf: NginxConf) => {
+  const port = conf.port === "koujou"
+    ? getSettings().getPortNumber()
+    : conf.port;
   let content = `server {
     listen 80;
     listen [::]:80;
     server_name ${conf.hostname};
     location / {
-        proxy_pass http://EbinaStationKoujou:${conf.port}/;
+        proxy_pass http://EbinaStationKoujou:${port}/;
     }
 }`;
   if (conf.www) {
@@ -35,7 +37,8 @@ server {
 }`;
   }
   try {
-    Deno.mkdirSync("./project/nginx/generate", { recursive: true });
+    const generateDir = "./project/nginx/generate";
+    if (!isExist(generateDir)) Deno.mkdirSync(generateDir, { recursive: true });
     Deno.writeTextFileSync(
       `./project/nginx/generate/${name}.conf`,
       content,
@@ -47,7 +50,6 @@ server {
   }
 };
 
-// @TODO ワイルドカードでいけるから消せ
 export const generateNginxConfsFromJson = () => {
   const confsFilePath = "./project/nginx/confs.json";
   const generateDir = "./project/nginx/generate";
@@ -55,24 +57,13 @@ export const generateNginxConfsFromJson = () => {
   if (isExist(generateDir)) Deno.removeSync(generateDir, { recursive: true });
   Deno.mkdirSync(generateDir, { recursive: true });
 
-  const includes: string[] = [];
-
-  if (isExist(confsFilePath)) {
-    const confs = JSON.parse(Deno.readTextFileSync(confsFilePath));
-    if (confs) {
-      Object.keys(confs).forEach((name) => {
-        const err = generateNginxConf(name, confs[name]);
-        if (err) {
-          console.log(err);
-        } else {
-          includes.push(`include ${generateDirPathInContainer}/${name}.conf;`);
-        }
-      });
-    }
-  }
-
-  const includesConfPath = `${generateDir}/includes.conf`;
-  Deno.writeTextFileSync(includesConfPath, includes.join("\n"));
+  if (!isExist(confsFilePath)) return;
+  const confs = JSON.parse(Deno.readTextFileSync(confsFilePath));
+  if (!confs) throw new Error("something wrong on ./project/nginx/confs.json");
+  Object.keys(confs).forEach((name) => {
+    const err = generateNginxConf(name, confs[name]);
+    if (err) console.log(err);
+  });
 };
 
 const createAuthKeyFunc = (honbuKey: string) => {
