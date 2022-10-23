@@ -1,4 +1,4 @@
-import { oak } from "./deps.ts";
+import { Cron, oak } from "./deps.ts";
 import { initProjectSettingsInteract, isExist, readReader } from "./utils.ts";
 import {
   DockerComposeControllerExeption,
@@ -82,9 +82,19 @@ const main = async () => {
   const honbuRouter = createHonbuRouter(honbuKey);
   app.use(honbuRouter.routes(), honbuRouter.allowedMethods());
   app.listen({ port: honbuPort });
-  console.log("Connect to Koujou...");
 };
 
-main();
+main().then(() => {
+  console.log("Connect to Koujou...");
+  const renewCron = new Cron("0 0 22-28 * 1", () => {
+    runCertbotService(["certbot", "renew"]).then((ret) => {
+      // @TODO ログに入れる
+      console.log(`renew: ${ret}`);
+    });
+  });
 
-Deno.addSignalListener("SIGTERM", () => exitHonbu());
+  Deno.addSignalListener("SIGTERM", () => {
+    renewCron.stop();
+    exitHonbu();
+  });
+});
