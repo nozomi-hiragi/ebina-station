@@ -122,6 +122,7 @@ export const executeAddRoute = (
   }
 
   api.addRoute(name, { certWebRoot: certbot, ...route }).then((ret) => {
+    console.log("Route added");
     switch (ret) {
       case 201:
         return true;
@@ -134,12 +135,15 @@ export const executeAddRoute = (
     }
   }).then(async (ret) => {
     if (ret && (restart || certbot)) {
+      console.log("Restart Jinji");
       generateNginxConfsFromJson(isDesktop);
       await restartService(ServiceName.Jinji);
       if (certbot) {
         const certCmd = ["certbot", "certonly", "-d", route.hostname];
         if (email) certCmd.push("-m", email);
+        console.log("Start certbot...");
         const ret = await runCertbotService(certCmd);
+        console.log(`result: ${ret.success}`);
         if (ret.success) {
           await api.setRoute(name, {
             certbot: true,
