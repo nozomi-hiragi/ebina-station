@@ -32,7 +32,6 @@ const main = async () => {
   if (pjInfo) {
     if (!pjInfo.isDirectory) throw new Error("project is not directory");
   } else {
-    Deno.mkdir(PROJECT_PATH, { recursive: true });
     await initProjectSettingsInteract();
   }
 

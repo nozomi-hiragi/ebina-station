@@ -70,7 +70,6 @@ const createCertbotCmd = (certbotArgs: string[]) => {
 
 const createCertonlyCommand = (certonlyArgs: string[]) => {
   const tmpCmd: string[] = [];
-  let agree = false;
   const domains: string[] = [];
   let email = "";
   let state: "none" | "domain" | "email" = "none";
@@ -78,8 +77,7 @@ const createCertonlyCommand = (certonlyArgs: string[]) => {
     const it = certonlyArgs[i];
     switch (state) {
       case "none":
-        if (it === "--agree-tos") agree = true;
-        else if (it === "-d") state = "domain";
+        if (it === "-d") state = "domain";
         else if (it === "-m") state = "email";
         else tmpCmd.push(it);
         break;
@@ -96,7 +94,7 @@ const createCertonlyCommand = (certonlyArgs: string[]) => {
   return [
     "certonly",
     "-n",
-    agree ? "--agree-tos" : "",
+    "--agree-tos", // プロジェクト作成時に同意を得てる
     email ? `-m ${email}` : "--register-unsafely-without-email",
     "--webroot",
     "-w",
@@ -112,30 +110,43 @@ export const runCertbotService = (commands: string[]) =>
 // ========== Route ==========
 
 export const executeAddRoute = (api: KoujouAPI, routeArgs: string[]) => {
-  const { restart, ...route } = parseRoute(routeArgs);
-  if (!route.name) return console.log("name is required");
+  const { name, restart, certbot, email, ...route } = parseRoute(routeArgs);
+  if (!name) return console.log("name is required");
   if (!route.hostname) return console.log("hostname is required");
   if (!route.port || Number.isNaN(route.port)) {
     return console.log("port is required");
   }
 
-  api.addRoute(route).then((ret) => {
+  api.addRoute(name, { certWebRoot: certbot, ...route }).then((ret) => {
     switch (ret) {
       case 201:
-        break;
+        return true;
       case 400:
         console.log("wrong params");
-        break;
+        return true;
       case 409:
         console.log("this name is already used");
-        break;
+        return false;
     }
-  }).then(() => {
-    if (restart) {
+  }).then(async (ret) => {
+    if (ret && (restart || certbot)) {
       generateNginxConfsFromJson();
-      restartService(ServiceName.Jinji).catch((msg) => console.log(msg));
+      await restartService(ServiceName.Jinji);
+      if (certbot) {
+        const certCmd = ["certbot", "certonly", "-d", route.hostname];
+        if (email) certCmd.push("-m", email);
+        const ret = await runCertbotService(certCmd);
+        if (ret.success) {
+          await api.setRoute(name, {
+            certbot: true,
+            certWebRoot: true,
+            ...route,
+          });
+          await restartService(ServiceName.Jinji);
+        }
+      }
     }
-  });
+  }).catch((msg) => console.log(msg));
 };
 
 const parseRoute = (routeArgs: string[]) => {
@@ -143,7 +154,9 @@ const parseRoute = (routeArgs: string[]) => {
   let hostname = "";
   let port: number | "koujou" = 0;
   let restart = false;
-  let state: "none" | "name" | "hostname" | "port" = "none";
+  let certbot = false;
+  let email = "";
+  let state: "none" | "name" | "hostname" | "port" | "email" = "none";
   for (let i = 0; i < routeArgs.length; i++) {
     const it = routeArgs[i];
     switch (state) {
@@ -161,6 +174,13 @@ const parseRoute = (routeArgs: string[]) => {
           case "--restart":
             restart = true;
             break;
+          case "-c":
+          case "--certbot":
+            certbot = true;
+            break;
+          case "-m":
+            state = "email";
+            break;
           default:
             name = it;
         }
@@ -173,7 +193,11 @@ const parseRoute = (routeArgs: string[]) => {
         port = it === "koujou" ? "koujou" : Number(it);
         state = "none";
         break;
+      case "email":
+        email = it;
+        state = "none";
+        break;
     }
   }
-  return { name, hostname, port, restart };
+  return { name, hostname, port, restart, certbot, email };
 };

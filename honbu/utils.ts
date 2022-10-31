@@ -56,12 +56,24 @@ export const isExist = (path: string) => {
 };
 
 export const initProjectSettingsInteract = async () => {
-  const projectSettings = getSettings();
-
   const yon = "y/n";
   const msgPleaseChangeFromSettingFile = "変更する場合は設定ファイルから行ってください。\n";
 
   const rb = new ReaderBuffer(Deno.stdin);
+
+  // Let's encrypt同意して
+  console.log(
+    "このアプリはcertbotコンテナを使用したLet's Encryptを使用してます。\n" +
+      "Let's Encrypt Subscriber Agreementの同意が必要です。 https://letsencrypt.org/repository/\n" +
+      "同意しますか？" + yon,
+  );
+  const agree = await rb.read().then((ret) => ret?.toLowerCase());
+  if (agree !== "y") {
+    console.log("同意できなきゃ多分使っちゃダメ");
+    throw new Error("Not agree let's encrype agreement");
+  }
+
+  const projectSettings = getSettings();
 
   console.log(
     "こんにちは。\n" +

@@ -1,3 +1,5 @@
+import { NginxConf } from "./honbuAPI.ts";
+
 export class KoujouAPI {
   honbuURL: string;
   headers: { key: string };
@@ -27,12 +29,17 @@ export class KoujouAPI {
       body: JSON.stringify({ id }),
     }).then((ret) => ret.status);
 
-  addRoute = (
-    route: { name: string; hostname: string; port: number | "koujou" },
-  ) =>
+  addRoute = (name: string, route: NginxConf) =>
     fetch(`${this.honbuURL}/route`, {
       headers: this.headers,
       method: "POST",
-      body: JSON.stringify(route),
+      body: JSON.stringify({ name, route }),
+    }).then((ret) => ret.status);
+
+  setRoute = (name: string, route: NginxConf) =>
+    fetch(`${this.honbuURL}/route`, {
+      headers: this.headers,
+      method: "PUT",
+      body: JSON.stringify({ name, route }),
     }).then((ret) => ret.status);
 }

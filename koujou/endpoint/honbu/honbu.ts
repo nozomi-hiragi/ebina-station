@@ -1,5 +1,6 @@
-import { isNumber, isString, oak } from "../../deps.ts";
+import { isString, oak } from "../../deps.ts";
 import { getMembers } from "../../settings/members/members.ts";
+import { isNginxConf } from "../../settings/nginx.ts";
 import { checkHonbuKey } from "../../utils/honbuDelegate.ts";
 import { nginxConfs } from "../ebina/rouging/routing.ts";
 
@@ -39,16 +40,21 @@ honbuRouter.post("/member/temp/deny", checkHonbuKey, async (ctx) => {
 });
 
 honbuRouter.post("/route", checkHonbuKey, async (ctx) => {
-  const { name, hostname, port } = await ctx.request
-    .body({ type: "json" }).value;
-  if (
-    !name || !isString(name) ||
-    !hostname || !isString(hostname) ||
-    !port || !(port === "koujou" || isNumber(port))
-  ) return ctx.response.status = 400;
+  const { name, route } = await ctx.request.body({ type: "json" }).value;
+  if (!name || !isString(name) || !route || !isNginxConf(route)) {
+    return ctx.response.status = 400;
+  }
   if (nginxConfs.getConf(name)) return ctx.response.status = 409;
-  nginxConfs.setConf(name, { hostname, port });
+  nginxConfs.setConf(name, route);
   ctx.response.status = 201;
 });
 
+honbuRouter.put("/route", checkHonbuKey, async (ctx) => {
+  const { name, route } = await ctx.request.body({ type: "json" }).value;
+  if (!name || !isString(name) || !route || !isNginxConf(route)) {
+    return ctx.response.status = 400;
+  }
+  nginxConfs.setConf(name, route);
+  ctx.response.status = 200;
+});
 export default honbuRouter;
