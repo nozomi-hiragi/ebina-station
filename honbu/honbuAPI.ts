@@ -23,7 +23,11 @@ export type NginxConf = {
   resolver?: boolean;
 };
 
-const generateNginxConf = (name: string, conf: NginxConf) => {
+const generateNginxConf = (
+  isDesktop: boolean,
+  name: string,
+  conf: NginxConf,
+) => {
   const port = conf.port === "koujou"
     ? getSettings().getPortNumber()
     : conf.port;
@@ -61,16 +65,17 @@ const generateNginxConf = (name: string, conf: NginxConf) => {
     ssl_trusted_certificate ${conf.ssl.trustedCertificate};`;
   }
 
+  const koujouName = isDesktop ? "EbinaStationKoujou" : "localhost";
   const content = `server {
     listen 80;
     listen [::]:80;
     server_name ${conf.hostname};
     location / {
-        proxy_pass http://EbinaStationKoujou:${port}/;
+        proxy_pass http://${koujouName}:${port}/;
     }${
     conf.certWebRoot
       ? `
-    location /.well-known/acme-challenge/ {
+    location /.well-known/ {
       root /var/www/html;
     }`
       : ""
@@ -96,7 +101,7 @@ ${sslSettings}${
   }
 };
 
-export const generateNginxConfsFromJson = () => {
+export const generateNginxConfsFromJson = (isDesktop: boolean) => {
   const confsFilePath = "./project/nginx/confs.json";
   const generateDir = "./project/nginx/generate";
 
@@ -107,7 +112,7 @@ export const generateNginxConfsFromJson = () => {
   const confs = JSON.parse(Deno.readTextFileSync(confsFilePath));
   if (!confs) throw new Error("something wrong on ./project/nginx/confs.json");
   Object.keys(confs).forEach((name) => {
-    const err = generateNginxConf(name, confs[name]);
+    const err = generateNginxConf(isDesktop, name, confs[name]);
     if (err) console.log(err);
   });
 };
@@ -129,6 +134,7 @@ const createAuthKeyFunc = (honbuKey: string) => {
 
 export const createHonbuRouter = (
   honbuKey: string,
+  isDesktop: boolean,
   onConnectedKoujou?: () => void,
 ) => {
   const authKey = createAuthKeyFunc(honbuKey);
@@ -145,7 +151,7 @@ export const createHonbuRouter = (
     const status = body.status;
     switch (status) {
       case "up": {
-        generateNginxConfsFromJson();
+        generateNginxConfsFromJson(isDesktop);
         ctx.response.status = await upService(ServiceName.Jinji)
           .then(() => 200)
           .catch((msg) => {
@@ -155,7 +161,7 @@ export const createHonbuRouter = (
         break;
       }
       case "restart": {
-        generateNginxConfsFromJson();
+        generateNginxConfsFromJson(isDesktop);
         ctx.response.status = await restartService(ServiceName.Jinji)
           .then(() => 200)
           .catch((msg) => {
@@ -165,7 +171,7 @@ export const createHonbuRouter = (
         break;
       }
       case "rm": {
-        generateNginxConfsFromJson();
+        generateNginxConfsFromJson(isDesktop);
         ctx.response.status = await rmService(ServiceName.Jinji)
           .then(() => 200)
           .catch((msg) => {

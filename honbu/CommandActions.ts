@@ -109,7 +109,11 @@ export const runCertbotService = (commands: string[]) =>
 
 // ========== Route ==========
 
-export const executeAddRoute = (api: KoujouAPI, routeArgs: string[]) => {
+export const executeAddRoute = (
+  isDesktop: boolean,
+  api: KoujouAPI,
+  routeArgs: string[],
+) => {
   const { name, restart, certbot, email, ...route } = parseRoute(routeArgs);
   if (!name) return console.log("name is required");
   if (!route.hostname) return console.log("hostname is required");
@@ -130,7 +134,7 @@ export const executeAddRoute = (api: KoujouAPI, routeArgs: string[]) => {
     }
   }).then(async (ret) => {
     if (ret && (restart || certbot)) {
-      generateNginxConfsFromJson();
+      generateNginxConfsFromJson(isDesktop);
       await restartService(ServiceName.Jinji);
       if (certbot) {
         const certCmd = ["certbot", "certonly", "-d", route.hostname];

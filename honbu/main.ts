@@ -1,5 +1,10 @@
 import { Cron, oak } from "./deps.ts";
-import { initProjectSettingsInteract, isExist, readReader } from "./utils.ts";
+import {
+  initProjectSettingsInteract,
+  isDockerDesktop,
+  isExist,
+  readReader,
+} from "./utils.ts";
 import {
   DockerComposeControllerExeption,
   rmService,
@@ -40,6 +45,8 @@ const main = async () => {
   const koujouPort = projectSettings.getPortNumber();
   const honbuPort = projectSettings.getHonbuPortNumber();
 
+  const isDesktop = await isDockerDesktop();
+
   const honbuKey = crypto.randomUUID() ?? "honbukey";
   await initDockerComposeFile(
     { key: honbuKey, port: honbuPort },
@@ -70,15 +77,16 @@ const main = async () => {
           console.log(err);
         });
     } else if (commands[0] === "route") {
-      if (commands[1] === "add") executeAddRoute(koujouAPI, commands.slice(2));
-      else console.log(`sub command "add"`);
+      if (commands[1] === "add") {
+        executeAddRoute(isDesktop, koujouAPI, commands.slice(2));
+      } else console.log(`sub command "add"`);
     } else {
       console.log("><");
     }
   });
 
   const app = new oak.Application();
-  const honbuRouter = createHonbuRouter(honbuKey);
+  const honbuRouter = createHonbuRouter(honbuKey, isDesktop);
   app.use(honbuRouter.routes(), honbuRouter.allowedMethods());
   app.listen({ port: honbuPort });
 };
