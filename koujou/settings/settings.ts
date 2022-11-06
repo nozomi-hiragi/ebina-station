@@ -103,7 +103,9 @@ class Settings {
 
   canRegistNewMember(currentMemberCount: number) {
     const settings = this.Member;
-    console.log(`${settings.allowRegist} ${settings.maxMembers} ${currentMemberCount}`)
+    console.log(
+      `${settings.allowRegist} ${settings.maxMembers} ${currentMemberCount}`,
+    );
     return settings.allowRegist && (settings.maxMembers > currentMemberCount);
   }
 }
@@ -117,6 +119,7 @@ const loadFromFile = () => {
       JSON.parse(Deno.readTextFileSync(SETTINGS_FILE_PATH)),
     );
   } catch {
+    Deno.mkdirSync(PROJECT_PATH, { recursive: true });
     settings = new Settings();
   }
   Deno.writeTextFileSync(

@@ -3,9 +3,33 @@ import { exist } from "../utils/utils.ts";
 
 export type NginxConf = {
   hostname: string;
-  port: number;
-  www?: boolean;
+  port: number | "koujou";
+  ssl?: {
+    certificate: string;
+    certificateKey: string;
+    trustedCertificate: string;
+    dhparam?: string;
+  };
+  certbot?: boolean;
+  certWebRoot?: boolean;
+  resolver?: boolean;
 };
+
+// deno-lint-ignore no-explicit-any
+export const isNginxConf = (obj: any): obj is NginxConf =>
+  "hostname" in obj && typeof obj.hostname === "string" &&
+  "port" in obj && (typeof obj.port === "number" || obj.port === "koujou") &&
+  (!("ssl" in obj) || typeof obj.ssl === "object" &&
+      "certificate" in obj.ssl &&
+      typeof obj.ssl.certificate === "string" &&
+      "certificateKey" in obj.ssl &&
+      typeof obj.ssl.certificateKey === "string" &&
+      "trustedCertificate" in obj.ssl &&
+      typeof obj.ssl.trustedCertificate === "string" &&
+      (!("dhparam" in obj.ssl) || typeof obj.ssl.dhparam === "string")) &&
+  (!("certbot" in obj) || typeof obj.certbot === "boolean") &&
+  (!("certWebRoot" in obj) || typeof obj.certWebRoot === "boolean") &&
+  (!("resolver" in obj) || typeof obj.resolver === "boolean");
 
 type NginxConfJson = {
   [name: string]: NginxConf | undefined;
