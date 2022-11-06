@@ -1,4 +1,4 @@
-import { Cron, oak } from "./deps.ts";
+import { Cron, oak, oakCors } from "./deps.ts";
 import {
   initProjectSettingsInteract,
   isDockerDesktop,
@@ -16,6 +16,7 @@ import {
   runCertbotService,
 } from "./CommandActions.ts";
 import { KoujouAPI } from "./KoujouAPI.ts";
+import ebinaRouter from "./ebinaAPI/ebina.ts";
 
 const removeBaseServices = () =>
   Promise.all([
@@ -83,7 +84,12 @@ const main = async () => {
   });
 
   const app = new oak.Application();
+  if (projectSettings.origins) {
+    app.use(oakCors({ origin: projectSettings.origins, credentials: true }));
+  }
+
   const honbuRouter = createHonbuRouter(honbuKey, isDesktop);
+  honbuRouter.use("/ebina", ebinaRouter.routes());
   app.use(honbuRouter.routes(), honbuRouter.allowedMethods());
   app.listen({ port: honbuPort });
 };

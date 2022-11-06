@@ -69,10 +69,6 @@ routingRouter.put("/route/:route", authToken, async (ctx) => {
     conf.port = body.port;
     isChanged = true;
   }
-  if (body.www !== undefined) {
-    conf.www = body.www;
-    isChanged = true;
-  }
 
   if (isChanged) {
     nginxConfs.setConf(route, conf);
