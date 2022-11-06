@@ -125,3 +125,40 @@ export const initProjectSettingsInteract = async () => {
 
   setSettings(projectSettings);
 };
+
+export class RunCommandExeption extends Error {
+  command: string;
+  status: number;
+  output: string;
+  errorOutput: string;
+  constructor(
+    command: string,
+    status: number,
+    output: string,
+    errorOutput: string,
+  ) {
+    super(`${command}\nstatus: ${status}\no: ${output}\ne: ${errorOutput}`);
+    this.command = command;
+    this.output = output;
+    this.errorOutput = errorOutput;
+    this.status = status;
+  }
+}
+
+export const runCommand = async (cmd: string[]) => {
+  const process = Deno.run({ cmd, stdout: "piped", stderr: "piped" });
+  const status = await process.status();
+  const decoder = new TextDecoder();
+  const output = decoder.decode(await process.output());
+  const err = decoder.decode(await process.stderrOutput());
+  if (status.code !== 0) {
+    throw new RunCommandExeption(
+      cmd.join(" "),
+      status.code,
+      output,
+      err,
+    );
+  }
+
+  return { output, err, status };
+};

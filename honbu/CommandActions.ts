@@ -1,4 +1,4 @@
-import { restartService, runService } from "./DockerComposeController.ts";
+import { execDCCRestart, execDCCRun } from "./docker/DockerComposeCommand.ts";
 import { ServiceName } from "./EbinaService.ts";
 import { generateNginxConfsFromJson } from "./honbuAPI.ts";
 import { KoujouAPI } from "./KoujouAPI.ts";
@@ -105,7 +105,7 @@ const createCertonlyCommand = (certonlyArgs: string[]) => {
 };
 
 export const runCertbotService = (commands: string[]) =>
-  runService("certbot", createCertbotCmd(commands.slice(1)));
+  execDCCRun("certbot", createCertbotCmd(commands.slice(1)));
 
 // ========== Route ==========
 
@@ -137,20 +137,20 @@ export const executeAddRoute = (
     if (ret && (restart || certbot)) {
       console.log("Restart Jinji");
       generateNginxConfsFromJson(isDesktop);
-      await restartService(ServiceName.Jinji);
+      await execDCCRestart(ServiceName.Jinji);
       if (certbot) {
         const certCmd = ["certbot", "certonly", "-d", route.hostname];
         if (email) certCmd.push("-m", email);
         console.log("Start certbot...");
         const ret = await runCertbotService(certCmd);
-        console.log(`result: ${ret.success}`);
-        if (ret.success) {
+        console.log(`result: ${ret.status.success}`);
+        if (ret.status.success) {
           await api.setRoute(name, {
             certbot: true,
             certWebRoot: true,
             ...route,
           });
-          await restartService(ServiceName.Jinji);
+          await execDCCRestart(ServiceName.Jinji);
         }
       }
     }

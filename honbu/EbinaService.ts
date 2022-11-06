@@ -1,9 +1,9 @@
 import { config, getNetworkAddr } from "./deps.ts";
-import { rmService } from "./DockerComposeController.ts";
+import { execDCCRm } from "./docker/DockerComposeCommand.ts";
 import {
   DockerComposeYamlManager,
   DockerComposeYamlService,
-} from "./DockerComposeYamlManager.ts";
+} from "./docker/DockerComposeYamlManager.ts";
 import { generateNginxConfsFromJson } from "./honbuAPI.ts";
 import { isDockerDesktop, isExist } from "./utils.ts";
 
@@ -116,10 +116,10 @@ export const initDockerComposeFile = async (
   mongodbPort?: number,
 ) => {
   await Promise.all([
-    rmService(ServiceName.Koujou).catch(() => {}),
-    rmService(ServiceName.Jinji).catch(() => {}),
-    rmService(ServiceName.mongodb).catch(() => {}),
-    rmService(ServiceName.certbot).catch(() => {}),
+    execDCCRm(ServiceName.Koujou).catch(() => {}),
+    execDCCRm(ServiceName.Jinji).catch(() => {}),
+    execDCCRm(ServiceName.mongodb).catch(() => {}),
+    execDCCRm(ServiceName.certbot).catch(() => {}),
   ]);
 
   const koujouEnv = config({ path: "./koujou/.env" });

@@ -1,4 +1,4 @@
-import { parse, stringify } from "./deps.ts";
+import { parse, stringify } from "../deps.ts";
 
 type DockerComposeYamlBase = {
   version: string;

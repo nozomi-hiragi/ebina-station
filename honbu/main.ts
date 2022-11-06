@@ -4,12 +4,9 @@ import {
   isDockerDesktop,
   isExist,
   readReader,
+  RunCommandExeption,
 } from "./utils.ts";
-import {
-  DockerComposeControllerExeption,
-  rmService,
-  upService,
-} from "./DockerComposeController.ts";
+import { execDCCRm, execDCCUp } from "./docker/DockerComposeCommand.ts";
 import { initDockerComposeFile, ServiceName } from "./EbinaService.ts";
 import { createHonbuRouter } from "./honbuAPI.ts";
 import { getSettings, PROJECT_PATH } from "../koujou/settings/settings.ts";
@@ -22,8 +19,8 @@ import { KoujouAPI } from "./KoujouAPI.ts";
 
 const removeBaseServices = () =>
   Promise.all([
-    rmService(ServiceName.Koujou).catch((msg) => console.error(msg)),
-    rmService(ServiceName.Jinji).catch((msg) => console.error(msg)),
+    execDCCRm(ServiceName.Koujou).catch((msg) => console.error(msg)),
+    execDCCRm(ServiceName.Jinji).catch((msg) => console.error(msg)),
   ]);
 
 const exitHonbu = () =>
@@ -54,9 +51,9 @@ const main = async () => {
     mongoSettings?.port,
   );
 
-  if (mongoSettings) if (!await upService(ServiceName.mongodb)) Deno.exit(1);
-  if (!await upService(ServiceName.Koujou)) Deno.exit(1);
-  if (!await upService(ServiceName.Jinji)) Deno.exit(1);
+  if (mongoSettings) if (!await execDCCUp(ServiceName.mongodb)) Deno.exit(1);
+  if (!await execDCCUp(ServiceName.Koujou)) Deno.exit(1);
+  if (!await execDCCUp(ServiceName.Jinji)) Deno.exit(1);
 
   const koujouAPI = new KoujouAPI(honbuKey, koujouPort);
 
@@ -73,7 +70,7 @@ const main = async () => {
       runCertbotService(commands)
         .then((ret) => {
           console.log(ret.output);
-        }).catch((err: DockerComposeControllerExeption) => {
+        }).catch((err: RunCommandExeption) => {
           console.log(err);
         });
     } else if (commands[0] === "route") {

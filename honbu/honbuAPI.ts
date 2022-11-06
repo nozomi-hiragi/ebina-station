@@ -1,10 +1,10 @@
 import { oak } from "./deps.ts";
 import {
-  psService,
-  restartService,
-  rmService,
-  upService,
-} from "./DockerComposeController.ts";
+  execDCCPs,
+  execDCCRestart,
+  execDCCRm,
+  execDCCUp,
+} from "./docker/DockerComposeCommand.ts";
 import { ServiceName } from "./EbinaService.ts";
 import { isExist } from "./utils.ts";
 import { getSettings } from "../koujou/settings/settings.ts";
@@ -152,7 +152,7 @@ export const createHonbuRouter = (
     switch (status) {
       case "up": {
         generateNginxConfsFromJson(isDesktop);
-        ctx.response.status = await upService(ServiceName.Jinji)
+        ctx.response.status = await execDCCUp(ServiceName.Jinji)
           .then(() => 200)
           .catch((msg) => {
             console.log(msg);
@@ -162,7 +162,7 @@ export const createHonbuRouter = (
       }
       case "restart": {
         generateNginxConfsFromJson(isDesktop);
-        ctx.response.status = await restartService(ServiceName.Jinji)
+        ctx.response.status = await execDCCRestart(ServiceName.Jinji)
           .then(() => 200)
           .catch((msg) => {
             console.log(msg);
@@ -172,7 +172,7 @@ export const createHonbuRouter = (
       }
       case "rm": {
         generateNginxConfsFromJson(isDesktop);
-        ctx.response.status = await rmService(ServiceName.Jinji)
+        ctx.response.status = await execDCCRm(ServiceName.Jinji)
           .then(() => 200)
           .catch((msg) => {
             console.log(msg);
@@ -187,7 +187,7 @@ export const createHonbuRouter = (
 
   router.get("/dockercompose/ps/:name", authKey, async (ctx) => {
     const name = ctx.params.name;
-    const ret = await psService(name).catch((msg) => {
+    const ret = await execDCCPs(name).catch((msg) => {
       console.log(msg);
       return undefined;
     });
