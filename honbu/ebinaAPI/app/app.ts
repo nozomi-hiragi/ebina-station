@@ -2,66 +2,88 @@ import { oak } from "../../deps.ts";
 import apiRouter from "./api.ts";
 import jsRouter from "./scripts.ts";
 import cronRouter from "./cron.ts";
-import { appURL } from "../ebina.ts";
+import { mkdirIfNotExist } from "../../utils/utils.ts";
+import { authToken } from "../../utils/auth.ts";
+import { logApi } from "../../utils/log.ts";
+import { APPS_DIR, GOMI_DIR } from "../../settings/settings.ts";
+
+const FIRST_APP_NAME = "FirstApp";
 
 const appRouter = new oak.Router();
 
+const getAppList = () => {
+  const appList = [];
+  try {
+    for (const dirEntry of Deno.readDirSync(APPS_DIR)) {
+      if (dirEntry.isDirectory) appList.push(dirEntry.name);
+    }
+  } catch {
+    console.log("no app dir");
+  }
+  if (appList.length === 0) {
+    mkdirIfNotExist(`${APPS_DIR}/${FIRST_APP_NAME}`);
+    appList.push(FIRST_APP_NAME);
+  }
+  return appList;
+};
+
 // アプリ配列取得
 // 200 名前ら
-appRouter.get("/", async (ctx) => {
-  await fetch(`${appURL}`, {
-    method: "GET",
-    headers: ctx.request.headers,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
-});
+appRouter.get("/", authToken, (ctx) => ctx.response.body = getAppList());
 
 // アプリ作成
 // 200 OK
 // 400 情報足らない
-appRouter.post("/:appName", async (ctx) => {
-  const { appName } = ctx.params;
-  await fetch(`${appURL}/${appName}`, {
-    method: "POST",
-    headers: ctx.request.headers,
-    body: await ctx.request.body({ type: "text" }).value,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+appRouter.post("/:appName", authToken, (ctx) => {
+  const appName = ctx.params.appName;
+  const appList = getAppList();
+  const found = appList.find((name) =>
+    name.toLowerCase() === appName.toLowerCase()
+  );
+  if (found) {
+    ctx.response.status = 400;
+    return ctx.response.body = { message: "Already use this name" };
+  }
+
+  mkdirIfNotExist(`${APPS_DIR}/${appName}`);
+
+  ctx.response.status = 200;
 });
 
 // アプリ取得 実質有無確認
 // 200 あった
 // 400 情報足らない
 // 404 なかった
-appRouter.get("/:appName", async (ctx) => {
-  const { appName } = ctx.params;
-  await fetch(`${appURL}/${appName}`, {
-    method: "GET",
-    headers: ctx.request.headers,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+appRouter.get("/:appName", authToken, (ctx) => {
+  const appName = ctx.params.appName;
+  const appList = getAppList();
+  const found = appList.find((name) =>
+    name.toLowerCase() === appName.toLowerCase()
+  );
+  ctx.response.status = found ? 200 : 404;
 });
 
 // アプリ削除 ゴミ箱に移動
 // 200 OK
 // 404 アプリない
 // 500 フォルダ移動ミスった
-appRouter.delete("/:appName", async (ctx) => {
-  const { appName } = ctx.params;
-  await fetch(`${appURL}/${appName}`, {
-    method: "DELETE",
-    headers: ctx.request.headers,
-    body: await ctx.request.body({ type: "text" }).value,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+appRouter.delete("/:appName", authToken, (ctx) => {
+  const appName = ctx.params.appName;
+  const appList = getAppList();
+  const found = appList.find((name) =>
+    name.toLowerCase() === appName.toLowerCase()
+  );
+  if (!found) return ctx.response.status = 404;
+
+  mkdirIfNotExist(GOMI_DIR);
+
+  try {
+    Deno.renameSync(`${APPS_DIR}/${appName}`, `${GOMI_DIR}/${appName}`);
+    ctx.response.status = 200;
+  } catch (_) {
+    logApi.error(["delete", "/app", "move folder failed", appName]);
+    ctx.response.status = 500;
+  }
 });
 
 appRouter.use("/:appName/api", apiRouter.routes());

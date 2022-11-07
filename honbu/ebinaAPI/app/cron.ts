@@ -1,64 +1,99 @@
 import { oak } from "../../deps.ts";
-import { appURL } from "../ebina.ts";
+import { CronItem, getCronJson, setCron } from "../../settings/cron.ts";
+import { authToken } from "../../utils/auth.ts";
 
 const cronRouter = new oak.Router();
 
-cronRouter.get("/", async (ctx) => {
+cronRouter.get("/", authToken, (ctx) => {
   const { appName } = ctx.params;
-  await fetch(`${appURL}/${appName}/cron`, {
-    method: "GET",
-    headers: ctx.request.headers,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+  if (!appName) return ctx.response.status = 400;
+
+  const cronJson = getCronJson(appName);
+  const cronNames = Object.keys(cronJson);
+  ctx.response.body = cronNames;
 });
 
-cronRouter.post("/:cronName", async (ctx) => {
+cronRouter.post("/:cronName", authToken, async (ctx) => {
   const { appName, cronName } = ctx.params;
-  await fetch(`${appURL}/${appName}/cron/${cronName}`, {
-    method: "POST",
-    headers: ctx.request.headers,
-    body: await ctx.request.body({ type: "text" }).value,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
+  if (!appName) return ctx.response.status = 400;
+
+  const body = await ctx.request.body({ type: "json" }).value;
+  const enableEx = body.enable !== undefined;
+  const patternEx = body.pattern !== undefined;
+  const functionEx = body.function !== undefined;
+  if (!enableEx || !patternEx || !functionEx) {
+    return ctx.response.status = 400;
+  }
+
+  const cronJson = getCronJson(appName);
+  if (cronJson[cronName]) return ctx.response.status = 409;
+
+  const ret = await setCron(appName, cronName, {
+    enable: body.enable,
+    pattern: body.pattern,
+    function: body.function,
   });
+
+  ctx.response.status = ret ? 200 : 500;
 });
 
-cronRouter.get("/:cronName", async (ctx) => {
+cronRouter.get("/:cronName", authToken, (ctx) => {
   const { appName, cronName } = ctx.params;
-  await fetch(`${appURL}/${appName}/cron/${cronName}`, {
-    method: "GET",
-    headers: ctx.request.headers,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+  if (!appName) return ctx.response.status = 400;
+
+  const cronJson = getCronJson(appName);
+  const cronItem = cronJson[cronName];
+  if (cronItem) {
+    ctx.response.body = cronItem;
+  } else {
+    ctx.response.status = 404;
+  }
 });
 
-cronRouter.patch("/:cronName", async (ctx) => {
+cronRouter.patch("/:cronName", authToken, async (ctx) => {
   const { appName, cronName } = ctx.params;
-  await fetch(`${appURL}/${appName}/cron/${cronName}`, {
-    method: "PATCH",
-    headers: ctx.request.headers,
-    body: await ctx.request.body({ type: "text" }).value,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+  if (!appName) return ctx.response.status = 400;
+
+  const body = await ctx.request.body({ type: "json" }).value;
+  const enableEx = body.enable !== undefined;
+  const patternEx = body.pattern !== undefined;
+  const functionEx = body.function !== undefined;
+  if (!enableEx && !patternEx && !functionEx) {
+    return ctx.response.status = 400;
+  }
+
+  const cronJson = getCronJson(appName);
+  const cronItem = cronJson[cronName] ?? {} as CronItem;
+  const newCronItem: CronItem = {
+    enable: enableEx ? body.enable : cronItem.enable,
+    pattern: patternEx ? body.pattern : cronItem.pattern,
+    function: functionEx ? body.function : cronItem.function,
+  };
+
+  if (
+    newCronItem.enable === undefined ||
+    newCronItem.function === undefined ||
+    newCronItem.pattern === undefined
+  ) {
+    return ctx.response.status = 403;
+  }
+
+  const ret = await setCron(appName, cronName, newCronItem);
+
+  ctx.response.status = ret ? 200 : 500;
 });
 
-cronRouter.delete("/:cronName", async (ctx) => {
+cronRouter.delete("/:cronName", authToken, async (ctx) => {
   const { appName, cronName } = ctx.params;
-  await fetch(`${appURL}/${appName}/cron/${cronName}`, {
-    method: "DELETE",
-    headers: ctx.request.headers,
-    body: await ctx.request.body({ type: "text" }).value,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+  if (!appName) return ctx.response.status = 400;
+
+  const cronJson = getCronJson(appName);
+  const cronItem = cronJson[cronName];
+  if (!cronItem) return ctx.response.status = 404;
+
+  const ret = await setCron(appName, cronName, undefined);
+
+  ctx.response.status = ret ? 200 : 500;
 });
 
 export default cronRouter;

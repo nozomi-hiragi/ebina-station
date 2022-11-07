@@ -1,6 +1,5 @@
 import { djwt, oak } from "../deps.ts";
 import { logKoujou } from "./log.ts";
-import { States } from "../index.ts";
 
 type JwtToken = {
   token: string;
@@ -97,6 +96,11 @@ export const removeToken = (id: string) => {
     delete userTokens[id];
   }
   return isLogedin;
+};
+
+type States = {
+  token?: string;
+  payload?: JwtPayload;
 };
 
 export const authToken = async (

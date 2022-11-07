@@ -1,4 +1,4 @@
-import { getSettings, setSettings } from "../koujou/settings/settings.ts";
+import { getSettings, setSettings } from "./settings/settings.ts";
 
 class ReaderBuffer {
   _reader: Deno.Reader;

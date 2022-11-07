@@ -1,5 +1,14 @@
 import { oak } from "../../../deps.ts";
-import { iWebauthnURL } from "../../ebina.ts";
+import { getMembers } from "../../../settings/members/members.ts";
+import { authToken, JwtPayload } from "../../../utils/auth.ts";
+import { HttpExeption } from "../../../utils/utils.ts";
+import {
+  createOptionsForAuth,
+  createOptionsForRegist,
+  getRPID,
+  verifyChallengeForAuth,
+  verifyChallengeForRegist,
+} from "../../../utils/webauthn/funcs.ts";
 import deviceRouter from "./device.ts";
 
 const webauthnRouter = new oak.Router();
@@ -10,14 +19,25 @@ const webauthnRouter = new oak.Router();
 // 400 オリジンヘッダない
 // 404 メンバーがない
 // 500 WebAuthnの設定おかしい
-webauthnRouter.get("/regist", async (ctx) => {
-  await fetch(`${iWebauthnURL}/regist`, {
-    method: "GET",
-    headers: ctx.request.headers,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+webauthnRouter.get("/regist", authToken, async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload: JwtPayload = ctx.state.payload!;
+  const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
+
+  try {
+    const options = await createOptionsForRegist(origin, member);
+    ctx.response.body = options;
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
 });
 
 // 登録
@@ -30,15 +50,39 @@ webauthnRouter.get("/regist", async (ctx) => {
 // 409 チャレンジ控えがない
 // 410 チャレンジ古い
 // 500 WebAuthnの設定おかしい
-webauthnRouter.post("/regist", async (ctx) => {
-  await fetch(`${iWebauthnURL}/regist`, {
-    method: "POST",
-    headers: ctx.request.headers,
-    body: await ctx.request.body({ type: "text" }).value,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+webauthnRouter.post("/regist", authToken, async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload: JwtPayload = ctx.state.payload!;
+  const memberId = payload.id;
+  const members = getMembers();
+  const member = members.getMember(memberId);
+  if (!member) return ctx.response.status = 404;
+
+  const body = await ctx.request.body({ type: "json" }).value;
+  const { deviceName } = body;
+  if (!deviceName) return ctx.response.status = 400;
+
+  try {
+    const newMember = await verifyChallengeForRegist(
+      origin,
+      member,
+      deviceName,
+      body,
+    );
+    members.setMember(newMember);
+    ctx.response.status = 200;
+    ctx.response.body = newMember
+      .getWebAuthnItem(getRPID(origin))
+      ?.getEnableDeviceNames() ?? [];
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
 });
 
 // 確認用オプション取得
@@ -48,14 +92,34 @@ webauthnRouter.post("/regist", async (ctx) => {
 // 400 情報足りない
 // 404 メンバーがない
 // 500 WebAuthnの設定おかしい
-webauthnRouter.get("/verify", async (ctx) => {
-  await fetch(`${iWebauthnURL}/verify`, {
-    method: "GET",
-    headers: ctx.request.headers,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+webauthnRouter.get("/verify", authToken, async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload: JwtPayload = ctx.state.payload!;
+  const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
+
+  const queryDeviceNames = ctx.request.url.searchParams
+    .get("deviceNames") ?? "";
+
+  try {
+    const options = await createOptionsForAuth(
+      origin,
+      memberId,
+      undefined,
+      member,
+      queryDeviceNames ? queryDeviceNames.split(",") : undefined,
+    );
+    ctx.response.body = options;
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
 });
 
 // 認証
@@ -69,15 +133,27 @@ webauthnRouter.get("/verify", async (ctx) => {
 // 409 チャレンジ控えがない
 // 410 チャレンジ古い
 // 500 WebAuthnの設定おかしい
-webauthnRouter.post("/verify", async (ctx) => {
-  await fetch(`${iWebauthnURL}/verify`, {
-    method: "POST",
-    headers: ctx.request.headers,
-    body: await ctx.request.body({ type: "text" }).value,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+webauthnRouter.post("/verify", authToken, async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload: JwtPayload = ctx.state.payload!;
+  const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
+
+  const body = await ctx.request.body({ type: "json" }).value;
+
+  try {
+    await verifyChallengeForAuth(origin, member, body, memberId);
+    ctx.response.status = 200;
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
 });
 
 webauthnRouter.use("/device", deviceRouter.routes());

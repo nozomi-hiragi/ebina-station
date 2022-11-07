@@ -1,5 +1,11 @@
-import { oak } from "../../deps.ts";
-import { memberURL } from "../ebina.ts";
+import { isString, oak } from "../../deps.ts";
+import { authToken } from "../../utils/auth.ts";
+import { getMembers } from "../../settings/members/members.ts";
+import {
+  createOptionsForRegist,
+  verifyChallengeForRegist,
+} from "../../utils/webauthn/funcs.ts";
+import { HttpExeption } from "../../utils/utils.ts";
 
 const memberRouter = new oak.Router();
 
@@ -9,14 +15,27 @@ const memberRouter = new oak.Router();
 // 400 パラメ足らん
 // 409 メンバ競合
 memberRouter.post("/regist/option", async (ctx) => {
-  await fetch(`${memberURL}/regist/option`, {
-    method: "POST",
-    headers: ctx.request.headers,
-    body: await ctx.request.body({ type: "text" }).value,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const { id, name, pass } = await ctx.request.body({ type: "json" }).value;
+  if (!id || !name || !pass) return ctx.response.status = 400;
+
+  const members = getMembers();
+  const tempMember = members.registTempMember(id, name, pass);
+  if (!tempMember) return ctx.response.status = 409;
+  try {
+    const option = await createOptionsForRegist(origin, tempMember);
+    ctx.response.body = option;
+    ctx.response.status = 201;
+    return;
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
 });
 
 // 仮登録認証
@@ -26,27 +45,50 @@ memberRouter.post("/regist/option", async (ctx) => {
 // 401 トークン違う
 // 404 いない
 memberRouter.post("/regist/verify", async (ctx) => {
-  await fetch(`${memberURL}/regist/verify`, {
-    method: "POST",
-    headers: ctx.request.headers,
-    body: await ctx.request.body({ type: "text" }).value,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const body = await ctx.request.body({ type: "json" }).value;
+  const { id, result, token } = body;
+  if (!id || !isString(id) || !result || !token || !isString(token)) {
+    return ctx.response.status = 400;
+  }
+
+  const members = getMembers();
+
+  const preRequest = members.popPreRequest(id);
+  if (!preRequest) return ctx.response.status = 404;
+  if (preRequest.token !== token) return ctx.response.status = 401;
+
+  const tempMember = members.getTempMember(id);
+  if (!tempMember) return ctx.response.status = 404;
+
+  try {
+    const newMember = await verifyChallengeForRegist(
+      origin,
+      tempMember,
+      "FirstDevice",
+      result,
+    );
+    members.setTempMember(newMember);
+    ctx.response.status = 200;
+    return;
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
 });
 
 // メンバー配列取得 ID無いなら全部
 // ?ids
 // 200 空でも返す
-memberRouter.get("/", async (ctx) => {
-  await fetch(`${memberURL}`, {
-    method: "GET",
-    headers: ctx.request.headers,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+memberRouter.get("/", authToken, (ctx) => {
+  const ids = ctx.request.url.searchParams.get("ids")?.split(",") ?? [];
+
+  ctx.response.body = getMembers().getMembersArray(ids);
 });
 
 // メンバー配列削除
@@ -54,15 +96,23 @@ memberRouter.get("/", async (ctx) => {
 // 200 全部できた
 // 206 一部できた
 // 404 全部できない
-memberRouter.delete("/", async (ctx) => {
-  await fetch(`${memberURL}`, {
-    method: "DELETE",
-    headers: ctx.request.headers,
-    body: await ctx.request.body({ type: "text" }).value,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
+memberRouter.delete("/", authToken, (ctx) => {
+  const payload = ctx.state.payload;
+  const ids = ctx.request.url.searchParams.get("ids")?.split(",") ?? [];
+
+  const failedIds: string[] = [];
+  ids.forEach((id) => {
+    if (id === payload?.id) return;
+    if (!getMembers().removeMember(id)) failedIds.push(id);
   });
+  if (failedIds.length === ids.length) {
+    ctx.response.status = 404;
+  } else if (failedIds.length !== 0) {
+    ctx.response.status = 206;
+    ctx.response.body = { failedIDs: failedIds };
+  } else {
+    ctx.response.status = 200;
+  }
 });
 
 // メンバー取得
@@ -70,15 +120,16 @@ memberRouter.delete("/", async (ctx) => {
 // 200 メンバー
 // 400 IDない
 // 404 みつからない
-memberRouter.get("/:id", async (ctx) => {
+memberRouter.get("/:id", authToken, (ctx) => {
   const { id } = ctx.params;
-  await fetch(`${memberURL}/${id}`, {
-    method: "GET",
-    headers: ctx.request.headers,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+  if (!id) return ctx.response.status = 400;
+
+  const member = getMembers().getMember(id);
+  if (member) {
+    ctx.response.body = { ...member, auth: undefined };
+  } else {
+    ctx.response.status = 404;
+  }
 });
 
 export default memberRouter;

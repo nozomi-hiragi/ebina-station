@@ -1,26 +1,23 @@
 import { Cron, oak, oakCors } from "./deps.ts";
 import {
   initProjectSettingsInteract,
-  isDockerDesktop,
   isExist,
   readReader,
   RunCommandExeption,
 } from "./utils.ts";
 import { execDCCRm, execDCCUp } from "./docker/DockerComposeCommand.ts";
 import { initDockerComposeFile, ServiceName } from "./EbinaService.ts";
-import { createHonbuRouter } from "./honbuAPI.ts";
-import { getSettings, PROJECT_PATH } from "../koujou/settings/settings.ts";
+import { getSettings, PROJECT_PATH } from "./settings/settings.ts";
 import {
   executeAddRoute,
   MemberTempActions,
   runCertbotService,
 } from "./CommandActions.ts";
-import { KoujouAPI } from "./KoujouAPI.ts";
 import ebinaRouter from "./ebinaAPI/ebina.ts";
+import { startCrons } from "./settings/cron.ts";
 
 const removeBaseServices = () =>
   Promise.all([
-    execDCCRm(ServiceName.Koujou).catch((msg) => console.error(msg)),
     execDCCRm(ServiceName.Jinji).catch((msg) => console.error(msg)),
   ]);
 
@@ -40,23 +37,12 @@ const main = async () => {
 
   const projectSettings = getSettings();
   const mongoSettings = projectSettings.MongoDB;
-  const koujouPort = projectSettings.getPortNumber();
   const honbuPort = projectSettings.getHonbuPortNumber();
 
-  const isDesktop = await isDockerDesktop();
-
-  const honbuKey = crypto.randomUUID() ?? "honbukey";
-  await initDockerComposeFile(
-    { key: honbuKey, port: honbuPort },
-    koujouPort,
-    mongoSettings?.port,
-  );
+  await initDockerComposeFile(mongoSettings?.port);
 
   if (mongoSettings) if (!await execDCCUp(ServiceName.mongodb)) Deno.exit(1);
-  if (!await execDCCUp(ServiceName.Koujou)) Deno.exit(1);
   if (!await execDCCUp(ServiceName.Jinji)) Deno.exit(1);
-
-  const koujouAPI = new KoujouAPI(honbuKey, koujouPort);
 
   readReader(Deno.stdin, (msg: string) => {
     const commands = msg.split(" ");
@@ -65,7 +51,7 @@ const main = async () => {
       return true;
     } else if (commands[0] === "member" && commands[1] === "temp") {
       const action = MemberTempActions.actionst[commands[2]];
-      if (action) action(koujouAPI, commands[3]);
+      if (action) action(commands[3]);
       else console.log("list, admit or deny");
     } else if (commands[0] === "certbot") {
       runCertbotService(commands)
@@ -76,7 +62,7 @@ const main = async () => {
         });
     } else if (commands[0] === "route") {
       if (commands[1] === "add") {
-        executeAddRoute(isDesktop, koujouAPI, commands.slice(2));
+        executeAddRoute(commands.slice(2));
       } else console.log(`sub command "add"`);
     } else {
       console.log("><");
@@ -88,9 +74,9 @@ const main = async () => {
     app.use(oakCors({ origin: projectSettings.origins, credentials: true }));
   }
 
-  const honbuRouter = createHonbuRouter(honbuKey, isDesktop);
-  honbuRouter.use("/ebina", ebinaRouter.routes());
-  app.use(honbuRouter.routes(), honbuRouter.allowedMethods());
+  const router = new oak.Router();
+  router.use("/ebina", ebinaRouter.routes());
+  app.use(router.routes(), router.allowedMethods());
   app.listen({ port: honbuPort });
 };
 
@@ -102,6 +88,8 @@ main().then(() => {
       console.log(`renew: ${ret}`);
     });
   });
+
+  startCrons();
 
   Deno.addSignalListener("SIGTERM", () => {
     renewCron.stop();

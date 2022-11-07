@@ -1,5 +1,13 @@
 import { oak } from "../../../deps.ts";
-import { iWebauthnDeviceURL } from "../../ebina.ts";
+import { getMembers } from "../../../settings/members/members.ts";
+import { authToken, JwtPayload } from "../../../utils/auth.ts";
+import { HttpExeption } from "../../../utils/utils.ts";
+import {
+  deleteAuthenticators,
+  getRawEnableAuthenticators,
+  getRPID,
+  switchEnableAuthenticator,
+} from "../../../utils/webauthn/funcs.ts";
 
 const deviceRouter = new oak.Router();
 
@@ -9,14 +17,33 @@ const deviceRouter = new oak.Router();
 // 200 空でも返す
 // 400 情報足りない
 // 500 WebAuthnの設定おかしい
-deviceRouter.get("/", async (ctx) => {
-  await fetch(`${iWebauthnDeviceURL}`, {
-    method: "GET",
-    headers: ctx.request.headers,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+deviceRouter.get("/", authToken, (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload: JwtPayload = ctx.state.payload!;
+  const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
+
+  const deviceNames: string[] =
+    ctx.request.url.searchParams.get("deviceNames")?.split(",") ?? [];
+
+  try {
+    const rpID = getRPID(origin);
+    const webatuhnItem = member.getWebAuthnItem(rpID);
+    const authenticatorNames = webatuhnItem?.getAuthenticatorNames() ?? [];
+
+    ctx.response.body = deviceNames.length === 0
+      ? authenticatorNames
+      : authenticatorNames.filter((name) => deviceNames.includes(name));
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
 });
 
 // デバイスら削除
@@ -26,15 +53,36 @@ deviceRouter.get("/", async (ctx) => {
 // 200 OK
 // 404 みつからない
 // 500 WebAuthnの設定おかしい
-deviceRouter.delete("/", async (ctx) => {
-  await fetch(`${iWebauthnDeviceURL}`, {
-    method: "DELETE",
-    headers: ctx.request.headers,
-    body: await ctx.request.body({ type: "text" }).value,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+deviceRouter.delete("/", authToken, (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload: JwtPayload = ctx.state.payload!;
+  const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
+
+  const deviceNames = ctx.request.url.searchParams
+    .get("deviceNames")?.split(",");
+
+  try {
+    const failedNames = deleteAuthenticators(origin, member, deviceNames);
+    if (failedNames.length === 0) {
+      ctx.response.status = 200;
+    } else if (failedNames.length === deviceNames?.length) {
+      ctx.response.status = 404;
+      ctx.response.body = { message: "Can't find all devices" };
+    } else {
+      ctx.response.status = 206;
+      ctx.response.body = { failedNames: failedNames };
+    }
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
 });
 
 // デバイス情報取得
@@ -44,15 +92,35 @@ deviceRouter.delete("/", async (ctx) => {
 // 400 情報足りない
 // 404 みつからない
 // 500 WebAuthnの設定おかしい
-deviceRouter.get("/:deviceName", async (ctx) => {
+deviceRouter.get("/:deviceName", authToken, (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload = ctx.state.payload!;
+  const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
+
   const { deviceName } = ctx.params;
-  await fetch(`${iWebauthnDeviceURL}/${deviceName}`, {
-    method: "GET",
-    headers: ctx.request.headers,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+  if (!deviceName) return ctx.response.status = 400;
+
+  try {
+    const rpID = getRPID(origin);
+    const webatuhnItem = member.getWebAuthnItem(rpID);
+    const authenticatorNames = webatuhnItem?.getAuthenticatorNames() ?? [];
+
+    if (authenticatorNames.includes(deviceName)) {
+      ctx.response.body = deviceName;
+    } else {
+      ctx.response.status = 404;
+    }
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
 });
 
 // デバイス削除
@@ -61,16 +129,32 @@ deviceRouter.get("/:deviceName", async (ctx) => {
 // 200 OK
 // 404 みつからない
 // 500 WebAuthnの設定おかしい
-deviceRouter.delete("/:deviceName", async (ctx) => {
+deviceRouter.delete("/:deviceName", authToken, (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload = ctx.state.payload!;
+  const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
+
   const { deviceName } = ctx.params;
-  await fetch(`${iWebauthnDeviceURL}/${deviceName}`, {
-    method: "DELETE",
-    headers: ctx.request.headers,
-    body: await ctx.request.body({ type: "text" }).value,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+  if (!deviceName) return ctx.response.status = 400;
+
+  try {
+    const failedNames = deleteAuthenticators(origin, member, [deviceName]);
+    if (failedNames.length) {
+      ctx.response.status = 500;
+    } else {
+      ctx.response.status = 200;
+    }
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
 });
 
 // デバイス有効確認
@@ -79,15 +163,26 @@ deviceRouter.delete("/:deviceName", async (ctx) => {
 // 200 こたえ
 // 404 みつからない
 // 500 WebAuthnの設定おかしい
-deviceRouter.get("/:deviceName/enable", async (ctx) => {
+deviceRouter.get("/:deviceName/enable", authToken, (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload = ctx.state.payload!;
+  const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
   const { deviceName } = ctx.params;
-  await fetch(`${iWebauthnDeviceURL}/${deviceName}/enable`, {
-    method: "GET",
-    headers: ctx.request.headers,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+
+  try {
+    const enableDevices = getRawEnableAuthenticators(origin, member);
+    ctx.response.body = enableDevices.includes(deviceName);
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
 });
 
 // デバイス有効
@@ -97,16 +192,29 @@ deviceRouter.get("/:deviceName/enable", async (ctx) => {
 // 208 もうある
 // 404 みつからない
 // 500 WebAuthnの設定おかしい
-deviceRouter.post("/:deviceName/enable", async (ctx) => {
+deviceRouter.post("/:deviceName/enable", authToken, (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload = ctx.state.payload!;
+  const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
   const { deviceName } = ctx.params;
-  await fetch(`${iWebauthnDeviceURL}/${deviceName}/enable`, {
-    method: "POST",
-    headers: ctx.request.headers,
-    body: await ctx.request.body({ type: "text" }).value,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+
+  try {
+    if (switchEnableAuthenticator(origin, member, deviceName, true)) {
+      ctx.response.status = 200;
+    } else {
+      ctx.response.status = 208;
+    }
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
 });
 
 // デバイス無効
@@ -116,16 +224,29 @@ deviceRouter.post("/:deviceName/enable", async (ctx) => {
 // 208 もうない
 // 404 みつからない
 // 500 WebAuthnの設定おかしい
-deviceRouter.post("/:deviceName/disable", async (ctx) => {
+deviceRouter.post("/:deviceName/disable", authToken, (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload = ctx.state.payload!;
+  const memberId = payload.id;
+  const member = getMembers().getMember(memberId);
+  if (!member) return ctx.response.status = 404;
   const { deviceName } = ctx.params;
-  await fetch(`${iWebauthnDeviceURL}/${deviceName}/disable`, {
-    method: "POST",
-    headers: ctx.request.headers,
-    body: await ctx.request.body({ type: "text" }).value,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+
+  try {
+    if (switchEnableAuthenticator(origin, member, deviceName, false)) {
+      ctx.response.status = 200;
+    } else {
+      ctx.response.status = 208;
+    }
+  } catch (err) {
+    if (err instanceof HttpExeption) {
+      ctx.response.status = err.status;
+      ctx.response.body = err.message;
+    } else {
+      throw err;
+    }
+  }
 });
 
 export default deviceRouter;

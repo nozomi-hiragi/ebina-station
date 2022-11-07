@@ -1,54 +1,51 @@
 import { execDCCRestart, execDCCRun } from "./docker/DockerComposeCommand.ts";
 import { ServiceName } from "./EbinaService.ts";
-import { generateNginxConfsFromJson } from "./honbuAPI.ts";
-import { KoujouAPI } from "./KoujouAPI.ts";
+import { generateNginxConfsFromJson } from "./nginx_conf.ts";
+import { nginxConfs } from "./ebinaAPI/rouging/routing.ts";
+import { getMembers } from "./settings/members/members.ts";
 
 /// ========== Member ==========
 export class MemberTempActions {
-  static showTempMemberList = (api: KoujouAPI) =>
-    api.getTempMemberList().then((ret) => console.log(ret));
+  static showTempMemberList = () => {
+    const tempMembers = getMembers().getTempMembers();
+    const tempMemberArray = Object.keys(tempMembers)
+      .map((id) => ({ id, ...tempMembers[id]?.getValue() }));
+    console.log(tempMemberArray);
+  };
 
-  static admitTempMember = (api: KoujouAPI, id: string) =>
-    api.admitTempMember(id).then((ret) => {
-      switch (ret) {
-        case 200:
-          console.log("ok");
-          break;
-        case 400:
-        case 404:
-        default:
-          console.log("wrong id");
-          break;
-        case 409:
-          console.log("this id is already used");
-          break;
-      }
-    });
+  static admitTempMember = (id: string) => {
+    switch (getMembers().admitTempMember(id)) {
+      case true:
+        console.log("ok");
+        break;
+      case false:
+        console.log("this id is already used");
+        break;
+      case undefined:
+      default:
+        console.log("wrong id");
+        break;
+    }
+  };
 
-  static denyTempMember = (api: KoujouAPI, id: string) =>
-    api.denyTempMember(id).then((ret) => {
-      switch (ret) {
-        case 200:
-          console.log("ok");
-          break;
-        case 400:
-        case 404:
-        default:
-          console.log("wrong id");
-          break;
-      }
-    });
+  static denyTempMember = (id: string) => {
+    if (getMembers().denyTempMember(id)) {
+      console.log("ok");
+    } else {
+      console.log("wrong id");
+    }
+  };
 
   static actionst: {
-    [name: string]: (api: KoujouAPI, id: string) => Promise<void>;
+    [name: string]: (id: string) => void;
   } = {
-    "list": async (api: KoujouAPI) => await this.showTempMemberList(api),
-    "admit": async (api: KoujouAPI, id: string) => {
-      if (id) await this.admitTempMember(api, id);
+    "list": () => this.showTempMemberList(),
+    "admit": (id: string) => {
+      if (id) this.admitTempMember(id);
       else console.log("id is required");
     },
-    "deny": async (api: KoujouAPI, id: string) => {
-      if (id) await this.denyTempMember(api, id);
+    "deny": (id: string) => {
+      if (id) this.denyTempMember(id);
       else console.log("id is required");
     },
   };
@@ -109,11 +106,7 @@ export const runCertbotService = (commands: string[]) =>
 
 // ========== Route ==========
 
-export const executeAddRoute = (
-  isDesktop: boolean,
-  api: KoujouAPI,
-  routeArgs: string[],
-) => {
+export const executeAddRoute = (routeArgs: string[]) => {
   const { name, restart, certbot, email, ...route } = parseRoute(routeArgs);
   if (!name) return console.log("name is required");
   if (!route.hostname) return console.log("hostname is required");
@@ -121,23 +114,15 @@ export const executeAddRoute = (
     return console.log("port is required");
   }
 
-  api.addRoute(name, { certWebRoot: certbot, ...route }).then((ret) => {
-    console.log("Route added");
-    switch (ret) {
-      case 201:
-        return true;
-      case 400:
-        console.log("wrong params");
-        return true;
-      case 409:
-        console.log("this name is already used");
-        return false;
-    }
-  }).then(async (ret) => {
-    if (ret && (restart || certbot)) {
-      console.log("Restart Jinji");
-      generateNginxConfsFromJson(isDesktop);
-      await execDCCRestart(ServiceName.Jinji);
+  if (nginxConfs.getConf(name)) {
+    console.log("this name is already used");
+    return;
+  }
+  nginxConfs.setConf(name, { certWebRoot: certbot, ...route });
+  if (restart || certbot) {
+    console.log("Restart Jinji");
+    generateNginxConfsFromJson();
+    execDCCRestart(ServiceName.Jinji).then(async () => {
       if (certbot) {
         const certCmd = ["certbot", "certonly", "-d", route.hostname];
         if (email) certCmd.push("-m", email);
@@ -145,7 +130,7 @@ export const executeAddRoute = (
         const ret = await runCertbotService(certCmd);
         console.log(`result: ${ret.status.success}`);
         if (ret.status.success) {
-          await api.setRoute(name, {
+          nginxConfs.setConf(name, {
             certbot: true,
             certWebRoot: true,
             ...route,
@@ -153,8 +138,8 @@ export const executeAddRoute = (
           await execDCCRestart(ServiceName.Jinji);
         }
       }
-    }
-  }).catch((msg) => console.log(msg));
+    }).catch((err) => console.log(err));
+  }
 };
 
 const parseRoute = (routeArgs: string[]) => {

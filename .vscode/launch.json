@@ -5,13 +5,13 @@
       "request": "launch",
       "name": "deno",
       "type": "node",
-      "cwd": "${workspaceFolder}/koujou",
+      "cwd": "${workspaceFolder}",
       "runtimeExecutable": "deno",
       "runtimeArgs": [
         "run",
         "--inspect-brk",
         "-A",
-        "index.ts"
+        "honbu/main.ts"
       ],
       "attachSimplePort": 9229
     }

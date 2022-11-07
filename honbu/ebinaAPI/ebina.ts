@@ -15,21 +15,4 @@ ebinaRouter.use("/settings", settingsRouter.routes());
 ebinaRouter.use("/database", databaseRouter.routes());
 ebinaRouter.use("/routing", routingRouter.routes());
 
-// @TODO 現状ポート固定
-export const baseURL = "http://localhost:3456/ebina";
-
-export const iURL = baseURL + "/i";
-export const iWebauthnURL = iURL + "/webauthn";
-export const iWebauthnDeviceURL = iWebauthnURL + "/device";
-
-export const memberURL = baseURL + "/member";
-
-export const appURL = baseURL + "/app";
-
-export const settingsURL = baseURL + "/settings";
-
-export const databaseURL = baseURL + "/database";
-
-export const routingURL = baseURL + "/routing";
-
 export default ebinaRouter;

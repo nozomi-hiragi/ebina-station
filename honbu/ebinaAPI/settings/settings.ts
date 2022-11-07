@@ -1,43 +1,45 @@
 import { oak } from "../../deps.ts";
-import { settingsURL } from "../ebina.ts";
-// import {
-//   getSettings,
-//   setSettings,
-//   WebAuthnSetting,
-// } from "../../../settings/settings.ts";
-// import { authToken } from "../../../utils/auth.ts";
+import {
+  getSettings,
+  setSettings,
+  WebAuthnSetting,
+} from "../../settings/settings.ts";
+import { authToken } from "../../utils/auth.ts";
 
 const projectRouter = new oak.Router();
 
-projectRouter.get("/webauthn", async (ctx) => {
-  await fetch(`${settingsURL}/webauthn`, {
-    method: "GET",
-    headers: ctx.request.headers,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+projectRouter.get("/webauthn", authToken, (ctx) => {
+  const settings = getSettings();
+  const webauthnSettings = settings.WebAuthn;
+  if (!webauthnSettings) {
+    return ctx.response.status = 503;
+  }
+  ctx.response.body = webauthnSettings;
 });
 
-projectRouter.post("/webauthn", async (ctx) => {
-  await fetch(`${settingsURL}/webauthn`, {
-    method: "POST",
-    headers: ctx.request.headers,
-    body: await ctx.request.body({ type: "text" }).value,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+projectRouter.post("/webauthn", authToken, async (ctx) => {
+  const settings = getSettings();
+  const webauthnSettings: WebAuthnSetting = await ctx.request
+    .body({ type: "json" }).value;
+  settings.WebAuthn = { ...settings.WebAuthn, ...webauthnSettings };
+  ctx.response.status = setSettings(settings) ? 200 : 500;
 });
 
-projectRouter.get("/mongodb", async (ctx) => {
-  await fetch(`${settingsURL}/mongodb`, {
-    method: "GET",
-    headers: ctx.request.headers,
-  }).then(async (ret) => {
-    ctx.response.body = await ret.json();
-    ctx.response.status = ret.status;
-  });
+projectRouter.get("/mongodb", authToken, (ctx) => {
+  const settings = getSettings();
+  const mongodbSettings = settings.MongoDB;
+  if (!mongodbSettings) {
+    return ctx.response.status = 503;
+  }
+  ctx.response.body = {
+    port: mongodbSettings.port,
+    username: mongodbSettings.username === "env"
+      ? mongodbSettings.username
+      : "*****",
+    password: mongodbSettings.password === "env"
+      ? mongodbSettings.password
+      : "*****",
+  };
 });
 
 // 不完全 再起動対応とか必要

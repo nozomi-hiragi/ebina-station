@@ -1,14 +1,13 @@
-import { config, getNetworkAddr } from "./deps.ts";
+import { config } from "./deps.ts";
 import { execDCCRm } from "./docker/DockerComposeCommand.ts";
 import {
   DockerComposeYamlManager,
   DockerComposeYamlService,
 } from "./docker/DockerComposeYamlManager.ts";
-import { generateNginxConfsFromJson } from "./honbuAPI.ts";
+import { generateNginxConfsFromJson } from "./nginx_conf.ts";
 import { isDockerDesktop, isExist } from "./utils.ts";
 
 export enum ServiceName {
-  Koujou = "Koujou",
   Jinji = "Jinji",
   mongodb = "mongodb",
   certbot = "certbot",
@@ -18,40 +17,6 @@ const volumesLetsencrypt = [
   "./project/letsencrypt:/etc/letsencrypt",
   "./project/letsencrypt/html:/var/www/html",
 ];
-
-type HonbuParams = {
-  key: string;
-  port: number;
-};
-
-const createKoujouSettings = async (
-  honbuParams: HonbuParams,
-  koujouPort: number,
-  isDesktop: boolean,
-  env: string[],
-) => {
-  const serviceKoujou: DockerComposeYamlService = {
-    build: "./koujou",
-    image: "ebina-station-api",
-    container_name: "EbinaStationKoujou",
-    volumes: ["./project:/app/project"],
-  };
-
-  if (isDesktop) serviceKoujou.ports = [`${koujouPort}:${koujouPort}`];
-  else serviceKoujou.network_mode = "host";
-
-  // 取れない時がある unstable外れたら変える
-  await getNetworkAddr().then((ipAddress) => {
-    serviceKoujou.environment = env.concat([
-      "HONBU=true",
-      `HONBU_ADDRESS=${ipAddress ?? "localhost"}`,
-      `HONBU_PORT=${honbuParams.port}`,
-      `HONBU_KEY=${honbuParams.key}`,
-    ]);
-  });
-
-  return serviceKoujou;
-};
 
 const createMongoSettings = (port: number, env: string[]) => {
   return {
@@ -76,7 +41,7 @@ const createJinjiSettings = (isDesktop: boolean) => {
   } else if (!info.isFile) {
     throw new Error(`"./project/nginx/nginx.conf" is not file`);
   }
-  generateNginxConfsFromJson(isDesktop);
+  generateNginxConfsFromJson();
 
   const volumes = [
     "./project/nginx/nginx.conf:/etc/nginx/nginx.conf",
@@ -91,7 +56,6 @@ const createJinjiSettings = (isDesktop: boolean) => {
     image: "nginx:latest",
     container_name: "EbinaStationJinji",
     restart: "always",
-    depends_on: [ServiceName.Koujou],
     ports: ["80:80", "443:443"],
     volumes,
   } as DockerComposeYamlService;
@@ -110,13 +74,8 @@ const createCertbotSettings = () => {
   } as DockerComposeYamlService;
 };
 
-export const initDockerComposeFile = async (
-  honbuParams: HonbuParams,
-  koujouPort: number,
-  mongodbPort?: number,
-) => {
+export const initDockerComposeFile = async (mongodbPort?: number) => {
   await Promise.all([
-    execDCCRm(ServiceName.Koujou).catch(() => {}),
     execDCCRm(ServiceName.Jinji).catch(() => {}),
     execDCCRm(ServiceName.mongodb).catch(() => {}),
     execDCCRm(ServiceName.certbot).catch(() => {}),
@@ -129,14 +88,6 @@ export const initDockerComposeFile = async (
   const dockerComposeYaml = new DockerComposeYamlManager();
 
   const isDesktop = await isDockerDesktop();
-
-  const koujouService = await createKoujouSettings(
-    honbuParams,
-    koujouPort,
-    isDesktop,
-    koujouEnvKeys,
-  );
-  dockerComposeYaml.setService(ServiceName.Koujou, koujouService);
 
   if (mongodbPort) {
     const mongoService = createMongoSettings(mongodbPort, koujouEnvKeys);
