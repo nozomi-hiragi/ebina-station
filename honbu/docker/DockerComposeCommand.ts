@@ -1,5 +1,5 @@
 import { isString } from "../deps.ts";
-import { runCommand } from "../utils.ts";
+import { runCommand } from "../utils/utils.ts";
 
 export const execDCCRun = (
   containerName: string,

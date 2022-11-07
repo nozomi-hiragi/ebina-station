@@ -56,7 +56,7 @@ export const switchCron = async (
 
   if (on) {
     const args = cronItem.function.split(">");
-    const modelPath = `../${APPS_DIR}/${appName}/scripts/${args[0]}`;
+    const modelPath = `../.${APPS_DIR}/${appName}/scripts/${args[0]}`;
     let module = modules[modelPath];
     try {
       if (!module) module = await import(modelPath);

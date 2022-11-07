@@ -1,11 +1,12 @@
 import { config } from "./deps.ts";
+import { isDockerDesktop } from "./docker/docker.ts";
 import { execDCCRm } from "./docker/DockerComposeCommand.ts";
 import {
   DockerComposeYamlManager,
   DockerComposeYamlService,
 } from "./docker/DockerComposeYamlManager.ts";
-import { generateNginxConfsFromJson } from "./nginx_conf.ts";
-import { isDockerDesktop, isExist } from "./utils.ts";
+import { generateNginxConfsFromJson } from "./project_data/nginx.ts";
+import { isExist } from "./utils/utils.ts";
 
 export enum ServiceName {
   Jinji = "Jinji",
@@ -81,16 +82,16 @@ export const initDockerComposeFile = async (mongodbPort?: number) => {
     execDCCRm(ServiceName.certbot).catch(() => {}),
   ]);
 
-  const koujouEnv = config({ path: "./koujou/.env" });
-  const koujouEnvKeys = Object.keys(koujouEnv)
-    .map((key) => `${key}=${koujouEnv[key]}`);
+  const envObj = config({ path: "./.env" });
+  const envKeys = Object.keys(envObj)
+    .map((key) => `${key}=${envObj[key]}`);
 
   const dockerComposeYaml = new DockerComposeYamlManager();
 
   const isDesktop = await isDockerDesktop();
 
   if (mongodbPort) {
-    const mongoService = createMongoSettings(mongodbPort, koujouEnvKeys);
+    const mongoService = createMongoSettings(mongodbPort, envKeys);
     dockerComposeYaml.setService(ServiceName.mongodb, mongoService);
   }
 

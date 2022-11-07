@@ -1,20 +1,16 @@
 import { Cron, oak, oakCors } from "./deps.ts";
-import {
-  initProjectSettingsInteract,
-  isExist,
-  readReader,
-  RunCommandExeption,
-} from "./utils.ts";
+import { initProjectSettingsInteract } from "./project_data/mod.ts";
+import { isExist, readReader, RunCommandExeption } from "./utils/utils.ts";
 import { execDCCRm, execDCCUp } from "./docker/DockerComposeCommand.ts";
 import { initDockerComposeFile, ServiceName } from "./EbinaService.ts";
-import { getSettings, PROJECT_PATH } from "./settings/settings.ts";
+import { getSettings, PROJECT_PATH } from "./project_data/settings.ts";
 import {
   executeAddRoute,
   MemberTempActions,
   runCertbotService,
 } from "./CommandActions.ts";
 import ebinaRouter from "./ebinaAPI/ebina.ts";
-import { startCrons } from "./settings/cron.ts";
+import { startCrons } from "./project_data/cron.ts";
 
 const removeBaseServices = () =>
   Promise.all([
@@ -37,7 +33,7 @@ const main = async () => {
 
   const projectSettings = getSettings();
   const mongoSettings = projectSettings.MongoDB;
-  const honbuPort = projectSettings.getHonbuPortNumber();
+  const port = projectSettings.getPortNumber();
 
   await initDockerComposeFile(mongoSettings?.port);
 
@@ -77,7 +73,7 @@ const main = async () => {
   const router = new oak.Router();
   router.use("/ebina", ebinaRouter.routes());
   app.use(router.routes(), router.allowedMethods());
-  app.listen({ port: honbuPort });
+  app.listen({ port });
 };
 
 main().then(() => {

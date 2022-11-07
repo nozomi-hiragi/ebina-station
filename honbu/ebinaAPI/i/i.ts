@@ -8,7 +8,7 @@ import {
   verifyRefreshToken,
 } from "../../utils/auth.ts";
 import { logApi } from "../../utils/log.ts";
-import { getMembers } from "../../settings/members/members.ts";
+import { getMembers } from "../../project_data/members/members.ts";
 import {
   createOptionsForAuth,
   verifyChallengeForAuth,
@@ -18,8 +18,8 @@ import webauthnRouter from "./webauthn/index.ts";
 import {
   createPasswordAuth,
   isPasswordAuth,
-} from "../../settings/members/auth/password.ts";
-import { getSettings } from "../../settings/settings.ts";
+} from "../../project_data/members/auth/password.ts";
+import { getSettings } from "../../project_data/settings.ts";
 
 const iRouter = new oak.Router();
 

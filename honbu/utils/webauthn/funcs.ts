@@ -1,9 +1,9 @@
 import { base64 } from "../../deps.ts";
-import { PasswordAuth } from "../../settings/members/auth/password.ts";
-import { WebAuthnItemController } from "../../settings/members/auth/webauthn.ts";
-import { Member } from "../../settings/members/member.ts";
-import { getMembers } from "../../settings/members/members.ts";
-import { getSettings } from "../../settings/settings.ts";
+import { PasswordAuth } from "../../project_data/members/auth/password.ts";
+import { WebAuthnItemController } from "../../project_data/members/auth/webauthn.ts";
+import { Member } from "../../project_data/members/member.ts";
+import { getMembers } from "../../project_data/members/members.ts";
+import { getSettings } from "../../project_data/settings.ts";
 import { HttpExeption } from "../utils.ts";
 import {
   AttestationOptionUser,

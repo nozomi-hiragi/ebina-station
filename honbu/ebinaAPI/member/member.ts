@@ -1,6 +1,6 @@
 import { isString, oak } from "../../deps.ts";
 import { authToken } from "../../utils/auth.ts";
-import { getMembers } from "../../settings/members/members.ts";
+import { getMembers } from "../../project_data/members/members.ts";
 import {
   createOptionsForRegist,
   verifyChallengeForRegist,

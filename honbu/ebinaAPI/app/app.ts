@@ -5,7 +5,7 @@ import cronRouter from "./cron.ts";
 import { mkdirIfNotExist } from "../../utils/utils.ts";
 import { authToken } from "../../utils/auth.ts";
 import { logApi } from "../../utils/log.ts";
-import { APPS_DIR, GOMI_DIR } from "../../settings/settings.ts";
+import { APPS_DIR, GOMI_DIR } from "../../project_data/settings.ts";
 
 const FIRST_APP_NAME = "FirstApp";
 

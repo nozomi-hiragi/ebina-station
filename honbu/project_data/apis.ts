@@ -1,5 +1,5 @@
 import { APPS_DIR } from "./settings.ts";
-import { exist } from "../utils/utils.ts";
+import { isExist } from "../utils/utils.ts";
 
 export type APIType = {
   name: string;
@@ -19,7 +19,7 @@ export class APIs {
 
   constructor(appName: string) {
     this.jsonPath = `${APPS_DIR}/${appName}/apis.json`;
-    if (exist(this.jsonPath)) {
+    if (isExist(this.jsonPath)) {
       this.apis = JSON.parse(Deno.readTextFileSync(this.jsonPath));
     } else {
       this.apis = { apis: {}, port: 1234 };

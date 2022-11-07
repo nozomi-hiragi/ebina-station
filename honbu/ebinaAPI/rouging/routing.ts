@@ -1,7 +1,7 @@
 import { oak } from "../../deps.ts";
-import { NginxConf, NginxConfs } from "../../settings/nginx.ts";
+import { NginxConf, NginxConfs } from "../../project_data/nginx.ts";
 import { authToken } from "../../utils/auth.ts";
-import { generateNginxConfsFromJson } from "../../nginx_conf.ts";
+import { generateNginxConfsFromJson } from "../../project_data/nginx.ts";
 import {
   execDCCPs,
   execDCCRestart,

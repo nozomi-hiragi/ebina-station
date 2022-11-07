@@ -1,5 +1,5 @@
 import { oak } from "../../deps.ts";
-import { CronItem, getCronJson, setCron } from "../../settings/cron.ts";
+import { CronItem, getCronJson, setCron } from "../../project_data/cron.ts";
 import { authToken } from "../../utils/auth.ts";
 
 const cronRouter = new oak.Router();

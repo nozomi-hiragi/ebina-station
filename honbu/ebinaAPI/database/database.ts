@@ -1,5 +1,5 @@
 import { mongodb, Mutex, oak } from "../../deps.ts";
-import { getSettings } from "../../settings/settings.ts";
+import { getSettings } from "../../project_data/settings.ts";
 import { authToken } from "../../utils/auth.ts";
 
 const databaseRouter = new oak.Router();

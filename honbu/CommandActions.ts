@@ -1,8 +1,8 @@
 import { execDCCRestart, execDCCRun } from "./docker/DockerComposeCommand.ts";
 import { ServiceName } from "./EbinaService.ts";
-import { generateNginxConfsFromJson } from "./nginx_conf.ts";
+import { generateNginxConfsFromJson } from "./project_data/nginx.ts";
 import { nginxConfs } from "./ebinaAPI/rouging/routing.ts";
-import { getMembers } from "./settings/members/members.ts";
+import { getMembers } from "./project_data/members/members.ts";
 
 /// ========== Member ==========
 export class MemberTempActions {

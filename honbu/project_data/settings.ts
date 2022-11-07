@@ -7,7 +7,6 @@ export const GOMI_DIR = `${PROJECT_PATH}/gomi`;
 
 const SETTINGS_FILE_PATH = `${PROJECT_PATH}/settings.json`;
 const DEFAULT_PORT_NUM = 3456;
-const DEFAULT_HONBU_PORT_NUM = 9876;
 const DEFAULT_MONGODB_PORT = 27017;
 
 export type WebAuthnSetting = {
@@ -26,8 +25,6 @@ export type MongoBD = {
 
 class Settings {
   port: "env" | number = DEFAULT_PORT_NUM;
-  honbuPort: number = DEFAULT_HONBU_PORT_NUM;
-  // membersEncryption = false;
   origins: string[] = [
     "https://nozomi-hiragi.github.io",
     "http://localhost:3000",
@@ -35,6 +32,7 @@ class Settings {
   Member = {
     allowRegist: true,
     maxMembers: 1,
+    // membersEncryption = false;
   };
   WebAuthn: WebAuthnSetting = {
     rpName: "EbinaStation",
@@ -62,10 +60,6 @@ class Settings {
     } else {
       return this.port ?? DEFAULT_PORT_NUM;
     }
-  }
-
-  getHonbuPortNumber() {
-    return this.honbuPort ?? DEFAULT_HONBU_PORT_NUM;
   }
 
   hasWebAuthn = () => this.WebAuthn !== undefined;

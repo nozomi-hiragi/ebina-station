@@ -1,8 +1,8 @@
 import { oak } from "../../deps.ts";
-import { APPS_DIR } from "../../settings/settings.ts";
+import { APPS_DIR } from "../../project_data/settings.ts";
 import { authToken } from "../../utils/auth.ts";
 import { logApi } from "../../utils/log.ts";
-import { exist, mkdirIfNotExist } from "../../utils/utils.ts";
+import { isExist, mkdirIfNotExist } from "../../utils/utils.ts";
 
 const scriptsDir = "scripts";
 const jsRouter = new oak.Router();
@@ -57,7 +57,7 @@ jsRouter.post("/:path", authToken, async (ctx) => {
   try {
     initFolder(appName);
     const fullPath = `${APPS_DIR}/${appName}/${scriptsDir}/${path}`;
-    if (exist(fullPath)) return ctx.response.status = 409;
+    if (isExist(fullPath)) return ctx.response.status = 409;
     const body = await ctx.request.body({ type: "text" }).value;
     Deno.writeTextFileSync(fullPath, body);
     ctx.response.status = 200;
@@ -83,7 +83,7 @@ jsRouter.get("/:path", authToken, (ctx) => {
   try {
     initFolder(appName);
     const fullPath = `${APPS_DIR}/${appName}/${scriptsDir}/${path}`;
-    if (!exist(fullPath)) return ctx.response.status = 404;
+    if (!isExist(fullPath)) return ctx.response.status = 404;
     if (Deno.statSync(fullPath).isDirectory) {
       const dir = [];
       for (const item of Deno.readDirSync(fullPath)) {
@@ -116,7 +116,7 @@ jsRouter.patch("/:path", authToken, async (ctx) => {
   try {
     initFolder(appName);
     const fullPath = `${APPS_DIR}/${appName}/${scriptsDir}/${path}`;
-    if (!exist(fullPath)) return ctx.response.status = 404;
+    if (!isExist(fullPath)) return ctx.response.status = 404;
     if (Deno.statSync(fullPath).isDirectory) return ctx.response.status = 409;
 
     const body = await ctx.request.body({ type: "text" }).value;
@@ -142,7 +142,7 @@ jsRouter.delete("/:path", authToken, (ctx) => {
   try {
     initFolder(appName);
     const fullPath = `${APPS_DIR}/${appName}/${scriptsDir}/${path}`;
-    if (!exist(fullPath)) return ctx.response.status = 404;
+    if (!isExist(fullPath)) return ctx.response.status = 404;
     if (Deno.statSync(fullPath).isDirectory) return ctx.response.status = 409;
 
     Deno.removeSync(fullPath);

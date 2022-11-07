@@ -3,7 +3,7 @@ import {
   getSettings,
   setSettings,
   WebAuthnSetting,
-} from "../../settings/settings.ts";
+} from "../../project_data/settings.ts";
 import { authToken } from "../../utils/auth.ts";
 
 const projectRouter = new oak.Router();

@@ -1,5 +1,5 @@
 import { oak } from "../../../deps.ts";
-import { getMembers } from "../../../settings/members/members.ts";
+import { getMembers } from "../../../project_data/members/members.ts";
 import { authToken, JwtPayload } from "../../../utils/auth.ts";
 import { HttpExeption } from "../../../utils/utils.ts";
 import {
