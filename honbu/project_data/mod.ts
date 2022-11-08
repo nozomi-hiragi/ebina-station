@@ -1,4 +1,5 @@
 import { ReaderBuffer } from "../utils/utils.ts";
+import { initApps } from "./apps/mod.ts";
 import { Members } from "./members/mod.ts";
 import { Settings } from "./settings/mod.ts";
 
@@ -18,6 +19,7 @@ export const initProjectData = async () => {
     await initProjectSettingsInteract();
   }
   Members.instance().load();
+  initApps();
 };
 
 const initProjectSettingsInteract = async () => {

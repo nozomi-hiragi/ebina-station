@@ -10,7 +10,6 @@ import {
   runCertbotService,
 } from "./CommandActions.ts";
 import ebinaRouter from "./ebinaAPI/ebina.ts";
-import { startCrons } from "./project_data/cron.ts";
 
 const removeBaseServices = () =>
   Promise.all([
@@ -79,8 +78,6 @@ main().then(() => {
       console.log(`renew: ${ret}`);
     });
   });
-
-  startCrons();
 
   Deno.addSignalListener("SIGTERM", () => {
     renewCron.stop();
