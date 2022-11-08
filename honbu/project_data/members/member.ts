@@ -13,20 +13,20 @@ type Flags = {
   admin?: boolean;
 };
 
-export type _TypeMember = {
+export interface MemberValues {
   name: string;
   auth: {
     password?: PasswordAuth;
     webAuthn?: WebAuthn;
   };
   flags?: Flags;
-};
+}
 
 export class Member {
   private id: string;
-  private value: _TypeMember;
+  private value: MemberValues;
 
-  constructor(id: string, value: _TypeMember) {
+  constructor(id: string, value: MemberValues) {
     this.id = id;
     this.value = value;
   }

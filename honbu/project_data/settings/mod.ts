@@ -58,8 +58,7 @@ export class Settings {
       ) as SettingsValues;
       this.fromValies(values);
       return true;
-    } catch (err) {
-      console.log(err);
+    } catch {
       return false;
     }
   }

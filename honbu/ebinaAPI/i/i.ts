@@ -8,7 +8,7 @@ import {
   verifyRefreshToken,
 } from "../../utils/auth.ts";
 import { logApi } from "../../utils/log.ts";
-import { getMembers } from "../../project_data/members/members.ts";
+import { Members } from "../../project_data/members/mod.ts";
 import {
   createOptionsForAuth,
   verifyChallengeForAuth,
@@ -33,7 +33,7 @@ iRouter.post("/login/option", async (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const body = await ctx.request.body({ type: "json" }).value;
   const id: string = body.id;
-  const members = getMembers();
+  const members = Members.instance();
 
   try {
     let member = undefined;
@@ -91,7 +91,7 @@ iRouter.post("/login/verify", async (ctx) => {
   if (!sessionId || !result) return ctx.response.status = 400;
 
   const id = result.response.userHandle;
-  const member = getMembers().getMember(id);
+  const member = Members.instance().getMember(id);
   if (!member) return ctx.response.status = 404;
   try {
     const ret = await verifyChallengeForAuth(origin, member, result, sessionId);
@@ -125,7 +125,7 @@ iRouter.post("/login", async (ctx) => {
   const id: string = body.id;
   const pass: string = body.pass;
   if (!id || !pass) return ctx.response.status = 400;
-  const member = getMembers().getMember(id);
+  const member = Members.instance().getMember(id);
   if (!member) {
     logApi.info(["post", "member/login", "not exist member", id]);
     return ctx.response.status = 404;
@@ -171,7 +171,7 @@ iRouter.post("/refresh/option", async (ctx) => {
   const payload = await verifyRefreshToken(refreshToken);
   if (!payload) return ctx.response.status = 401;
   const { id } = payload;
-  const members = getMembers();
+  const members = Members.instance();
   const member = members.getMember(id);
   if (!member) return ctx.response.status = 404;
 
@@ -216,7 +216,7 @@ iRouter.post("/refresh/verify", async (ctx) => {
   const payload = await verifyRefreshToken(refreshToken);
   if (!payload) return ctx.response.status = 401;
   const { id } = payload;
-  const members = getMembers();
+  const members = Members.instance();
   const member = members.getMember(id);
   if (!member) return ctx.response.status = 404;
 
@@ -283,7 +283,7 @@ iRouter.put("/password", authToken, async (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload = ctx.state.payload;
   if (!payload) return ctx.response.status = 401;
-  const members = getMembers();
+  const members = Members.instance();
   const member = members.getMember(payload.id);
   if (!member) return ctx.response.status = 404;
 
@@ -331,7 +331,7 @@ iRouter.put("/password", authToken, async (ctx) => {
       if (err instanceof HttpExeption || err.message === "no secure") {
         switch (member.updatePassword(current, _new)) {
           case true:
-            getMembers().setMember(member);
+            Members.instance().setMember(member);
             return ctx.response.status = 200;
           case false:
             return ctx.response.status = 401;

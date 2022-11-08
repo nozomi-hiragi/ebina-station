@@ -1,16 +1,20 @@
 import { ReaderBuffer } from "../utils/utils.ts";
+import { Members } from "./members/mod.ts";
 import { Settings } from "./settings/mod.ts";
 
 export const PROJECT_PATH = "./project";
+export const SETTINGS_FILE_PATH = `${PROJECT_PATH}/settings.json`;
+export const MEMBERS_FILE_PATH = `${PROJECT_PATH}/members.json`;
+
 export const APPS_DIR = `${PROJECT_PATH}/apps`;
 export const NGINX_DIR = `${PROJECT_PATH}/nginx`;
 export const GOMI_DIR = `${PROJECT_PATH}/gomi`;
-export const SETTINGS_FILE_PATH = `${PROJECT_PATH}/settings.json`;
 
 export const initProjectData = async () => {
   if (!Settings.instance().load()) {
     await initProjectSettingsInteract();
   }
+  Members.instance().load();
 };
 
 const initProjectSettingsInteract = async () => {

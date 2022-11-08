@@ -1,6 +1,6 @@
 import { isString, oak } from "../../deps.ts";
 import { authToken } from "../../utils/auth.ts";
-import { getMembers } from "../../project_data/members/members.ts";
+import { Members } from "../../project_data/members/mod.ts";
 import {
   createOptionsForRegist,
   verifyChallengeForRegist,
@@ -20,7 +20,7 @@ memberRouter.post("/regist/option", async (ctx) => {
   const { id, name, pass } = await ctx.request.body({ type: "json" }).value;
   if (!id || !name || !pass) return ctx.response.status = 400;
 
-  const members = getMembers();
+  const members = Members.instance();
   const tempMember = members.registTempMember(id, name, pass);
   if (!tempMember) return ctx.response.status = 409;
   try {
@@ -53,7 +53,7 @@ memberRouter.post("/regist/verify", async (ctx) => {
     return ctx.response.status = 400;
   }
 
-  const members = getMembers();
+  const members = Members.instance();
 
   const preRequest = members.popPreRequest(id);
   if (!preRequest) return ctx.response.status = 404;
@@ -88,7 +88,7 @@ memberRouter.post("/regist/verify", async (ctx) => {
 memberRouter.get("/", authToken, (ctx) => {
   const ids = ctx.request.url.searchParams.get("ids")?.split(",") ?? [];
 
-  ctx.response.body = getMembers().getMembersArray(ids);
+  ctx.response.body = Members.instance().getMembersArray(ids);
 });
 
 // メンバー配列削除
@@ -103,7 +103,7 @@ memberRouter.delete("/", authToken, (ctx) => {
   const failedIds: string[] = [];
   ids.forEach((id) => {
     if (id === payload?.id) return;
-    if (!getMembers().removeMember(id)) failedIds.push(id);
+    if (!Members.instance().removeMember(id)) failedIds.push(id);
   });
   if (failedIds.length === ids.length) {
     ctx.response.status = 404;
@@ -124,7 +124,7 @@ memberRouter.get("/:id", authToken, (ctx) => {
   const { id } = ctx.params;
   if (!id) return ctx.response.status = 400;
 
-  const member = getMembers().getMember(id);
+  const member = Members.instance().getMember(id);
   if (member) {
     ctx.response.body = { ...member, auth: undefined };
   } else {

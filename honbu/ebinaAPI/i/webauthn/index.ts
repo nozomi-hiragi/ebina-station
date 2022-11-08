@@ -1,5 +1,5 @@
 import { oak } from "../../../deps.ts";
-import { getMembers } from "../../../project_data/members/members.ts";
+import { Members } from "../../../project_data/members/mod.ts";
 import { authToken, JwtPayload } from "../../../utils/auth.ts";
 import { HttpExeption } from "../../../utils/utils.ts";
 import {
@@ -24,7 +24,7 @@ webauthnRouter.get("/regist", authToken, async (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload: JwtPayload = ctx.state.payload!;
   const memberId = payload.id;
-  const member = getMembers().getMember(memberId);
+  const member = Members.instance().getMember(memberId);
   if (!member) return ctx.response.status = 404;
 
   try {
@@ -55,7 +55,7 @@ webauthnRouter.post("/regist", authToken, async (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload: JwtPayload = ctx.state.payload!;
   const memberId = payload.id;
-  const members = getMembers();
+  const members = Members.instance();
   const member = members.getMember(memberId);
   if (!member) return ctx.response.status = 404;
 
@@ -97,7 +97,7 @@ webauthnRouter.get("/verify", authToken, async (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload: JwtPayload = ctx.state.payload!;
   const memberId = payload.id;
-  const member = getMembers().getMember(memberId);
+  const member = Members.instance().getMember(memberId);
   if (!member) return ctx.response.status = 404;
 
   const queryDeviceNames = ctx.request.url.searchParams
@@ -138,7 +138,7 @@ webauthnRouter.post("/verify", authToken, async (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload: JwtPayload = ctx.state.payload!;
   const memberId = payload.id;
-  const member = getMembers().getMember(memberId);
+  const member = Members.instance().getMember(memberId);
   if (!member) return ctx.response.status = 404;
 
   const body = await ctx.request.body({ type: "json" }).value;

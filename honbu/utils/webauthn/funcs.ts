@@ -2,7 +2,7 @@ import { base64 } from "../../deps.ts";
 import { PasswordAuth } from "../../project_data/members/auth/password.ts";
 import { WebAuthnItemController } from "../../project_data/members/auth/webauthn.ts";
 import { Member } from "../../project_data/members/member.ts";
-import { getMembers } from "../../project_data/members/members.ts";
+import { Members } from "../../project_data/members/mod.ts";
 import { Settings } from "../../project_data/settings/mod.ts";
 import { HttpExeption } from "../utils.ts";
 import {
@@ -196,7 +196,7 @@ export const verifyChallengeForAuth = async (
   webAuthnItem.setAuthenticator(deviceName, authenticator);
   member.setWebAuthnItem(rpID, webAuthnItem);
 
-  getMembers().setMember(member);
+  Members.instance().setMember(member);
 
   return {
     result,
@@ -227,7 +227,7 @@ export const deleteAuthenticators = (
     }
   });
   member.setWebAuthnItem(rpID, webAuthnItem);
-  getMembers().setMember(member);
+  Members.instance().setMember(member);
 
   return failedNames;
 };
@@ -267,7 +267,7 @@ export const switchEnableAuthenticator = (
     if (toEnable) webAuthnItem.addEnableDeviceName(deviceName);
     else webAuthnItem.deleteEnableDeviceName(deviceName);
     member.setWebAuthnItem(rpID, webAuthnItem);
-    getMembers().setMember(member);
+    Members.instance().setMember(member);
     return true;
   }
 };

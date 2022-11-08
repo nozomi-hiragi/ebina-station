@@ -1,5 +1,5 @@
 import { oak } from "../../../deps.ts";
-import { getMembers } from "../../../project_data/members/members.ts";
+import { Members } from "../../../project_data/members/mod.ts";
 import { authToken, JwtPayload } from "../../../utils/auth.ts";
 import { HttpExeption } from "../../../utils/utils.ts";
 import {
@@ -22,7 +22,7 @@ deviceRouter.get("/", authToken, (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload: JwtPayload = ctx.state.payload!;
   const memberId = payload.id;
-  const member = getMembers().getMember(memberId);
+  const member = Members.instance().getMember(memberId);
   if (!member) return ctx.response.status = 404;
 
   const deviceNames: string[] =
@@ -58,7 +58,7 @@ deviceRouter.delete("/", authToken, (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload: JwtPayload = ctx.state.payload!;
   const memberId = payload.id;
-  const member = getMembers().getMember(memberId);
+  const member = Members.instance().getMember(memberId);
   if (!member) return ctx.response.status = 404;
 
   const deviceNames = ctx.request.url.searchParams
@@ -97,7 +97,7 @@ deviceRouter.get("/:deviceName", authToken, (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload = ctx.state.payload!;
   const memberId = payload.id;
-  const member = getMembers().getMember(memberId);
+  const member = Members.instance().getMember(memberId);
   if (!member) return ctx.response.status = 404;
 
   const { deviceName } = ctx.params;
@@ -134,7 +134,7 @@ deviceRouter.delete("/:deviceName", authToken, (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload = ctx.state.payload!;
   const memberId = payload.id;
-  const member = getMembers().getMember(memberId);
+  const member = Members.instance().getMember(memberId);
   if (!member) return ctx.response.status = 404;
 
   const { deviceName } = ctx.params;
@@ -168,7 +168,7 @@ deviceRouter.get("/:deviceName/enable", authToken, (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload = ctx.state.payload!;
   const memberId = payload.id;
-  const member = getMembers().getMember(memberId);
+  const member = Members.instance().getMember(memberId);
   if (!member) return ctx.response.status = 404;
   const { deviceName } = ctx.params;
 
@@ -197,7 +197,7 @@ deviceRouter.post("/:deviceName/enable", authToken, (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload = ctx.state.payload!;
   const memberId = payload.id;
-  const member = getMembers().getMember(memberId);
+  const member = Members.instance().getMember(memberId);
   if (!member) return ctx.response.status = 404;
   const { deviceName } = ctx.params;
 
@@ -229,7 +229,7 @@ deviceRouter.post("/:deviceName/disable", authToken, (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const payload = ctx.state.payload!;
   const memberId = payload.id;
-  const member = getMembers().getMember(memberId);
+  const member = Members.instance().getMember(memberId);
   if (!member) return ctx.response.status = 404;
   const { deviceName } = ctx.params;
 

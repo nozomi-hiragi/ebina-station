@@ -2,19 +2,19 @@ import { execDCCRestart, execDCCRun } from "./docker/DockerComposeCommand.ts";
 import { ServiceName } from "./EbinaService.ts";
 import { generateNginxConfsFromJson } from "./project_data/nginx.ts";
 import { nginxConfs } from "./ebinaAPI/rouging/routing.ts";
-import { getMembers } from "./project_data/members/members.ts";
+import { Members } from "./project_data/members/mod.ts";
 
 /// ========== Member ==========
 export class MemberTempActions {
   static showTempMemberList = () => {
-    const tempMembers = getMembers().getTempMembers();
+    const tempMembers = Members.instance().getTempMembers();
     const tempMemberArray = Object.keys(tempMembers)
       .map((id) => ({ id, ...tempMembers[id]?.getValue() }));
     console.log(tempMemberArray);
   };
 
   static admitTempMember = (id: string) => {
-    switch (getMembers().admitTempMember(id)) {
+    switch (Members.instance().admitTempMember(id)) {
       case true:
         console.log("ok");
         break;
@@ -29,7 +29,7 @@ export class MemberTempActions {
   };
 
   static denyTempMember = (id: string) => {
-    if (getMembers().denyTempMember(id)) {
+    if (Members.instance().denyTempMember(id)) {
       console.log("ok");
     } else {
       console.log("wrong id");

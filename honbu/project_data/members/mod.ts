@@ -1,26 +1,60 @@
-import { PROJECT_PATH } from "../mod.ts";
-import { _TypeMember, Member } from "./member.ts";
+import { MEMBERS_FILE_PATH } from "../mod.ts";
+import { Member, MemberValues } from "./member.ts";
 
-const MEMBERS_FILE_PATH = `${PROJECT_PATH}/members.json`;
+interface MembersValues {
+  members: { [id: string]: MemberValues };
+  temp?: { [id: string]: MemberValues };
+}
 
-type TypeMembers = {
-  members: { [id: string]: _TypeMember };
-  temp?: { [id: string]: _TypeMember };
-};
+export class Members {
+  private static _instance: Members;
+  static instance() {
+    if (!this._instance) this._instance = new Members();
+    return this._instance;
+  }
+  private constructor() {}
 
-class Members {
   members: { [id: string]: Member | undefined } = {};
   temp: { [id: string]: Member | undefined } = {};
   preRquests: { [id: string]: { ip: string; token: string } | undefined } = {};
 
-  constructor(value?: TypeMembers) {
-    if (!value) return;
-    Object.keys(value.members)
-      .forEach((id) => this.members[id] = new Member(id, value.members[id]));
-    if (value.temp) {
-      const temp = value.temp;
-      Object.keys(temp)
-        .forEach((id) => this.temp[id] = new Member(id, temp[id]));
+  load() {
+    try {
+      const value: MembersValues = JSON.parse(
+        Deno.readTextFileSync(MEMBERS_FILE_PATH),
+      );
+      Object.keys(value.members)
+        .forEach((id) => this.members[id] = new Member(id, value.members[id]));
+      if (value.temp) {
+        const temp = value.temp;
+        Object.keys(temp)
+          .forEach((id) => this.temp[id] = new Member(id, temp[id]));
+      }
+    } catch {
+      return false;
+    }
+  }
+
+  save() {
+    try {
+      const value: MembersValues = { members: {} };
+      Object.values(this.members).forEach((member) =>
+        value.members[member!.getId()] = member!.getRawValue()
+      );
+      if (this.temp && Object.keys(this.temp).length !== 0) {
+        value.temp = {};
+        Object.values(this.temp).forEach((member) =>
+          value.temp![member!.getId()] = member!.getRawValue()
+        );
+      }
+      Deno.writeTextFileSync(
+        MEMBERS_FILE_PATH,
+        JSON.stringify(value, undefined, 2),
+      );
+      return true;
+    } catch (err) {
+      console.log(err);
+      return false;
     }
   }
 
@@ -30,11 +64,11 @@ class Members {
 
   setMember(member: Member) {
     this.members[member.getId()] = member;
-    this.saveMembersToFile();
+    this.save();
   }
 
   addMember(member: Member) {
-    if (this.members[member.getId()]) return false;
+    if (this.getMember(member.getId())) return false;
     this.setMember(member);
     return true;
   }
@@ -53,7 +87,7 @@ class Members {
   removeMember(id: string) {
     if (!this.getMember(id)) return false;
     delete this.members[id];
-    this.saveMembersToFile();
+    this.save();
     return true;
   }
 
@@ -62,23 +96,6 @@ class Members {
     return memberIds
       .filter((id) => ids.length !== 0 ? ids.includes(id) : true)
       .map((id) => ({ ...this.getMember(id), id, auth: undefined }));
-  }
-
-  saveMembersToFile() {
-    const value: TypeMembers = { members: {} };
-    Object.values(this.members).forEach((member) =>
-      value.members[member!.getId()] = member!.getRawValue()
-    );
-    if (this.temp && Object.keys(this.temp).length !== 0) {
-      value.temp = {};
-      Object.values(this.temp).forEach((member) =>
-        value.temp![member!.getId()] = member!.getRawValue()
-      );
-    }
-    Deno.writeTextFileSync(
-      MEMBERS_FILE_PATH,
-      JSON.stringify(value, undefined, 2),
-    );
   }
 
   memberCount = () => Object.keys(this.members).length;
@@ -97,7 +114,7 @@ class Members {
 
   setTempMember(member: Member) {
     this.temp[member.getId()] = member;
-    this.saveMembersToFile();
+    this.save();
   }
 
   addTempMember(member: Member) {
@@ -130,7 +147,7 @@ class Members {
     const temp = this.getTempMember(id);
     if (!temp) return undefined;
     delete this.temp[id];
-    this.saveMembersToFile();
+    this.save();
     return true;
   }
 
@@ -145,13 +162,3 @@ class Members {
     return request;
   }
 }
-
-const members: Members = (() => {
-  try {
-    return new Members(JSON.parse(Deno.readTextFileSync(MEMBERS_FILE_PATH)));
-  } catch {
-    return new Members();
-  }
-})();
-
-export const getMembers = () => members;
