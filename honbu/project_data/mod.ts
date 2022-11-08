@@ -7,8 +7,11 @@ export const SETTINGS_FILE_PATH = `${PROJECT_PATH}/settings.json`;
 export const MEMBERS_FILE_PATH = `${PROJECT_PATH}/members.json`;
 
 export const APPS_DIR = `${PROJECT_PATH}/apps`;
-export const NGINX_DIR = `${PROJECT_PATH}/nginx`;
 export const GOMI_DIR = `${PROJECT_PATH}/gomi`;
+
+export const NGINX_DIR = `${PROJECT_PATH}/nginx`;
+export const NGINX_GENERATE_DIR = `${NGINX_DIR}/generate`;
+export const NGINX_CONFS_FILE_PATH = `${NGINX_DIR}/confs.json`;
 
 export const initProjectData = async () => {
   if (!Settings.instance().load()) {

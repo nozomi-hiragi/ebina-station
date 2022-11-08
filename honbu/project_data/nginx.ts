@@ -1,6 +1,6 @@
 import { Settings } from "./settings/mod.ts";
 import { isExist } from "../utils/utils.ts";
-import { NGINX_DIR } from "./mod.ts";
+import { NGINX_CONFS_FILE_PATH, NGINX_GENERATE_DIR } from "./mod.ts";
 
 export type NginxConf = {
   hostname: string;
@@ -37,13 +37,11 @@ type NginxConfJson = {
 };
 
 export class NginxConfs {
-  private confJsonPath: string;
   private confs: NginxConfJson;
 
   constructor() {
-    this.confJsonPath = `${NGINX_DIR}/confs.json`;
-    if (isExist(this.confJsonPath)) {
-      this.confs = JSON.parse(Deno.readTextFileSync(this.confJsonPath));
+    if (isExist(NGINX_CONFS_FILE_PATH)) {
+      this.confs = JSON.parse(Deno.readTextFileSync(NGINX_CONFS_FILE_PATH));
     } else {
       this.confs = {};
       this.saveConfsToJson();
@@ -51,9 +49,8 @@ export class NginxConfs {
   }
 
   private saveConfsToJson() {
-    if (!this.confJsonPath) return;
     Deno.writeTextFileSync(
-      this.confJsonPath,
+      NGINX_CONFS_FILE_PATH,
       JSON.stringify(this.confs, undefined, 2),
     );
   }
@@ -142,10 +139,11 @@ ${sslSettings}${
       : ""
   }}`;
   try {
-    const generateDir = "./project/nginx/generate";
-    if (!isExist(generateDir)) Deno.mkdirSync(generateDir, { recursive: true });
+    if (!isExist(NGINX_GENERATE_DIR)) {
+      Deno.mkdirSync(NGINX_GENERATE_DIR, { recursive: true });
+    }
     Deno.writeTextFileSync(
-      `./project/nginx/generate/${name}.conf`,
+      `${NGINX_GENERATE_DIR}/${name}.conf`,
       content,
       {},
     );
@@ -156,15 +154,14 @@ ${sslSettings}${
 };
 
 export const generateNginxConfsFromJson = () => {
-  const confsFilePath = "./project/nginx/confs.json";
-  const generateDir = "./project/nginx/generate";
+  if (isExist(NGINX_GENERATE_DIR)) {
+    Deno.removeSync(NGINX_GENERATE_DIR, { recursive: true });
+  }
+  Deno.mkdirSync(NGINX_GENERATE_DIR, { recursive: true });
 
-  if (isExist(generateDir)) Deno.removeSync(generateDir, { recursive: true });
-  Deno.mkdirSync(generateDir, { recursive: true });
-
-  if (!isExist(confsFilePath)) return;
-  const confs = JSON.parse(Deno.readTextFileSync(confsFilePath));
-  if (!confs) throw new Error("something wrong on ./project/nginx/confs.json");
+  if (!isExist(NGINX_CONFS_FILE_PATH)) return;
+  const confs = JSON.parse(Deno.readTextFileSync(NGINX_CONFS_FILE_PATH));
+  if (!confs) throw new Error(`something wrong on ${NGINX_CONFS_FILE_PATH}`);
   Object.keys(confs).forEach((name) => {
     const err = generateNginxConf(name, confs[name]);
     if (err) console.log(err);

@@ -69,10 +69,10 @@ const main = async () => {
   router.use("/ebina", ebinaRouter.routes());
   app.use(router.routes(), router.allowedMethods());
   app.listen({ port });
+  console.log("start listeing");
 };
 
 main().then(() => {
-  console.log("Connect to Koujou...");
   const renewCron = new Cron("0 0 22-28 * 1", () => {
     runCertbotService(["certbot", "renew"]).then((ret) => {
       // @TODO ログに入れる

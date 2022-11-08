@@ -5,6 +5,7 @@ import {
   DockerComposeYamlManager,
   DockerComposeYamlService,
 } from "./docker/DockerComposeYamlManager.ts";
+import { NGINX_DIR, PROJECT_PATH } from "./project_data/mod.ts";
 import { generateNginxConfsFromJson } from "./project_data/nginx.ts";
 import { isExist } from "./utils/utils.ts";
 
@@ -15,8 +16,8 @@ export enum ServiceName {
 }
 
 const volumesLetsencrypt = [
-  "./project/letsencrypt:/etc/letsencrypt",
-  "./project/letsencrypt/html:/var/www/html",
+  `${PROJECT_PATH}/letsencrypt:/etc/letsencrypt`,
+  `${PROJECT_PATH}/letsencrypt/html:/var/www/html`,
 ];
 
 const createMongoSettings = (port: number, env: string[]) => {
@@ -35,19 +36,20 @@ const createMongoSettings = (port: number, env: string[]) => {
 };
 
 const createJinjiSettings = (isDesktop: boolean) => {
-  const info = isExist("./project/nginx/nginx.conf");
+  const nginxConfPath = `${NGINX_DIR}/nginx.conf`;
+  const info = isExist(nginxConfPath);
   if (!info) {
-    Deno.mkdirSync("./project/nginx/", { recursive: true });
-    Deno.copyFileSync("./nginx.conf.base", "./project/nginx/nginx.conf");
+    Deno.mkdirSync(NGINX_DIR, { recursive: true });
+    Deno.copyFileSync("./nginx.conf.base", nginxConfPath);
   } else if (!info.isFile) {
-    throw new Error(`"./project/nginx/nginx.conf" is not file`);
+    throw new Error(`"${nginxConfPath}" is not file`);
   }
   generateNginxConfsFromJson();
 
   const volumes = [
-    "./project/nginx/nginx.conf:/etc/nginx/nginx.conf",
-    "./project/nginx/sites-enabled:/etc/nginx/sites-enabled",
-    "./project/nginx/generate:/etc/nginx/generate",
+    `${nginxConfPath}:/etc/nginx/nginx.conf`,
+    `${NGINX_DIR}/sites-enabled:/etc/nginx/sites-enabled`,
+    `${NGINX_DIR}/nginx/generate:/etc/nginx/generate`,
   ].concat(volumesLetsencrypt);
   if (isExist("/etc/ssl/certs/dhparam.pem")) {
     volumes.push("/etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem");
