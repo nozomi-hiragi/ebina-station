@@ -19,7 +19,7 @@ import {
   createPasswordAuth,
   isPasswordAuth,
 } from "../../project_data/members/auth/password.ts";
-import { getSettings } from "../../project_data/settings.ts";
+import { Settings } from "../../project_data/settings/mod.ts";
 
 const iRouter = new oak.Router();
 
@@ -41,7 +41,7 @@ iRouter.post("/login/option", async (ctx) => {
       member = members.getMember(id);
       if (!member) {
         const allMemberCount = members.allMemberCount();
-        if (getSettings().canRegistNewMember(allMemberCount)) {
+        if (Settings.instance().Member.canRegistNewMember(allMemberCount)) {
           const token = randomString(32);
           members.setPreRequest(id, ctx.request.ip, token);
           ctx.response.status = 202;

@@ -1,5 +1,6 @@
-import { getSettings, NGINX_DIR } from "./settings.ts";
+import { Settings } from "./settings/mod.ts";
 import { isExist } from "../utils/utils.ts";
+import { NGINX_DIR } from "./mod.ts";
 
 export type NginxConf = {
   hostname: string;
@@ -83,7 +84,7 @@ const generateNginxConf = (
   conf: NginxConf,
 ) => {
   const port = conf.port === "koujou"
-    ? getSettings().getPortNumber()
+    ? Settings.instance().getPortNumber()
     : conf.port;
 
   let sslSettings = "";

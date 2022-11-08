@@ -1,4 +1,4 @@
-import { APPS_DIR } from "./settings.ts";
+import { APPS_DIR } from "./mod.ts";
 import { isExist } from "../utils/utils.ts";
 
 export type APIType = {

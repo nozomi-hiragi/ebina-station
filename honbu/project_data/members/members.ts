@@ -1,4 +1,4 @@
-import { PROJECT_PATH } from "../settings.ts";
+import { PROJECT_PATH } from "../mod.ts";
 import { _TypeMember, Member } from "./member.ts";
 
 const MEMBERS_FILE_PATH = `${PROJECT_PATH}/members.json`;

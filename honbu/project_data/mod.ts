@@ -1,7 +1,19 @@
 import { ReaderBuffer } from "../utils/utils.ts";
-import { getSettings, setSettings } from "./settings.ts";
+import { Settings } from "./settings/mod.ts";
 
-export const initProjectSettingsInteract = async () => {
+export const PROJECT_PATH = "./project";
+export const APPS_DIR = `${PROJECT_PATH}/apps`;
+export const NGINX_DIR = `${PROJECT_PATH}/nginx`;
+export const GOMI_DIR = `${PROJECT_PATH}/gomi`;
+export const SETTINGS_FILE_PATH = `${PROJECT_PATH}/settings.json`;
+
+export const initProjectData = async () => {
+  if (!Settings.instance().load()) {
+    await initProjectSettingsInteract();
+  }
+};
+
+const initProjectSettingsInteract = async () => {
   const yon = "y/n";
   const msgPleaseChangeFromSettingFile = "変更する場合は設定ファイルから行ってください。\n";
 
@@ -19,7 +31,7 @@ export const initProjectSettingsInteract = async () => {
     throw new Error("Not agree let's encrype agreement");
   }
 
-  const projectSettings = getSettings();
+  const projectSettings = Settings.instance();
 
   console.log(
     "こんにちは。\n" +
@@ -62,12 +74,12 @@ export const initProjectSettingsInteract = async () => {
     `"${rpName}"に設定します。\n` +
       msgPleaseChangeFromSettingFile,
   );
-  projectSettings.WebAuthn.rpName = rpName;
+  projectSettings.WebAuthn.setRpName(rpName);
 
   console.log(
     "これにて設定は終わりです。\n" +
       "その他" + msgPleaseChangeFromSettingFile,
   );
 
-  setSettings(projectSettings);
+  projectSettings.save();
 };

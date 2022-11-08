@@ -1,5 +1,5 @@
 import { Cron } from "../deps.ts";
-import { APPS_DIR } from "./settings.ts";
+import { APPS_DIR } from "./mod.ts";
 
 export type CronItem = {
   enable: boolean;

@@ -3,7 +3,7 @@ import { PasswordAuth } from "../../project_data/members/auth/password.ts";
 import { WebAuthnItemController } from "../../project_data/members/auth/webauthn.ts";
 import { Member } from "../../project_data/members/member.ts";
 import { getMembers } from "../../project_data/members/members.ts";
-import { getSettings } from "../../project_data/settings.ts";
+import { Settings } from "../../project_data/settings/mod.ts";
 import { HttpExeption } from "../utils.ts";
 import {
   AttestationOptionUser,
@@ -37,7 +37,7 @@ const challenges: { [key: string]: ChallengeItem | undefined } = {};
 const f2lList: { [id: string]: Fido2Wrap | undefined } = {};
 
 export const getRPID = (origin: string) => {
-  const rpID = getSettings().getWebAuthnRPID(origin);
+  const rpID = Settings.instance().WebAuthn.getWebAuthnRPID(origin);
   if (!rpID) throw new HttpExeption(500, "No rpID value");
   return rpID;
 };
@@ -52,13 +52,16 @@ const createF2L = (options: Fido2LibOptions) =>
   });
 
 const getF2L = (rpId: string) => {
-  const settings = getSettings();
+  const settings = Settings.instance();
   const webAuthnSetting = settings.WebAuthn;
   if (!webAuthnSetting) throw "No WebAuthn setting";
-  const { rpName, attestationType } = webAuthnSetting;
 
   return f2lList[rpId] ??
-    (f2lList[rpId] = createF2L({ rpId, rpName, attestation: attestationType }));
+    (f2lList[rpId] = createF2L({
+      rpId,
+      rpName: webAuthnSetting.getRpName(),
+      attestation: webAuthnSetting.getAttestationType(),
+    }));
 };
 
 export const createOptionsForRegist = async (

@@ -1,9 +1,9 @@
 import { Cron, oak, oakCors } from "./deps.ts";
-import { initProjectSettingsInteract } from "./project_data/mod.ts";
-import { isExist, readReader, RunCommandExeption } from "./utils/utils.ts";
+import { initProjectData } from "./project_data/mod.ts";
+import { readReader, RunCommandExeption } from "./utils/utils.ts";
 import { execDCCRm, execDCCUp } from "./docker/DockerComposeCommand.ts";
 import { initDockerComposeFile, ServiceName } from "./EbinaService.ts";
-import { getSettings, PROJECT_PATH } from "./project_data/settings.ts";
+import { Settings } from "./project_data/settings/mod.ts";
 import {
   executeAddRoute,
   MemberTempActions,
@@ -24,18 +24,13 @@ const exitHonbu = () =>
   });
 
 const main = async () => {
-  const pjInfo = isExist(PROJECT_PATH);
-  if (pjInfo) {
-    if (!pjInfo.isDirectory) throw new Error("project is not directory");
-  } else {
-    await initProjectSettingsInteract();
-  }
+  initProjectData();
 
-  const projectSettings = getSettings();
-  const mongoSettings = projectSettings.MongoDB;
+  const projectSettings = Settings.instance();
+  const mongoSettings = projectSettings.Mongodb;
   const port = projectSettings.getPortNumber();
 
-  await initDockerComposeFile(mongoSettings?.port);
+  await initDockerComposeFile(mongoSettings.getPortNumber());
 
   if (mongoSettings) if (!await execDCCUp(ServiceName.mongodb)) Deno.exit(1);
   if (!await execDCCUp(ServiceName.Jinji)) Deno.exit(1);

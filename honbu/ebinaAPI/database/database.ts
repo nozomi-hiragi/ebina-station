@@ -1,5 +1,5 @@
 import { mongodb, Mutex, oak } from "../../deps.ts";
-import { getSettings } from "../../project_data/settings.ts";
+import { Settings } from "../../project_data/settings/mod.ts";
 import { authToken } from "../../utils/auth.ts";
 
 const databaseRouter = new oak.Router();
@@ -8,18 +8,18 @@ const client = new mongodb.MongoClient();
 const mutex = new Mutex();
 
 const initClient = async () => {
-  const settings = getSettings();
-  const mongodbSettings = settings.MongoDB;
+  const settings = Settings.instance();
+  const mongodbSettings = settings.Mongodb;
   if (!mongodbSettings) return;
   await mutex.use(async () => {
     if (client.buildInfo) return;
     console.log("start init db");
     const op: mongodb.ConnectOptions = {
       db: "admin",
-      servers: [{ host: "localhost", port: mongodbSettings.port }],
+      servers: [{ host: "localhost", port: mongodbSettings.getPortNumber() }],
       credential: {
-        username: settings.getMongodbUsername(),
-        password: settings.getMongodbPassword(),
+        username: mongodbSettings.getMongodbUsername(),
+        password: mongodbSettings.getMongodbPassword(),
         db: "admin",
         mechanism: "SCRAM-SHA-1",
       },
@@ -30,25 +30,19 @@ const initClient = async () => {
 
 databaseRouter.get("/", authToken, async (ctx) => {
   await initClient();
-  const mongodbSettings = getSettings().MongoDB;
+  const mongodbSettings = Settings.instance().Mongodb;
   let filter: mongodb.Document | undefined = undefined;
-  if (mongodbSettings) {
-    const names = Object.keys(mongodbSettings.databaseFilter).filter((name) =>
-      mongodbSettings.databaseFilter[name].enable
-    );
-    filter = { name: { "$nin": names } };
-  }
+  const names = mongodbSettings.getFilterEnabledDBNames();
+  filter = { name: { "$nin": names } };
   const list = await client.listDatabases({ filter });
   ctx.response.body = list;
 });
 
 databaseRouter.get("/:db", authToken, async (ctx) => {
   const dbName = ctx.params.db;
-  const mongodbSettings = getSettings().MongoDB;
-  if (mongodbSettings) {
-    const filter = mongodbSettings.databaseFilter[dbName];
-    if (filter && filter.enable) return ctx.response.status = 403;
-  }
+  const mongodbSettings = Settings.instance().Mongodb;
+  const filter = mongodbSettings.getDBFilterByName(dbName);
+  if (filter && filter.enable) return ctx.response.status = 403;
 
   await initClient();
   const db = client.database(dbName);
@@ -57,11 +51,9 @@ databaseRouter.get("/:db", authToken, async (ctx) => {
 
 databaseRouter.get("/:db/:collection/find", authToken, async (ctx) => {
   const dbName = ctx.params.db;
-  const mongodbSettings = getSettings().MongoDB;
-  if (mongodbSettings) {
-    const filter = mongodbSettings.databaseFilter[dbName];
-    if (filter && filter.enable) return ctx.response.status = 403;
-  }
+  const mongodbSettings = Settings.instance().Mongodb;
+  const filter = mongodbSettings.getDBFilterByName(dbName);
+  if (filter && filter.enable) return ctx.response.status = 403;
 
   const collectionName = ctx.params.collection;
   await initClient();

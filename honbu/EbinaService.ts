@@ -75,7 +75,7 @@ const createCertbotSettings = () => {
   } as DockerComposeYamlService;
 };
 
-export const initDockerComposeFile = async (mongodbPort?: number) => {
+export const initDockerComposeFile = async (mongodbPort: number) => {
   await Promise.all([
     execDCCRm(ServiceName.Jinji).catch(() => {}),
     execDCCRm(ServiceName.mongodb).catch(() => {}),
@@ -90,10 +90,8 @@ export const initDockerComposeFile = async (mongodbPort?: number) => {
 
   const isDesktop = await isDockerDesktop();
 
-  if (mongodbPort) {
-    const mongoService = createMongoSettings(mongodbPort, envKeys);
-    dockerComposeYaml.setService(ServiceName.mongodb, mongoService);
-  }
+  const mongoService = createMongoSettings(mongodbPort, envKeys);
+  dockerComposeYaml.setService(ServiceName.mongodb, mongoService);
 
   const jinjiService = createJinjiSettings(isDesktop);
   dockerComposeYaml.setService(ServiceName.Jinji, jinjiService);

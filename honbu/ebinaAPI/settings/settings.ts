@@ -1,15 +1,12 @@
 import { oak } from "../../deps.ts";
-import {
-  getSettings,
-  setSettings,
-  WebAuthnSetting,
-} from "../../project_data/settings.ts";
+import { Settings } from "../../project_data/settings/mod.ts";
+import { SettingWebAuthnValues } from "../../project_data/settings/webauthn.ts";
 import { authToken } from "../../utils/auth.ts";
 
 const projectRouter = new oak.Router();
 
 projectRouter.get("/webauthn", authToken, (ctx) => {
-  const settings = getSettings();
+  const settings = Settings.instance();
   const webauthnSettings = settings.WebAuthn;
   if (!webauthnSettings) {
     return ctx.response.status = 503;
@@ -18,33 +15,40 @@ projectRouter.get("/webauthn", authToken, (ctx) => {
 });
 
 projectRouter.post("/webauthn", authToken, async (ctx) => {
-  const settings = getSettings();
-  const webauthnSettings: WebAuthnSetting = await ctx.request
+  const settings = Settings.instance();
+  const webauthnSettings: SettingWebAuthnValues = await ctx.request
     .body({ type: "json" }).value;
-  settings.WebAuthn = { ...settings.WebAuthn, ...webauthnSettings };
-  ctx.response.status = setSettings(settings) ? 200 : 500;
+  if (webauthnSettings.rpName) {
+    settings.WebAuthn.setRpName(webauthnSettings.rpName);
+  }
+  if (webauthnSettings.rpIDType) {
+    settings.WebAuthn.setRpIDType(webauthnSettings.rpIDType);
+  }
+  if (webauthnSettings.rpID) {
+    settings.WebAuthn.setRpID(webauthnSettings.rpID);
+  }
+  if (webauthnSettings.attestationType) {
+    settings.WebAuthn.setAttestationType(webauthnSettings.attestationType);
+  }
+  ctx.response.status = settings.save() ? 200 : 500;
 });
 
 projectRouter.get("/mongodb", authToken, (ctx) => {
-  const settings = getSettings();
-  const mongodbSettings = settings.MongoDB;
+  const settings = Settings.instance();
+  const mongodbSettings = settings.Mongodb;
   if (!mongodbSettings) {
     return ctx.response.status = 503;
   }
   ctx.response.body = {
-    port: mongodbSettings.port,
-    username: mongodbSettings.username === "env"
-      ? mongodbSettings.username
-      : "*****",
-    password: mongodbSettings.password === "env"
-      ? mongodbSettings.password
-      : "*****",
+    port: mongodbSettings.getPortNumber(),
+    username: mongodbSettings.getMongodbUsername() === "env" ? "env" : "*****",
+    password: mongodbSettings.getMongodbPassword() === "env" ? "env" : "*****",
   };
 });
 
 // 不完全 再起動対応とか必要
 // projectRouter.post("/mongodb", authToken, async (ctx) => {
-//   const settings = getSettings();
+//   const settings = Settings.instance();
 //   const mongodbSettings: MongoBD = {
 //     ...settings.mongodb,
 //     ...await ctx.request.body({ type: "json" }).value,
