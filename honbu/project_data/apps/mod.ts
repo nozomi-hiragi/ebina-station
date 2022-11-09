@@ -1,4 +1,5 @@
 import { APPS_DIR } from "../mod.ts";
+import { APIs } from "./apis.ts";
 import { CronItems } from "./cron.ts";
 
 const apps: { [name: string]: App | undefined } = {};
@@ -10,10 +11,12 @@ export const getApp = (appName: string) => {
 class App {
   appName: string;
   cron: CronItems;
+  apis: APIs;
 
   constructor(appName: string) {
     this.appName = appName;
     this.cron = new CronItems(appName);
+    this.apis = new APIs(appName);
   }
 }
 

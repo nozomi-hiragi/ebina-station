@@ -1,66 +1,87 @@
 import { APPS_DIR } from "../mod.ts";
 import { isExist } from "../../utils/utils.ts";
 
-export type APIType = {
+const APIS_JSON_FILE_NAME = "apis.json";
+
+interface APIItemValues {
   name: string;
   method: "get" | "head" | "post" | "put" | "delete" | "options" | "patch";
   type: "static" | "JavaScript";
   value: string;
-};
+}
 
-export type APIsType = {
+interface APIValues {
   port: number;
-  apis: { [path: string]: APIType | undefined };
-};
+  apis: { [path: string]: APIItemValues | undefined };
+}
+
+export class APIItem {
+  values: APIItemValues;
+  constructor(values: APIItemValues) {
+    this.values = values;
+  }
+
+  getRawValues = () => this.values;
+}
 
 export class APIs {
   private jsonPath: string;
-  private apis: APIsType;
+  private port = 1234;
+  private apis: { [name: string]: APIItem | undefined } = {};
 
   constructor(appName: string) {
-    this.jsonPath = `${APPS_DIR}/${appName}/apis.json`;
+    this.jsonPath = `${APPS_DIR}/${appName}/${APIS_JSON_FILE_NAME}`;
     if (isExist(this.jsonPath)) {
-      this.apis = JSON.parse(Deno.readTextFileSync(this.jsonPath));
+      const values: APIValues = JSON.parse(
+        Deno.readTextFileSync(this.jsonPath),
+      );
+      this.port = values.port;
+      for (const name of Object.keys(values.apis)) {
+        this.apis[name] = new APIItem(values.apis[name]!);
+      }
     } else {
-      this.apis = { apis: {}, port: 1234 };
       this.saveAPIsToFile();
     }
   }
 
   private saveAPIsToFile() {
-    if (!this.jsonPath) return;
+    const values: APIValues = { apis: {}, port: this.port };
+    for (const name of Object.keys(this.apis)) {
+      values.apis[name] = this.apis[name]?.getRawValues();
+    }
     Deno.writeTextFileSync(
       this.jsonPath,
-      JSON.stringify(this.apis, undefined, 2),
+      JSON.stringify(values, undefined, 2),
     );
   }
 
-  public getAPIs() {
-    return this.apis.apis;
+  public getAPIItemValueList() {
+    return Object.keys(this.apis)
+      .map((path) => ({ path, api: this.apis[path]!.getRawValues() }));
   }
 
   public getAPI(path: string) {
-    return this.apis.apis[path];
+    return this.apis[path];
   }
 
-  public setAPI(path: string, api: APIType) {
-    this.apis.apis[path] = api;
+  public setAPI(path: string, api: APIItem) {
+    this.apis[path] = api;
     this.saveAPIsToFile();
   }
 
   public deleteAPI(path: string) {
-    if (!this.apis.apis[path]) return false;
-    delete this.apis.apis[path];
+    if (!this.getAPI(path)) return false;
+    delete this.apis[path];
     this.saveAPIsToFile();
     return true;
   }
 
   public getPort() {
-    return this.apis.port;
+    return this.port;
   }
 
   public setPort(port: number) {
-    this.apis.port = port;
+    this.port = port;
     this.saveAPIsToFile();
   }
 }

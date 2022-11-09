@@ -1,7 +1,8 @@
 import { oak } from "../../deps.ts";
 import { authToken } from "../../utils/auth.ts";
-import { APIs } from "../../project_data/apps/apis.ts";
+import { APIItem } from "../../project_data/apps/apis.ts";
 import { APPS_DIR } from "../../project_data/mod.ts";
+import { getApp } from "../../project_data/apps/mod.ts";
 
 const apiRouter = new oak.Router();
 
@@ -11,8 +12,6 @@ const entrances: {
     startedDate: number | null;
   } | undefined;
 } = {};
-
-const apisList: { [name: string]: APIs | undefined } = {};
 
 // API起動状態取得
 // 200 { status: 'started' | 'stop', started_at: number }
@@ -76,9 +75,9 @@ apiRouter.put("/status", authToken, async (ctx) => {
 apiRouter.get("/port", authToken, (ctx) => {
   const { appName } = ctx.params;
   if (!appName) return ctx.response.status = 400;
-  const apisInstance = apisList[appName] ??
-    (apisList[appName] = new APIs(appName));
-  ctx.response.body = { port: apisInstance.getPort() };
+  const apis = getApp(appName)?.apis;
+  if (!apis) return ctx.response.status = 404;
+  ctx.response.body = { port: apis.getPort() };
 });
 
 // ポート設定
@@ -91,9 +90,9 @@ apiRouter.put("/port", authToken, async (ctx) => {
   const { port } = await ctx.request.body({ type: "json" }).value;
   if (!port) return ctx.response.status = 400;
 
-  const apisInstance = apisList[appName] ??
-    (apisList[appName] = new APIs(appName));
-  apisInstance.setPort(port);
+  const apis = getApp(appName)?.apis;
+  if (!apis) return ctx.response.status = 404;
+  apis.setPort(port);
   ctx.response.status = 200;
 });
 
@@ -102,11 +101,10 @@ apiRouter.put("/port", authToken, async (ctx) => {
 apiRouter.get("/endpoint", authToken, (ctx) => {
   const { appName } = ctx.params;
   if (!appName) return ctx.response.status = 400;
-  const apisInstance = apisList[appName] ??
-    (apisList[appName] = new APIs(appName));
+  const apis = getApp(appName)?.apis;
+  if (!apis) return ctx.response.status = 404;
 
-  const apis = apisInstance.getAPIs();
-  const apiList = Object.keys(apis).map((path) => ({ path, api: apis[path] }));
+  const apiList = apis.getAPIItemValueList();
   ctx.response.body = apiList;
 });
 
@@ -124,9 +122,9 @@ apiRouter.post("/endpoint/:path", authToken, async (ctx) => {
     return ctx.response.status = 400;
   }
 
-  const apisInstance = apisList[appName] ??
-    (apisList[appName] = new APIs(appName));
-  apisInstance.setAPI(path, { name, method, type, value });
+  const apis = getApp(appName)?.apis;
+  if (!apis) return ctx.response.status = 404;
+  apis.setAPI(path, new APIItem({ name, method, type, value }));
   ctx.response.status = 200;
 });
 
@@ -139,9 +137,9 @@ apiRouter.get("/endpoint/:path", authToken, (ctx) => {
   const { appName, path } = ctx.params;
   if (!appName) return ctx.response.status = 400;
 
-  const apisInstance = apisList[appName] ??
-    (apisList[appName] = new APIs(appName));
-  const api = apisInstance.getAPI(path);
+  const apis = getApp(appName)?.apis;
+  if (!apis) return ctx.response.status = 404;
+  const api = apis.getAPI(path)?.getRawValues();
   if (api) {
     ctx.response.body = api;
   } else {
@@ -162,9 +160,9 @@ apiRouter.put("/endpoint/:path", authToken, async (ctx) => {
     return ctx.response.status = 400;
   }
 
-  const apisInstance = apisList[appName] ??
-    (apisList[appName] = new APIs(appName));
-  apisInstance.setAPI(path, { name, method, type, value });
+  const apis = getApp(appName)?.apis;
+  if (!apis) return ctx.response.status = 404;
+  apis.setAPI(path, new APIItem({ name, method, type, value }));
   ctx.response.status = 200;
 });
 
@@ -176,9 +174,9 @@ apiRouter.delete("/endpoint/:path", authToken, (ctx) => {
   const { appName, path } = ctx.params;
   if (!appName) return ctx.response.status = 400;
 
-  const apisInstance = apisList[appName] ??
-    (apisList[appName] = new APIs(appName));
-  ctx.response.status = apisInstance.deleteAPI(path) ? 200 : 404;
+  const apis = getApp(appName)?.apis;
+  if (!apis) return ctx.response.status = 404;
+  ctx.response.status = apis.deleteAPI(path) ? 200 : 404;
 });
 
 export default apiRouter;
