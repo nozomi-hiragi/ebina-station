@@ -1,10 +1,10 @@
-import { base64 } from "../../deps.ts";
-import { PasswordAuth } from "../../project_data/members/auth/password.ts";
-import { WebAuthnItemController } from "../../project_data/members/auth/webauthn.ts";
-import { Member } from "../../project_data/members/member.ts";
-import { Members } from "../../project_data/members/mod.ts";
-import { Settings } from "../../project_data/settings/mod.ts";
-import { HttpExeption } from "../utils.ts";
+import { base64 } from "../deps.ts";
+import { PasswordAuth } from "../project_data/members/auth/password.ts";
+import { WebAuthnItemController } from "../project_data/members/auth/webauthn.ts";
+import { Member } from "../project_data/members/member.ts";
+import { Members } from "../project_data/members/mod.ts";
+import { Settings } from "../project_data/settings/mod.ts";
+import { HttpExeption } from "../utils/utils.ts";
 import {
   AttestationOptionUser,
   AttestationResponseJSON,
@@ -12,7 +12,7 @@ import {
   Fido2AssertionOptions,
   Fido2LibOptions,
   Fido2Wrap,
-} from "./fido2Wrap.ts";
+} from "../webauthn/fido2Wrap.ts";
 
 export type ChallengeAction = PasswordAuth;
 
@@ -202,72 +202,4 @@ export const verifyChallengeForAuth = async (
     result,
     actionResult: challengeItem.action && await challengeItem.action(member),
   };
-};
-
-export const deleteAuthenticators = (
-  origin: string,
-  member: Member,
-  deviceNames?: string[],
-) => {
-  const rpID = getRPID(origin);
-  const webAuthnItem = member.getWebAuthnItem(rpID);
-  const authenticatorNames = webAuthnItem?.getAuthenticatorNames() ?? [];
-  if (!webAuthnItem || authenticatorNames.length === 0) {
-    throw new HttpExeption(404, "Disable WebAuthn on this account");
-  }
-
-  const failedNames: string[] = [];
-  authenticatorNames.forEach((name) => {
-    const isTarget = deviceNames?.includes(name) ?? true;
-    if (!isTarget) return;
-    if (webAuthnItem.getAuthenticator(name)) {
-      webAuthnItem.deleteAuthenticator(name);
-    } else {
-      failedNames.push(name);
-    }
-  });
-  member.setWebAuthnItem(rpID, webAuthnItem);
-  Members.instance().setMember(member);
-
-  return failedNames;
-};
-
-export const getRawEnableAuthenticators = (origin: string, member: Member) => {
-  const rpID = getRPID(origin);
-  const webAuthnItem = member.getWebAuthnItem(rpID);
-  const authenticatorNames = webAuthnItem?.getAuthenticatorNames() ?? [];
-
-  if (!webAuthnItem || authenticatorNames.length === 0) {
-    throw new HttpExeption(404, "Disable WebAuthn on this account");
-  }
-
-  return webAuthnItem.getRawEnableDeviceNames();
-};
-
-export const switchEnableAuthenticator = (
-  origin: string,
-  member: Member,
-  deviceName: string,
-  toEnable: boolean,
-) => {
-  const rpID = getRPID(origin);
-  const webAuthnItem = member.getWebAuthnItem(rpID);
-  const authenticatorNames = webAuthnItem?.getAuthenticatorNames() ?? [];
-  if (!webAuthnItem || authenticatorNames.length === 0) {
-    throw new HttpExeption(404, "Disable WebAuthn on this account");
-  }
-
-  if (!authenticatorNames.includes(deviceName)) {
-    throw new HttpExeption(404, "not found this device");
-  }
-
-  if (webAuthnItem.hasEnableDeviceName(deviceName) === toEnable) {
-    return false;
-  } else {
-    if (toEnable) webAuthnItem.addEnableDeviceName(deviceName);
-    else webAuthnItem.deleteEnableDeviceName(deviceName);
-    member.setWebAuthnItem(rpID, webAuthnItem);
-    Members.instance().setMember(member);
-    return true;
-  }
 };

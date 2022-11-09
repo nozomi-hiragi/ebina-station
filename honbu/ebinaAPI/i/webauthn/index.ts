@@ -8,7 +8,7 @@ import {
   getRPID,
   verifyChallengeForAuth,
   verifyChallengeForRegist,
-} from "../../../utils/webauthn/funcs.ts";
+} from "../../../auth_manager/webauthn.ts";
 import deviceRouter from "./device.ts";
 
 const webauthnRouter = new oak.Router();

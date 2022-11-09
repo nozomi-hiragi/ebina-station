@@ -4,7 +4,7 @@ import { Members } from "../../project_data/members/mod.ts";
 import {
   createOptionsForRegist,
   verifyChallengeForRegist,
-} from "../../utils/webauthn/funcs.ts";
+} from "../../auth_manager/webauthn.ts";
 import { HttpExeption } from "../../utils/utils.ts";
 
 const memberRouter = new oak.Router();

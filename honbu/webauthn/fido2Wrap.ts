@@ -4,27 +4,15 @@ import {
   coerceToArrayBuffer,
   coerceToBase64,
   Fido2Lib,
-} from "../../deps.ts";
-
-type Requirement = "discouraged" | "preferred" | "required";
-type ResidentKeyRequirement = Requirement;
-type UserVerificationRequirement = Requirement;
-type AuthenticatorAttachment = "cross-platform" | "platform";
-export type AttestationConveyancePreference = "direct" | "indirect" | "none";
-export type PublicKeyCredentialType = "public-key";
-export type AuthenticatorTransportFuture =
-  | "ble"
-  | "internal"
-  | "nfc"
-  | "usb"
-  | "cable"
-  | "hybrid";
-
-export interface PublicKeyCredentialDescriptor {
-  id: string;
-  transports?: AuthenticatorTransportFuture[];
-  type: PublicKeyCredentialType;
-}
+} from "../deps.ts";
+import {
+  AttestationConveyancePreference,
+  AuthenticatorAttachment,
+  PublicKeyCredentialDescriptor,
+  PublicKeyCredentialType,
+  ResidentKeyRequirement,
+  UserVerificationRequirement,
+} from "./types.ts";
 
 export interface Fido2LibOptions {
   timeout?: number;

@@ -1,7 +1,7 @@
 import {
   AuthenticatorTransportFuture,
   PublicKeyCredentialType,
-} from "../../../utils/webauthn/fido2Wrap.ts";
+} from "../../../webauthn/types.ts";
 
 export type WebAuthnAuthenticator = {
   fmt: string;

@@ -1,4 +1,4 @@
-import { AttestationConveyancePreference } from "../../utils/webauthn/fido2Wrap.ts";
+import { AttestationConveyancePreference } from "../../webauthn/types.ts";
 
 export interface SettingWebAuthnValues {
   rpName: string;

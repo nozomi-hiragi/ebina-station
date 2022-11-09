@@ -12,7 +12,7 @@ import { Members } from "../../project_data/members/mod.ts";
 import {
   createOptionsForAuth,
   verifyChallengeForAuth,
-} from "../../utils/webauthn/funcs.ts";
+} from "../../auth_manager/webauthn.ts";
 import { HttpExeption, randomString } from "../../utils/utils.ts";
 import webauthnRouter from "./webauthn/index.ts";
 import {
