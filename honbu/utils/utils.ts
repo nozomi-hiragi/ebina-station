@@ -12,7 +12,7 @@ export const isExist = (path: string) => {
   try {
     return Deno.statSync(path);
   } catch {
-    return false;
+    return undefined;
   }
 };
 
