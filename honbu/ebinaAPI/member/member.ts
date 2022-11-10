@@ -1,11 +1,7 @@
 import { isString, oak } from "../../deps.ts";
 import { authToken } from "../../auth_manager/token.ts";
 import { Members } from "../../project_data/members/mod.ts";
-import {
-  createOptionsForRegist,
-  verifyChallengeForRegist,
-} from "../../auth_manager/webauthn.ts";
-import { HttpExeption } from "../../utils/utils.ts";
+import { AuthManager, hadleAMErrorToStatus } from "../../auth_manager/mod.ts";
 
 const memberRouter = new oak.Router();
 
@@ -20,21 +16,13 @@ memberRouter.post("/regist/option", async (ctx) => {
   const { id, name, pass } = await ctx.request.body({ type: "json" }).value;
   if (!id || !name || !pass) return ctx.response.status = 400;
 
-  const members = Members.instance();
-  const tempMember = members.registTempMember(id, name, pass);
-  if (!tempMember) return ctx.response.status = 409;
   try {
-    const option = await createOptionsForRegist(origin, tempMember);
+    const option = await AuthManager.instance()
+      .registTempMemberOption(origin, id, name, pass);
     ctx.response.body = option;
     ctx.response.status = 201;
-    return;
   } catch (err) {
-    if (err instanceof HttpExeption) {
-      ctx.response.status = err.status;
-      ctx.response.body = err.message;
-    } else {
-      throw err;
-    }
+    return ctx.response.status = hadleAMErrorToStatus(err);
   }
 });
 
@@ -53,32 +41,12 @@ memberRouter.post("/regist/verify", async (ctx) => {
     return ctx.response.status = 400;
   }
 
-  const members = Members.instance();
-
-  const preRequest = members.popPreRequest(id);
-  if (!preRequest) return ctx.response.status = 404;
-  if (preRequest.token !== token) return ctx.response.status = 401;
-
-  const tempMember = members.getTempMember(id);
-  if (!tempMember) return ctx.response.status = 404;
-
   try {
-    const newMember = await verifyChallengeForRegist(
-      origin,
-      tempMember,
-      "FirstDevice",
-      result,
-    );
-    members.setTempMember(newMember);
+    await AuthManager.instance()
+      .registTempMemberVerify(origin, id, token, result);
     ctx.response.status = 200;
-    return;
   } catch (err) {
-    if (err instanceof HttpExeption) {
-      ctx.response.status = err.status;
-      ctx.response.body = err.message;
-    } else {
-      throw err;
-    }
+    return ctx.response.status = hadleAMErrorToStatus(err);
   }
 });
 

@@ -25,6 +25,7 @@ export interface MemberValues {
 export class Member {
   private id: string;
   private value: MemberValues;
+  private challengeWebAuthn?: { name: string; challenge: string };
 
   constructor(id: string, value: MemberValues) {
     this.id = id;
@@ -90,6 +91,14 @@ export class Member {
     const webauthnAuth = this.value.auth.webAuthn;
     if (!webauthnAuth) return undefined;
     return hasHostname(webauthnAuth, hostname);
+  }
+
+  setChallengeWebAuthn(name: string, challenge: string) {
+    this.challengeWebAuthn = { name, challenge };
+  }
+
+  getChallengeWebAuthn() {
+    return this.challengeWebAuthn;
   }
 
   static create(id: string, name: string, pass: string, admin = false) {

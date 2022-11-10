@@ -1,15 +1,12 @@
 import { oak } from "../../../deps.ts";
-import { Members } from "../../../project_data/members/mod.ts";
-import { authToken, JwtPayload } from "../../../auth_manager/token.ts";
-import { HttpExeption } from "../../../utils/utils.ts";
-import {
-  createOptionsForAuth,
-  createOptionsForRegist,
-  getRPID,
-  verifyChallengeForAuth,
-  verifyChallengeForRegist,
-} from "../../../auth_manager/webauthn.ts";
+import { authToken } from "../../../auth_manager/token.ts";
+import { getRPID } from "../../../auth_manager/webauthn.ts";
 import deviceRouter from "./device.ts";
+import {
+  AuthManager,
+  hadleAMErrorToStatus,
+} from "../../../auth_manager/mod.ts";
+import { randomString } from "../../../utils/utils.ts";
 
 const webauthnRouter = new oak.Router();
 
@@ -22,27 +19,24 @@ const webauthnRouter = new oak.Router();
 webauthnRouter.get("/regist", authToken, async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
-  const payload: JwtPayload = ctx.state.payload!;
-  const memberId = payload.id;
-  const member = Members.instance().getMember(memberId);
-  if (!member) return ctx.response.status = 404;
+  const payload = ctx.state.payload;
+  if (!payload) return ctx.response.status = 401;
+  const deviceName = ctx.request.url.searchParams
+    .get("deviceName") ?? randomString(8);
 
   try {
-    const options = await createOptionsForRegist(origin, member);
-    ctx.response.body = options;
+    const option = await AuthManager.instance()
+      .registWebAuthnOption(origin, payload.id, deviceName);
+    ctx.response.body = option;
+    ctx.response.status = 200;
   } catch (err) {
-    if (err instanceof HttpExeption) {
-      ctx.response.status = err.status;
-      ctx.response.body = err.message;
-    } else {
-      throw err;
-    }
+    return ctx.response.status = hadleAMErrorToStatus(err);
   }
 });
 
 // 登録
 // origin:
-// { ...credential, deviceName }
+// { credential }
 // 200 OK
 // 400 情報おかしい
 // 401 チャレンジ失敗
@@ -53,35 +47,20 @@ webauthnRouter.get("/regist", authToken, async (ctx) => {
 webauthnRouter.post("/regist", authToken, async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
-  const payload: JwtPayload = ctx.state.payload!;
-  const memberId = payload.id;
-  const members = Members.instance();
-  const member = members.getMember(memberId);
-  if (!member) return ctx.response.status = 404;
-
+  const payload = ctx.state.payload;
+  if (!payload) return ctx.response.status = 401;
   const body = await ctx.request.body({ type: "json" }).value;
-  const { deviceName } = body;
-  if (!deviceName) return ctx.response.status = 400;
 
   try {
-    const newMember = await verifyChallengeForRegist(
-      origin,
-      member,
-      deviceName,
-      body,
-    );
-    members.setMember(newMember);
+    const enabledDeviceNames = await AuthManager.instance()
+      .registWebAuthnVerify(origin, payload.id, body)
+      .then((member) =>
+        member.getWebAuthnItem(getRPID(origin))?.getEnableDeviceNames() ?? []
+      );
+    ctx.response.body = enabledDeviceNames;
     ctx.response.status = 200;
-    ctx.response.body = newMember
-      .getWebAuthnItem(getRPID(origin))
-      ?.getEnableDeviceNames() ?? [];
   } catch (err) {
-    if (err instanceof HttpExeption) {
-      ctx.response.status = err.status;
-      ctx.response.body = err.message;
-    } else {
-      throw err;
-    }
+    return ctx.response.status = hadleAMErrorToStatus(err);
   }
 });
 
@@ -95,30 +74,22 @@ webauthnRouter.post("/regist", authToken, async (ctx) => {
 webauthnRouter.get("/verify", authToken, async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
-  const payload: JwtPayload = ctx.state.payload!;
-  const memberId = payload.id;
-  const member = Members.instance().getMember(memberId);
-  if (!member) return ctx.response.status = 404;
+  const payload = ctx.state.payload;
+  if (!payload) return ctx.response.status = 401;
 
   const queryDeviceNames = ctx.request.url.searchParams
     .get("deviceNames") ?? "";
 
   try {
-    const options = await createOptionsForAuth(
+    const options = await AuthManager.instance().checkDevicesOption(
       origin,
-      memberId,
-      undefined,
-      member,
+      payload.id,
       queryDeviceNames ? queryDeviceNames.split(",") : undefined,
     );
     ctx.response.body = options;
+    ctx.response.status = 200;
   } catch (err) {
-    if (err instanceof HttpExeption) {
-      ctx.response.status = err.status;
-      ctx.response.body = err.message;
-    } else {
-      throw err;
-    }
+    return ctx.response.status = hadleAMErrorToStatus(err);
   }
 });
 
@@ -136,23 +107,15 @@ webauthnRouter.get("/verify", authToken, async (ctx) => {
 webauthnRouter.post("/verify", authToken, async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
-  const payload: JwtPayload = ctx.state.payload!;
-  const memberId = payload.id;
-  const member = Members.instance().getMember(memberId);
-  if (!member) return ctx.response.status = 404;
-
+  const payload = ctx.state.payload;
+  if (!payload) return ctx.response.status = 401;
   const body = await ctx.request.body({ type: "json" }).value;
 
   try {
-    await verifyChallengeForAuth(origin, member, body, memberId);
+    await AuthManager.instance().verifyAuthResponse(origin, payload.id, body);
     ctx.response.status = 200;
   } catch (err) {
-    if (err instanceof HttpExeption) {
-      ctx.response.status = err.status;
-      ctx.response.body = err.message;
-    } else {
-      throw err;
-    }
+    return ctx.response.status = hadleAMErrorToStatus(err);
   }
 });
 

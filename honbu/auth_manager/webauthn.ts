@@ -4,35 +4,19 @@ import { WebAuthnItemController } from "../project_data/members/auth/webauthn.ts
 import { Member } from "../project_data/members/member.ts";
 import { Members } from "../project_data/members/mod.ts";
 import { Settings } from "../project_data/settings/mod.ts";
-import { HttpExeption } from "../utils/utils.ts";
 import {
   AttestationOptionUser,
   AttestationResponseJSON,
   AuthenticationResponseJSON,
-  Fido2AssertionOptions,
   Fido2LibOptions,
   Fido2Wrap,
 } from "../webauthn/fido2Wrap.ts";
+import { PublicKeyCredentialDescriptor } from "../webauthn/types.ts";
+import { AuthManagerError } from "./mod.ts";
 
 export type ChallengeAction = PasswordAuth;
 
 // @TODO  メンバー書き換えの方法見直したほうがいい
-
-// deno-lint-ignore no-explicit-any
-type AuthAction = (member: Member) => Promise<any>;
-
-class ChallengeItem {
-  challenge: string;
-  createdAt: Date;
-  action?: AuthAction;
-  constructor(params: { challenge: string; action?: AuthAction }) {
-    this.createdAt = new Date();
-    this.challenge = params.challenge;
-    this.action = params.action;
-  }
-}
-
-const challenges: { [key: string]: ChallengeItem | undefined } = {};
 
 const f2lList: { [id: string]: Fido2Wrap | undefined } = {};
 
@@ -67,7 +51,7 @@ const getF2L = (rpId: string) => {
 export const createOptionsForRegist = async (
   origin: string,
   member: Member,
-  fource = false,
+  deviceName: string,
 ) => {
   const rpID = getRPID(origin);
 
@@ -77,129 +61,97 @@ export const createOptionsForRegist = async (
     displayName: member.getName(),
   };
 
-  const webAuthnItem = member.getWebAuthnItem(rpID) ??
-    new WebAuthnItemController();
-  const excludeCredentials = fource
-    ? []
-    : webAuthnItem.getPublicKeyCredentials();
+  const excludeCredentials = member
+    .getWebAuthnItem(rpID)?.getPublicKeyCredentials();
 
   const options = await getF2L(rpID)
     .attestationOptions({ user, excludeCredentials });
-  const { challenge } = options;
-  challenges[member.getId()] = new ChallengeItem({ challenge });
-
+  member.setChallengeWebAuthn(deviceName, options.challenge);
   return options;
 };
 
 export const verifyChallengeForRegist = async (
   origin: string,
   member: Member,
-  deviceName: string,
-  body: AttestationResponseJSON,
+  response: AttestationResponseJSON,
 ) => {
-  const rpID = getRPID(origin);
+  const challengeItem = member.getChallengeWebAuthn();
+  if (!challengeItem) throw new AuthManagerError("No matching session id");
 
+  const rpID = getRPID(origin);
   const webAuthnItem = member.getWebAuthnItem(rpID) ??
     new WebAuthnItemController();
-  if (webAuthnItem.getAuthenticator(deviceName)) {
-    throw new HttpExeption(400, "Already used this device name");
+  if (webAuthnItem.getAuthenticator(challengeItem.name)) {
+    throw new AuthManagerError("Already used device name");
   }
 
-  const challenge = challenges[member.getId()];
-  if (!challenge) throw new HttpExeption(409, "didn't challenge");
-  delete challenges[member.getId()];
+  try {
+    const result = await getF2L(rpID).attestationResult(response, {
+      challenge: challengeItem.challenge,
+      origin,
+      factor: "either",
+    });
 
-  const result = await getF2L(rpID).attestationResult(body, {
-    challenge: challenge.challenge,
-    origin,
-    factor: "either",
-  });
-
-  webAuthnItem.addAuthenticator(deviceName, {
-    fmt: result.authnrData!.get("fmt"),
-    alg: result.authnrData!.get("alg"),
-    counter: result.authnrData!.get("counter"),
-    aaguid: base64.encode(result.authnrData!.get("aaguid")),
-    credentialID: base64.encode(result.authnrData!.get("credId")),
-    credentialPublicKey: result.authnrData!.get("credentialPublicKeyPem"),
-    transports: result.authnrData!.get("transports"),
-    credentialType: "public-key",
-  });
-  member.setWebAuthnItem(rpID, webAuthnItem);
-
-  return member;
+    webAuthnItem.addAuthenticator(challengeItem.name, {
+      fmt: result.authnrData!.get("fmt"),
+      alg: result.authnrData!.get("alg"),
+      counter: result.authnrData!.get("counter"),
+      aaguid: base64.encode(result.authnrData!.get("aaguid")),
+      credentialID: base64.encode(result.authnrData!.get("credId")),
+      credentialPublicKey: result.authnrData!.get("credentialPublicKeyPem"),
+      transports: result.authnrData!.get("transports"),
+      credentialType: "public-key",
+    });
+    member.setWebAuthnItem(rpID, webAuthnItem);
+    return member;
+  } catch (err) {
+    console.log(err);
+    throw new AuthManagerError("Failed auth");
+  }
 };
 
-export const createOptionsForAuth = async (
+export const createOptionsForAuth = (
   origin: string,
-  challengeId: string,
-  action?: AuthAction,
-  member?: Member,
-  deviceNames?: string[],
+  allowCredentials?: PublicKeyCredentialDescriptor[],
 ) => {
   const rpID = getRPID(origin);
-  const options: Fido2AssertionOptions = {};
-
-  if (member) {
-    const webAuthnItem = member.getWebAuthnItem(rpID);
-    if (!webAuthnItem) throw new HttpExeption(406, "no webauthn authenticator");
-
-    const targetDeviceNames = deviceNames && deviceNames.length !== 0
-      ? deviceNames
-      : webAuthnItem.getEnableDeviceNames();
-
-    options.allowCredentials = webAuthnItem.getPublicKeyCredentials(
-      targetDeviceNames,
-    );
-  }
-
-  const ret = await getF2L(rpID).assertionOptions(options);
-  const { challenge } = ret;
-  challenges[challengeId] = new ChallengeItem({ challenge, action });
-  return ret;
+  return getF2L(rpID).assertionOptions({ allowCredentials });
 };
 
 export const verifyChallengeForAuth = async (
   origin: string,
   member: Member,
-  body: AuthenticationResponseJSON,
-  challengeId: string,
+  response: AuthenticationResponseJSON,
+  challenge: string,
 ) => {
   const rpID = getRPID(origin);
   const webAuthnItem = member.getWebAuthnItem(rpID);
-  if (!webAuthnItem) throw new HttpExeption(400, "wrong rpid");
+  if (!webAuthnItem) throw new AuthManagerError("Wrong rpId");
 
-  const authenticatorSet = webAuthnItem.getAuthenticatorFromCertId(body.id);
-  if (!authenticatorSet) {
-    throw new HttpExeption(404, "Can't find device from this credential id");
-  }
+  const authenticatorSet = webAuthnItem
+    .getAuthenticatorFromCertId(response.id);
+  if (!authenticatorSet) throw new AuthManagerError("No matching session id"); //
   const { deviceName, authenticator } = authenticatorSet;
-  const allowCredentials = webAuthnItem
-    .getPublicKeyCredentials(webAuthnItem.getEnableDeviceNames());
+  const allowCredentials = webAuthnItem.getEnabledPublicKeyCredentials();
 
-  const challengeItem = challenges[challengeId];
-  if (!challengeItem) throw new HttpExeption(409, "invalid challenge");
-  delete challenges[challengeId];
-  const { challenge } = challengeItem;
+  try {
+    const result = await getF2L(rpID).assertionResult(response, {
+      challenge,
+      origin,
+      factor: "either",
+      publicKey: authenticator.credentialPublicKey,
+      prevCounter: authenticator.counter,
+      userHandle: member.getId(),
+      allowCredentials,
+    });
 
-  const result = await getF2L(rpID).assertionResult(body, {
-    challenge,
-    origin,
-    factor: "either",
-    publicKey: authenticator.credentialPublicKey,
-    prevCounter: authenticator.counter,
-    userHandle: member.getId(),
-    allowCredentials,
-  });
-
-  authenticator.counter = result.authnrData!.get("counter");
-  webAuthnItem.setAuthenticator(deviceName, authenticator);
-  member.setWebAuthnItem(rpID, webAuthnItem);
-
-  Members.instance().setMember(member);
-
-  return {
-    result,
-    actionResult: challengeItem.action && await challengeItem.action(member),
-  };
+    authenticator.counter = result.authnrData!.get("counter");
+    webAuthnItem.setAuthenticator(deviceName, authenticator);
+    member.setWebAuthnItem(rpID, webAuthnItem);
+    Members.instance().setMember(member);
+    return result;
+  } catch (err) {
+    console.log(err);
+    throw new AuthManagerError("Failed auth");
+  }
 };

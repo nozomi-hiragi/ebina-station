@@ -1,5 +1,6 @@
 import {
   AuthenticatorTransportFuture,
+  PublicKeyCredentialDescriptor,
   PublicKeyCredentialType,
 } from "../../../webauthn/types.ts";
 
@@ -77,7 +78,7 @@ export class WebAuthnItemController {
       return enableDeviceNames;
     } else {
       const firstAuthenticator = this.getAuthenticatorFromIndex(0);
-      if (!firstAuthenticator) throw new Error("No Authenticators");
+      if (!firstAuthenticator) return undefined;
       return [firstAuthenticator.deviceName];
     }
   }
@@ -98,12 +99,15 @@ export class WebAuthnItemController {
         : Object.values(this.item.authenticators))
         .filter((v) => v) as WebAuthnAuthenticator[];
 
-    return targetAuthenticators
-      .map((authenticator) => ({
-        id: authenticator.credentialID,
-        type: authenticator.credentialType,
-        transports: authenticator.transports,
-      }));
+    return targetAuthenticators.map((authenticator) => ({
+      id: authenticator.credentialID,
+      transports: authenticator.transports,
+      type: authenticator.credentialType,
+    } as PublicKeyCredentialDescriptor));
+  }
+
+  getEnabledPublicKeyCredentials() {
+    return this.getPublicKeyCredentials(this.getEnableDeviceNames());
   }
 }
 
