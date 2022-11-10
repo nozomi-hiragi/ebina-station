@@ -106,10 +106,6 @@ dist
 # sqlite
 *.db
 
-# Token key
-token.key
-refreshtoken.key
-
 .DS_Store
 
 # certbot html

@@ -2,7 +2,7 @@ import { oak } from "../../deps.ts";
 import apiRouter from "./api.ts";
 import jsRouter from "./scripts.ts";
 import cronRouter from "./cron.ts";
-import { authToken } from "../../utils/auth.ts";
+import { authToken } from "../../auth_manager/token.ts";
 import {
   createApp,
   deleteApp,

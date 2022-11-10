@@ -116,3 +116,29 @@ export const caller = () => {
     return { func, file, line };
   }
 };
+
+export const createKey = () =>
+  window.crypto.subtle.generateKey(
+    { name: "HMAC", hash: "SHA-512" },
+    true,
+    ["verify", "sign"],
+  );
+
+export const loadKey = (filename: string) =>
+  Deno.readTextFile(filename).then((keyString) => {
+    return crypto.subtle.importKey(
+      "jwk",
+      JSON.parse(keyString),
+      { name: "HMAC", hash: "SHA-512" },
+      true,
+      ["verify", "sign"],
+    );
+  }).catch((err) => {
+    console.log(err);
+    return undefined;
+  });
+
+export const saveKey = (filename: string, key: CryptoKey) =>
+  crypto.subtle.exportKey("jwk", key).then((exportedKey) =>
+    Deno.writeTextFileSync(filename, `${JSON.stringify(exportedKey)}`)
+  );

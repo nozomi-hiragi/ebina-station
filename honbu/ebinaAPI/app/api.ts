@@ -1,5 +1,5 @@
 import { oak } from "../../deps.ts";
-import { authToken } from "../../utils/auth.ts";
+import { authToken } from "../../auth_manager/token.ts";
 import { APIItem } from "../../project_data/apps/apis.ts";
 import { APPS_DIR } from "../../project_data/mod.ts";
 import { getApp } from "../../project_data/apps/mod.ts";

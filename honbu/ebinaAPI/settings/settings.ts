@@ -1,7 +1,7 @@
 import { oak } from "../../deps.ts";
 import { Settings } from "../../project_data/settings/mod.ts";
 import { SettingWebAuthnValues } from "../../project_data/settings/webauthn.ts";
-import { authToken } from "../../utils/auth.ts";
+import { authToken } from "../../auth_manager/token.ts";
 
 const projectRouter = new oak.Router();
 

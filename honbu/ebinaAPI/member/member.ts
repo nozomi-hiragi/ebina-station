@@ -1,5 +1,5 @@
 import { isString, oak } from "../../deps.ts";
-import { authToken } from "../../utils/auth.ts";
+import { authToken } from "../../auth_manager/token.ts";
 import { Members } from "../../project_data/members/mod.ts";
 import {
   createOptionsForRegist,

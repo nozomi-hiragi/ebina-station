@@ -41,7 +41,7 @@ export class WebAuthnSettings {
   getAttestationType = () => this.values.attestationType;
 
   isRPIDStatic() {
-    switch (this.values.rpIDType) {
+    switch (this.getRpIDType()) {
       case "variable":
         return false;
       default:
@@ -50,10 +50,9 @@ export class WebAuthnSettings {
     }
   }
 
-  getWebAuthnRPID(origin: string) {
-    const rpID = this.isRPIDStatic()
-      ? this.getRpID()
-      : new URL(origin).hostname;
+  getWebAuthnRPID(hostname: string) {
+    const rpID = this.isRPIDStatic() ? this.getRpID() : hostname;
+    if (!rpID) throw new Error("Wrong WebAuthn RpID parameter");
     return rpID;
   }
 }

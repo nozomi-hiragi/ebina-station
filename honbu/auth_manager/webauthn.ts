@@ -37,8 +37,8 @@ const challenges: { [key: string]: ChallengeItem | undefined } = {};
 const f2lList: { [id: string]: Fido2Wrap | undefined } = {};
 
 export const getRPID = (origin: string) => {
-  const rpID = Settings.instance().WebAuthn.getWebAuthnRPID(origin);
-  if (!rpID) throw new HttpExeption(500, "No rpID value");
+  const { hostname } = new URL(origin);
+  const rpID = Settings.instance().WebAuthn.getWebAuthnRPID(hostname);
   return rpID;
 };
 

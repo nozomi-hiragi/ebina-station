@@ -1,6 +1,6 @@
 import { oak } from "../../deps.ts";
 import { getApp } from "../../project_data/apps/mod.ts";
-import { authToken } from "../../utils/auth.ts";
+import { authToken } from "../../auth_manager/token.ts";
 
 const jsRouter = new oak.Router();
 

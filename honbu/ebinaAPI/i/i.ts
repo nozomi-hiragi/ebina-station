@@ -2,11 +2,11 @@ import { isString, oak } from "../../deps.ts";
 import {
   authToken,
   generateTokens,
-  isJwtToken,
+  isTokens,
   refreshTokens,
   removeToken,
   verifyRefreshToken,
-} from "../../utils/auth.ts";
+} from "../../auth_manager/token.ts";
 import { logApi } from "../../utils/log.ts";
 import { Members } from "../../project_data/members/mod.ts";
 import {
@@ -96,7 +96,7 @@ iRouter.post("/login/verify", async (ctx) => {
   try {
     const ret = await verifyChallengeForAuth(origin, member, result, sessionId);
     if (!ret.actionResult) throw new Error("Verify failed");
-    if (!isJwtToken(ret.actionResult)) throw new Error("Recieve wrong result");
+    if (!isTokens(ret.actionResult)) throw new Error("Recieve wrong result");
     const tokens = ret.actionResult;
     ctx.response.body = { member: { ...member.getValue(), id }, tokens };
   } catch (err) {
@@ -229,7 +229,7 @@ iRouter.post("/refresh/verify", async (ctx) => {
         refreshToken,
       );
       if (!ret.actionResult) return ctx.response.status = 401;
-      if (!isJwtToken(ret.actionResult)) return ctx.response.status = 400;
+      if (!isTokens(ret.actionResult)) return ctx.response.status = 400;
       const tokens = ret.actionResult;
       ctx.response.status = 200;
       ctx.response.body = tokens;

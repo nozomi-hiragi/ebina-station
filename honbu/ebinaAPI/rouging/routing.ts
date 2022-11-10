@@ -1,6 +1,6 @@
 import { oak } from "../../deps.ts";
 import { NginxConf, NginxConfs } from "../../project_data/nginx.ts";
-import { authToken } from "../../utils/auth.ts";
+import { authToken } from "../../auth_manager/token.ts";
 import { generateNginxConfsFromJson } from "../../project_data/nginx.ts";
 import {
   execDCCPs,

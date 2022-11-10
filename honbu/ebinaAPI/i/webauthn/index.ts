@@ -1,6 +1,6 @@
 import { oak } from "../../../deps.ts";
 import { Members } from "../../../project_data/members/mod.ts";
-import { authToken, JwtPayload } from "../../../utils/auth.ts";
+import { authToken, JwtPayload } from "../../../auth_manager/token.ts";
 import { HttpExeption } from "../../../utils/utils.ts";
 import {
   createOptionsForAuth,
