@@ -17,7 +17,7 @@ export class CommandOption {
   option: string;
   takeValue: boolean;
   alias: string[];
-  constructor(option: string, ex?: { takeValue: boolean; alias?: string[] }) {
+  constructor(option: string, ex?: { takeValue?: boolean; alias?: string[] }) {
     this.option = option;
     this.takeValue = ex?.takeValue ?? false;
     this.alias = ex?.alias ?? [];
@@ -28,20 +28,21 @@ export class CommandOption {
   }
 }
 
-interface OptionValue {
+export interface OptionValue {
   option: string;
   value?: string;
 }
+export type OnExecute = (options: OptionValue[], command: string[]) => void;
 
 export class Command {
   command: string;
-  onExecute: (options: OptionValue[], command: string[]) => void;
+  onExecute: OnExecute;
   onInteract?: (str: string) => boolean;
   options: CommandOption[];
 
   constructor(
     command: string,
-    onExecute: (options: OptionValue[], command: string[]) => void,
+    onExecute: OnExecute,
     ex?: {
       onInteract?: (str: string) => boolean;
       options?: CommandOption[];
