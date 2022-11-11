@@ -8,7 +8,7 @@ import {
   execDCCRm,
   execDCCUp,
 } from "../../docker/DockerComposeCommand.ts";
-import { ServiceName } from "../../EbinaService.ts";
+import { ServiceName } from "../../ebina_docker_compose.ts";
 
 export const nginxConfs = new NginxConfs();
 

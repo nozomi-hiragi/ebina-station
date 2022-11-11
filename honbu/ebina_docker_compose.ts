@@ -1,12 +1,13 @@
 import { config } from "./deps.ts";
 import { isDockerDesktop } from "./docker/docker.ts";
-import { execDCCRm } from "./docker/DockerComposeCommand.ts";
+import { execDCCRm, execDCCUp } from "./docker/DockerComposeCommand.ts";
 import {
   DockerComposeYamlManager,
   DockerComposeYamlService,
 } from "./docker/DockerComposeYamlManager.ts";
 import { NGINX_DIR, PROJECT_PATH } from "./project_data/mod.ts";
 import { generateNginxConfsFromJson } from "./project_data/nginx.ts";
+import { Settings } from "./project_data/settings/mod.ts";
 import { isExist } from "./utils/utils.ts";
 
 export enum ServiceName {
@@ -77,7 +78,7 @@ const createCertbotSettings = () => {
   } as DockerComposeYamlService;
 };
 
-export const initDockerComposeFile = async (mongodbPort: number) => {
+export const initDockerComposeFile = async () => {
   await Promise.all([
     execDCCRm(ServiceName.Jinji).catch(() => {}),
     execDCCRm(ServiceName.mongodb).catch(() => {}),
@@ -90,11 +91,11 @@ export const initDockerComposeFile = async (mongodbPort: number) => {
 
   const dockerComposeYaml = new DockerComposeYamlManager();
 
-  const isDesktop = await isDockerDesktop();
-
+  const mongodbPort = Settings.instance().Mongodb.getPortNumber();
   const mongoService = createMongoSettings(mongodbPort, envKeys);
   dockerComposeYaml.setService(ServiceName.mongodb, mongoService);
 
+  const isDesktop = await isDockerDesktop();
   const jinjiService = createJinjiSettings(isDesktop);
   dockerComposeYaml.setService(ServiceName.Jinji, jinjiService);
 
@@ -102,4 +103,15 @@ export const initDockerComposeFile = async (mongodbPort: number) => {
   dockerComposeYaml.setService(ServiceName.certbot, certbotService);
 
   dockerComposeYaml.saveToFile();
+};
+
+export const startContainers = async () => {
+  await execDCCUp(ServiceName.mongodb);
+  await execDCCUp(ServiceName.Jinji);
+};
+
+export const removeContainers = () => {
+  return Promise.all([
+    execDCCRm(ServiceName.Jinji).catch((msg) => console.error(msg)),
+  ]);
 };

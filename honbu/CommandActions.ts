@@ -1,5 +1,5 @@
 import { execDCCRestart, execDCCRun } from "./docker/DockerComposeCommand.ts";
-import { ServiceName } from "./EbinaService.ts";
+import { ServiceName } from "./ebina_docker_compose.ts";
 import { generateNginxConfsFromJson } from "./project_data/nginx.ts";
 import { nginxConfs } from "./ebinaAPI/rouging/routing.ts";
 import { Members } from "./project_data/members/mod.ts";
