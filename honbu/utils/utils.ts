@@ -51,19 +51,6 @@ export class ReaderBuffer {
   message = () => this._msg;
 }
 
-export const readReader = async (
-  reader: Deno.Reader,
-  callback: (msg: string) => boolean | undefined | void,
-) => {
-  const rb = new ReaderBuffer(reader);
-  while (await rb.read() !== null) {
-    for (const msg of rb.message().split("\n")) {
-      if (msg.indexOf("\0") === 0) continue;
-      if (callback(msg)) return;
-    }
-  }
-};
-
 export class RunCommandExeption extends Error {
   command: string;
   status: number;
