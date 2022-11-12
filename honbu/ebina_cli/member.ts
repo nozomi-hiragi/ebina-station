@@ -3,7 +3,6 @@ import { Members } from "../project_data/members/mod.ts";
 
 export const createMemeberCommand = () =>
   new Command("member", (options) => {
-    console.log(options);
     if (options.length < 2) {
       console.log("not enough options");
       return;

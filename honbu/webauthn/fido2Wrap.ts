@@ -147,7 +147,7 @@ export class Fido2Wrap {
         ...options.user,
         displayName: options.user.displayName ?? options.user.name,
       },
-      excludeCredentials: options.excludeCredentials,
+      excludeCredentials: options.excludeCredentials ?? [],
     };
     if (ret.authenticatorSelection) {
       if (ret.authenticatorSelection?.requireResidentKey) {

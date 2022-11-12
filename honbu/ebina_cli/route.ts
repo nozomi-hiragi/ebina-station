@@ -1,9 +1,11 @@
 import { certCertbot } from "../action_delegate/certbot.ts";
 import { Command, CommandOption } from "../cli.ts";
 import { execDCCRestart } from "../docker/DockerComposeCommand.ts";
-import { nginxConfs } from "../ebinaAPI/rouging/routing.ts";
 import { ServiceName } from "../ebina_docker_compose.ts";
-import { generateNginxConfsFromJson } from "../project_data/nginx.ts";
+import {
+  generateNginxConfsFromJson,
+  NginxConfs,
+} from "../project_data/nginx.ts";
 
 const executeAddRoute = (
   name: string,
@@ -13,6 +15,7 @@ const executeAddRoute = (
   certbot?: boolean,
   email?: string,
 ) => {
+  const nginxConfs = NginxConfs.instance();
   if (nginxConfs.getConf(name)) {
     console.log("this name is already used");
     return;

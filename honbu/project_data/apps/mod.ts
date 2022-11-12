@@ -33,11 +33,10 @@ export const initApps = () => {
       const appName = dir.name;
       loadApp(appName);
     }
-    if (Object.keys(apps).length === 0) {
-      createApp(FIRST_APP_NAME);
-    }
-  } catch (err) {
-    console.log(err);
+    // deno-lint-ignore no-empty
+  } catch {}
+  if (Object.keys(apps).length === 0) {
+    createApp(FIRST_APP_NAME);
   }
 };
 

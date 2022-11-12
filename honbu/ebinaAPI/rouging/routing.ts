@@ -10,13 +10,11 @@ import {
 } from "../../docker/DockerComposeCommand.ts";
 import { ServiceName } from "../../ebina_docker_compose.ts";
 
-export const nginxConfs = new NginxConfs();
-
 const routingRouter = new oak.Router();
 
 // ルート一覧
 routingRouter.get("/", authToken, (ctx) => {
-  const confs = nginxConfs.getConfs();
+  const confs = NginxConfs.instance().getConfs();
   ctx.response.status = 200;
   ctx.response.body = Object.keys(confs);
 });
@@ -24,7 +22,7 @@ routingRouter.get("/", authToken, (ctx) => {
 // ルート詳細
 routingRouter.get("/route/:route", authToken, (ctx) => {
   const { route } = ctx.params;
-  const conf = nginxConfs.getConf(route);
+  const conf = NginxConfs.instance().getConf(route);
   if (conf) {
     ctx.response.status = 200;
     ctx.response.body = conf;
@@ -43,6 +41,7 @@ routingRouter.post("/route/:route", authToken, async (ctx) => {
   ) {
     return ctx.response.status = 400;
   }
+  const nginxConfs = NginxConfs.instance();
   if (nginxConfs.getConf(route)) {
     return ctx.response.status = 409;
   }
@@ -53,7 +52,7 @@ routingRouter.post("/route/:route", authToken, async (ctx) => {
 // ルート削除
 routingRouter.delete("/route/:route", authToken, (ctx) => {
   const { route } = ctx.params;
-  ctx.response.status = nginxConfs.deleteConf(route) ? 200 : 404;
+  ctx.response.status = NginxConfs.instance().deleteConf(route) ? 200 : 404;
 });
 
 // ルート更新
@@ -62,7 +61,7 @@ routingRouter.put("/route/:route", authToken, async (ctx) => {
   const body = await ctx.request.body({ type: "json" }).value;
 
   let isChanged = false;
-  const conf = nginxConfs.getConf(route);
+  const conf = NginxConfs.instance().getConf(route);
   if (!conf) return ctx.response.status = 404;
   if (body.hostname !== undefined) {
     conf.hostname = body.hostname;
@@ -74,7 +73,7 @@ routingRouter.put("/route/:route", authToken, async (ctx) => {
   }
 
   if (isChanged) {
-    nginxConfs.setConf(route, conf);
+    NginxConfs.instance().setConf(route, conf);
     ctx.response.status = 201;
   } else {
     ctx.response.status = 200;

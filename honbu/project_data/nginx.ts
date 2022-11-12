@@ -37,9 +37,14 @@ type NginxConfJson = {
 };
 
 export class NginxConfs {
-  private confs: NginxConfJson;
-
-  constructor() {
+  private static _instance: NginxConfs;
+  public static instance() {
+    if (!this._instance) {
+      this._instance = new NginxConfs();
+    }
+    return this._instance;
+  }
+  private constructor() {
     if (isExist(NGINX_CONFS_FILE_PATH)) {
       this.confs = JSON.parse(Deno.readTextFileSync(NGINX_CONFS_FILE_PATH));
     } else {
@@ -47,6 +52,8 @@ export class NginxConfs {
       this.saveConfsToJson();
     }
   }
+
+  private confs: NginxConfJson;
 
   private saveConfsToJson() {
     Deno.writeTextFileSync(
