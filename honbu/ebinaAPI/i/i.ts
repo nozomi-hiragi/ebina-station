@@ -1,5 +1,5 @@
 import { isString, oak } from "../../deps.ts";
-import { authToken, isTokens } from "../../auth_manager/token.ts";
+import { authToken } from "../../auth_manager/token.ts";
 import { Members } from "../../project_data/members/mod.ts";
 import webauthnRouter from "./webauthn/index.ts";
 import { AuthManager, hadleAMErrorToStatus } from "../../auth_manager/mod.ts";
@@ -45,14 +45,14 @@ iRouter.post("/login/verify", async (ctx) => {
   const id = result.response.userHandle;
 
   try {
-    const tokens = await AuthManager.instance()
+    const token = await AuthManager.instance()
       .verifyAuthResponse(origin, id, result, sessionId);
-    if (!isTokens(tokens)) return ctx.response.status = 502;
+    if (!isString(token)) return ctx.response.status = 502;
 
     // @TODO 暫定メンバー返し
     const member = Members.instance().getMember(id)!;
 
-    ctx.response.body = { member: { ...member.getValue(), id }, tokens };
+    ctx.response.body = { member: { ...member.getValue(), id }, token };
     ctx.response.status = 200;
   } catch (err) {
     return ctx.response.status = hadleAMErrorToStatus(err);
@@ -78,13 +78,13 @@ iRouter.post("/login", async (ctx) => {
   if (!id || !pass) return ctx.response.status = 400;
 
   try {
-    const tokens = await AuthManager.instance()
+    const token = await AuthManager.instance()
       .loginWithPassword(hostname, id, pass);
 
     // @TODO 暫定メンバー返し
     const member = Members.instance().getMember(id)!;
 
-    ctx.response.body = { member: { ...member.getValue(), id: id }, tokens };
+    ctx.response.body = { member: { ...member.getValue(), id: id }, token };
     ctx.response.status = 200;
   } catch (err) {
     return ctx.response.status = hadleAMErrorToStatus(err);
@@ -93,11 +93,10 @@ iRouter.post("/login", async (ctx) => {
 
 // ログアウト サーバー内のトークン消す
 // 200 消せた
-// 401 無かった
 iRouter.post("/logout", authToken, (ctx) => {
   const payload = ctx.state.payload;
   if (!payload) return ctx.response.status = 401;
-  ctx.response.status = AuthManager.instance().logout(payload.id) ? 200 : 401;
+  ctx.response.status = 200;
 });
 
 // トークン使えるか確認

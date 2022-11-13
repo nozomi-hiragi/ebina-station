@@ -7,7 +7,7 @@ import {
   AttestationResponseJSON,
   AuthenticationResponseJSON,
 } from "../webauthn/fido2Wrap.ts";
-import { generateTokens, removeToken } from "./token.ts";
+import { generateTokens } from "./token.ts";
 import {
   createOptionsForAuth,
   createOptionsForRegist,
@@ -193,7 +193,7 @@ export class AuthManager {
       if (member) {
         const rpID = getRPID(origin);
         const webAuthnItem = member.getWebAuthnItem(rpID);
-        if (!webAuthnItem) throw new AuthManagerError("No WebAuthn auth");
+        if (!webAuthnItem) return { type: "Password" };
         allowCredentials = webAuthnItem.getEnabledPublicKeyCredentials();
       } else {
         throw new AuthManagerError("No member");
@@ -302,11 +302,5 @@ export class AuthManager {
     return challengeItem.action
       ? await challengeItem.action(member)
       : undefined;
-  }
-
-  // logout
-
-  logout(id: string) {
-    return removeToken(id);
   }
 }
