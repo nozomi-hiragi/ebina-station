@@ -6,6 +6,15 @@ import { AuthManager, hadleAMErrorToStatus } from "../../auth_manager/mod.ts";
 
 const iRouter = new oak.Router();
 
+// メンバー取得
+iRouter.get("/", authToken, (ctx) => {
+  const payload = ctx.state.payload;
+  if (!payload) return ctx.response.status = 500;
+  const member = Members.instance().getMember(payload.id);
+  ctx.response.body = member?.getValue();
+  ctx.response.status = 200;
+});
+
 // ログインオプション
 // origin:
 // :id
@@ -29,7 +38,7 @@ iRouter.post("/login/option", async (ctx) => {
 
 // 認証でログイン
 // { ...ret, response.serHandle }
-// 200 ユーザーとトークン
+// 200 トークン
 // 400 情報足らない
 // 404 メンバーない
 // 500 WebAuthn設定おかしい
@@ -49,10 +58,7 @@ iRouter.post("/login/verify", async (ctx) => {
       .verifyAuthResponse(origin, id, result, sessionId);
     if (!isString(token)) return ctx.response.status = 502;
 
-    // @TODO 暫定メンバー返し
-    const member = Members.instance().getMember(id)!;
-
-    ctx.response.body = { member: { ...member.getValue(), id }, token };
+    ctx.response.body = token;
     ctx.response.status = 200;
   } catch (err) {
     return ctx.response.status = hadleAMErrorToStatus(err);
@@ -61,7 +67,7 @@ iRouter.post("/login/verify", async (ctx) => {
 
 // パスワードでログイン
 // { type, id, pass }
-// 200 ユーザーとトークン
+// 200 トークン
 // 400 情報足らない
 // 403 パスワードが違う
 // 404 メンバーない
@@ -81,10 +87,7 @@ iRouter.post("/login", async (ctx) => {
     const token = await AuthManager.instance()
       .loginWithPassword(hostname, id, pass);
 
-    // @TODO 暫定メンバー返し
-    const member = Members.instance().getMember(id)!;
-
-    ctx.response.body = { member: { ...member.getValue(), id: id }, token };
+    ctx.response.body = token;
     ctx.response.status = 200;
   } catch (err) {
     return ctx.response.status = hadleAMErrorToStatus(err);
