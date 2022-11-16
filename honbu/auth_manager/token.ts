@@ -22,7 +22,11 @@ export const generateTokens = async (id: string) => {
 
 const verifyToken = (token: string, key: CryptoKey) =>
   djwt.verify(token, key)
+    .then((payload) =>
+      djwt.validate([{ alg: "" }, payload, new Uint8Array()]).payload
+    )
     .then((payload) => payload as JwtPayload)
+    .catch((_: RangeError) => undefined)
     .catch((err) => {
       console.log(err);
       return undefined;
@@ -50,6 +54,6 @@ export const authToken = async (
     ctx.state.payload = payload;
     await next();
   } else {
-    ctx.response.status = 403;
+    ctx.response.status = 401;
   }
 };

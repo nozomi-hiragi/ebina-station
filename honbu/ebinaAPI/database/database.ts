@@ -94,7 +94,7 @@ databaseRouter.post("/user", authToken, async (ctx) => {
     roles?: { role: string; db: string }[];
   } = body;
   if (!username || !password || !roles) {
-    return ctx.response.status = 401;
+    return ctx.response.status = 400;
   }
 
   await initClient();
@@ -111,7 +111,7 @@ databaseRouter.post("/user", authToken, async (ctx) => {
 databaseRouter.delete("/user/:username", authToken, async (ctx) => {
   const { username }: { username?: string } = ctx.params;
   if (!username) {
-    return ctx.response.status = 401;
+    return ctx.response.status = 400;
   }
   await initClient();
   const db = client.database("admin");
