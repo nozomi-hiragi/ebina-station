@@ -2,6 +2,7 @@ import { PROJECT_PATH, SETTINGS_FILE_PATH } from "../mod.ts";
 import { MemberSettings, SettingMemberValues } from "./member.ts";
 import { MongodbSettings, SettingMongodbValues } from "./mongodb.ts";
 import { SettingWebAuthnValues, WebAuthnSettings } from "./webauthn.ts";
+import { SettingWebPushValues, WebPushSettings } from "./webpush.ts";
 
 const DEFAULT_PORT_NUM = 3456;
 const DEFAULT_ORIGINS = [
@@ -16,6 +17,7 @@ interface SettingsValues {
   Member: SettingMemberValues;
   WebAuthn: SettingWebAuthnValues;
   Mongodb: SettingMongodbValues;
+  WebPush: SettingWebPushValues;
 }
 
 export class Settings {
@@ -32,6 +34,7 @@ export class Settings {
   Member = new MemberSettings();
   WebAuthn = new WebAuthnSettings();
   Mongodb = new MongodbSettings();
+  WebPush = new WebPushSettings();
 
   fromValies(values: SettingsValues) {
     this.port = values.port;
@@ -39,6 +42,7 @@ export class Settings {
     this.Member = new MemberSettings(values.Member);
     this.WebAuthn = new WebAuthnSettings(values.WebAuthn);
     this.Mongodb = new MongodbSettings(values.Mongodb);
+    this.WebPush = new WebPushSettings(values.WebPush);
   }
 
   toValues(): SettingsValues {
@@ -48,6 +52,7 @@ export class Settings {
       Member: this.Member.getRawValue(),
       WebAuthn: this.WebAuthn.getRawValue(),
       Mongodb: this.Mongodb.getRawValue(),
+      WebPush: this.WebPush.getRawValue(),
     };
   }
 

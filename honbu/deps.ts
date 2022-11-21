@@ -10,7 +10,7 @@ export { isString } from "https://deno.land/std@0.158.0/encoding/_yaml/utils.ts"
 export { Cron } from "https://deno.land/x/croner@5.3.2/src/croner.js";
 export * as mongodb from "https://deno.land/x/mongo@v0.31.1/mod.ts";
 export { Mutex } from "https://deno.land/x/semaphore@v1.1.1/mod.ts";
-export * as base64 from "https://deno.land/std@0.160.0/encoding/base64url.ts";
+export * as base64url from "https://deno.land/std@0.160.0/encoding/base64url.ts";
 export * as log from "https://deno.land/std@0.160.0/log/mod.ts";
 export * as bcrypt from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
 export * as djwt from "https://deno.land/x/djwt@v2.7/mod.ts";

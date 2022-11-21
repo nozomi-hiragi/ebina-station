@@ -3,6 +3,7 @@ import { authToken } from "../../auth_manager/token.ts";
 import { Members } from "../../project_data/members/mod.ts";
 import webauthnRouter from "./webauthn/index.ts";
 import { AuthManager, hadleAMErrorToStatus } from "../../auth_manager/mod.ts";
+import webpushRouter from "./webpush.ts";
 
 const iRouter = new oak.Router();
 
@@ -148,5 +149,6 @@ iRouter.put("/password", authToken, async (ctx) => {
 });
 
 iRouter.use("/webauthn", webauthnRouter.routes());
+iRouter.use("/webpush", webpushRouter.routes());
 
 export default iRouter;

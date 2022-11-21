@@ -1,4 +1,4 @@
-import { base64 } from "../deps.ts";
+import { base64url } from "../deps.ts";
 import { PasswordAuth } from "../project_data/members/auth/password.ts";
 import { WebAuthnItemController } from "../project_data/members/auth/webauthn.ts";
 import { Member } from "../project_data/members/member.ts";
@@ -96,8 +96,8 @@ export const verifyChallengeForRegist = async (
       fmt: result.authnrData!.get("fmt"),
       alg: result.authnrData!.get("alg"),
       counter: result.authnrData!.get("counter"),
-      aaguid: base64.encode(result.authnrData!.get("aaguid")),
-      credentialID: base64.encode(result.authnrData!.get("credId")),
+      aaguid: base64url.encode(result.authnrData!.get("aaguid")),
+      credentialID: base64url.encode(result.authnrData!.get("credId")),
       credentialPublicKey: result.authnrData!.get("credentialPublicKeyPem"),
       transports: result.authnrData!.get("transports"),
       credentialType: "public-key",

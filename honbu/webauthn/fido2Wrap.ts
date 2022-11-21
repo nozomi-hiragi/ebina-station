@@ -1,6 +1,6 @@
 import {
   abToBuf,
-  base64,
+  base64url,
   coerceToArrayBuffer,
   coerceToBase64,
   Fido2Lib,
@@ -220,7 +220,7 @@ export class Fido2Wrap {
     }, {
       ...expectations,
       userHandle: expectations.userHandle
-        ? base64.encode(expectations.userHandle)
+        ? base64url.encode(expectations.userHandle)
         : undefined,
 
       // Level3暫定対応

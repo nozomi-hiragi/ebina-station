@@ -8,6 +8,7 @@ import {
   WebAuthn,
   WebAuthnItemController,
 } from "./auth/webauthn.ts";
+import { PushSubscriptionJSON, WebPushParams } from "./webpush.ts";
 
 type Flags = {
   admin?: boolean;
@@ -19,6 +20,7 @@ export interface MemberValues {
     password?: PasswordAuth;
     webAuthn?: WebAuthn;
   };
+  webpush?: WebPushParams;
   flags?: Flags;
 }
 
@@ -34,7 +36,7 @@ export class Member {
 
   getId = () => this.id;
   getRawValue = () => this.value;
-  getValue = () => ({ ...(this.value), auth: undefined });
+  getValue = () => ({ ...(this.value), auth: undefined, webpush: undefined });
   getName = () => this.value.name;
 
   hasWebAuthnAuth = () => this.value.auth.webAuthn !== undefined;
@@ -99,6 +101,32 @@ export class Member {
 
   getChallengeWebAuthn() {
     return this.challengeWebAuthn;
+  }
+
+  getWebPushDeviceNames() {
+    return this.value.webpush
+      ? Object.keys(this.value.webpush.devices)
+      : undefined;
+  }
+
+  getWebPushDevice(name: string) {
+    return this.value.webpush?.devices[name];
+  }
+
+  deleteWebPushDevice(name: string) {
+    if (!this.value.webpush) return undefined;
+    if (this.value.webpush.devices[name]) {
+      delete this.value.webpush.devices[name];
+      return true;
+    }
+    return false;
+  }
+
+  setWPSubscription(name: string, subscription: PushSubscriptionJSON) {
+    if (!this.value.webpush) this.value.webpush = { devices: {} };
+    const device = this.value.webpush.devices[name];
+    this.value.webpush.devices[name] = { ...device, subscription };
+    return device !== undefined;
   }
 
   static create(id: string, name: string, pass: string, admin = false) {

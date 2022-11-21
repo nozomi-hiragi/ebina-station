@@ -1,4 +1,4 @@
-import { base64 } from "../deps.ts";
+import { base64url } from "../deps.ts";
 
 export const mkdirIfNotExist = (path: string) => {
   try {
@@ -27,7 +27,7 @@ export class HttpExeption extends Error {
 export const randomString = (len: number) => {
   const bytes = new Uint8Array((len * 6) / 8);
   crypto.getRandomValues(bytes);
-  return base64.encode(bytes);
+  return base64url.encode(bytes);
 };
 
 export class ReaderBuffer {
@@ -129,3 +129,20 @@ export const saveKey = (filename: string, key: CryptoKey) =>
   crypto.subtle.exportKey("jwk", key).then((exportedKey) =>
     Deno.writeTextFileSync(filename, `${JSON.stringify(exportedKey)}`)
   );
+
+export const generateVAPIDKeys = async () => {
+  const keyPair = await crypto.subtle.generateKey(
+    { name: "ECDH", namedCurve: "P-256" },
+    true,
+    ["deriveKey"],
+  );
+
+  const publicKey = base64url.encode(
+    await crypto.subtle.exportKey("raw", keyPair.publicKey),
+  );
+  const privateKey = (
+    await crypto.subtle.exportKey("jwk", keyPair.privateKey)
+  ).d!;
+
+  return { publicKey, privateKey };
+};

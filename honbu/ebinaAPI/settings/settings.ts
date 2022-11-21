@@ -11,7 +11,7 @@ projectRouter.get("/webauthn", authToken, (ctx) => {
   if (!webauthnSettings) {
     return ctx.response.status = 503;
   }
-  ctx.response.body = webauthnSettings;
+  ctx.response.body = webauthnSettings.getRawValue();
 });
 
 projectRouter.post("/webauthn", authToken, async (ctx) => {
