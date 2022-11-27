@@ -15,3 +15,4 @@ export * as log from "https://deno.land/std@0.160.0/log/mod.ts";
 export * as bcrypt from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
 export * as djwt from "https://deno.land/x/djwt@v2.7/mod.ts";
 export * from "https://deno.land/x/fido2@3.3.4/dist/main.js";
+export { default as qrcode } from "https://deno.land/x/qrcode_terminal@v1.1.1/mod.js";

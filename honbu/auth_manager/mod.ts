@@ -2,7 +2,7 @@ import { createPasswordAuth } from "../project_data/members/auth/password.ts";
 import { Member } from "../project_data/members/member.ts";
 import { Members } from "../project_data/members/mod.ts";
 import { Settings } from "../project_data/settings/mod.ts";
-import { randomString } from "../utils/utils.ts";
+import { randomBase64url } from "../utils/utils.ts";
 import {
   AttestationResponseJSON,
   AuthenticationResponseJSON,
@@ -26,7 +26,8 @@ export type AuthManagerErrorType =
   | "No matching session id"
   | "Already used device name"
   | "Already used id"
-  | "No pre request";
+  | "No pre request"
+  | "Expired";
 
 export class AuthManagerError extends Error {
   type: AuthManagerErrorType;
@@ -116,28 +117,31 @@ export class AuthManager {
 
   // Regist temp user
 
-  requestRegistNewMemeber(id: string, ip: string) {
+  getRegistNewMemeberToken(from: string) {
     const members = Members.instance();
-    const member = members.getMember(id);
     if (
-      member || !Settings.instance().Member
-        .canRegistNewMember(members.allMemberCount())
+      !Settings.instance().Member.canRegistNewMember(members.allMemberCount())
     ) return undefined;
-
-    const token = randomString(32);
-    members.setPreRequest(id, ip, token);
-    return { type: "Regist", token };
+    const token = randomBase64url(32);
+    members.setPreRequest(token, from);
+    return token;
   }
 
   registTempMemberOption(
     origin: string,
+    token: string,
     id: string,
     name: string,
     password: string,
     deviceName = "FirstDevice",
   ) {
     const members = Members.instance();
-    const tempMember = members.registTempMember(id, name, password);
+    if (members.getMember(id)) throw new AuthManagerError("Already used id");
+    const preRequest = members.popPreRequest(token);
+    if (preRequest === null) throw new AuthManagerError("Expired");
+    if (!preRequest) throw new AuthManagerError("No matching session id");
+    const tempMember = members
+      .registTempMember(preRequest.from, id, name, password);
     if (!tempMember) throw new AuthManagerError("Already used id");
     return createOptionsForRegist(origin, tempMember, deviceName);
   }
@@ -145,21 +149,15 @@ export class AuthManager {
   async registTempMemberVerify(
     origin: string,
     id: string,
-    token: string,
     response: AttestationResponseJSON,
   ) {
     const members = Members.instance();
-    const preRequest = members.popPreRequest(id);
-    if (!preRequest) throw new AuthManagerError("No pre request");
-    if (preRequest.token !== token) {
-      throw new AuthManagerError("No matching session id");
-    }
     const tempMember = members.getTempMember(id);
     if (!tempMember) throw new AuthManagerError("No member");
 
-    return await verifyChallengeForRegist(origin, tempMember, response)
+    return await verifyChallengeForRegist(origin, tempMember.member, response)
       .then((newMember) => {
-        members.setTempMember(newMember);
+        members.setTempMember(tempMember.from, newMember);
         return newMember;
       });
   }
@@ -201,7 +199,7 @@ export class AuthManager {
     }
 
     const options = await createOptionsForAuth(origin, allowCredentials);
-    const sessionId = randomString(16);
+    const sessionId = randomBase64url(16);
     AuthChallenge.set(
       sessionId,
       options.challenge,

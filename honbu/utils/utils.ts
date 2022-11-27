@@ -24,7 +24,7 @@ export class HttpExeption extends Error {
   }
 }
 
-export const randomString = (len: number) => {
+export const randomBase64url = (len: number) => {
   const bytes = new Uint8Array((len * 6) / 8);
   crypto.getRandomValues(bytes);
   return base64url.encode(bytes);

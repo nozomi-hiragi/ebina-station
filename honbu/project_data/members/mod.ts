@@ -3,8 +3,13 @@ import { Member, MemberValues } from "./member.ts";
 
 interface MembersValues {
   members: { [id: string]: MemberValues };
-  temp?: { [id: string]: MemberValues };
+  temp?: { [id: string]: { from: string; member: MemberValues } };
 }
+
+const EXPIRE_TIME_MS = 30 * 60 * 1000;
+const checkExpire = (date: Date) => {
+  return (date.getTime() + EXPIRE_TIME_MS) < Date.now();
+};
 
 export class Members {
   private static _instance: Members;
@@ -15,8 +20,9 @@ export class Members {
   private constructor() {}
 
   members: { [id: string]: Member | undefined } = {};
-  temp: { [id: string]: Member | undefined } = {};
-  preRquests: { [id: string]: { ip: string; token: string } | undefined } = {};
+  temp: { [id: string]: { from: string; member: Member } | undefined } = {};
+  preRquests: { [token: string]: { from: string; date: Date } | undefined } =
+    {};
 
   load() {
     try {
@@ -27,8 +33,12 @@ export class Members {
         .forEach((id) => this.members[id] = new Member(id, value.members[id]));
       if (value.temp) {
         const temp = value.temp;
-        Object.keys(temp)
-          .forEach((id) => this.temp[id] = new Member(id, temp[id]));
+        Object.keys(temp).forEach((id) =>
+          this.temp[id] = {
+            from: temp[id].from,
+            member: new Member(id, temp[id].member),
+          }
+        );
       }
     } catch {
       return false;
@@ -44,7 +54,10 @@ export class Members {
       if (this.temp && Object.keys(this.temp).length !== 0) {
         value.temp = {};
         Object.values(this.temp).forEach((member) =>
-          value.temp![member!.getId()] = member!.getRawValue()
+          value.temp![member!.member.getId()] = {
+            from: member!.from,
+            member: member!.member.getRawValue(),
+          }
         );
       }
       Deno.writeTextFileSync(
@@ -112,18 +125,19 @@ export class Members {
     return this.temp;
   }
 
-  setTempMember(member: Member) {
-    this.temp[member.getId()] = member;
+  setTempMember(from: string, member: Member) {
+    this.temp[member.getId()] = { from, member };
     this.save();
   }
 
-  addTempMember(member: Member) {
+  addTempMember(from: string, member: Member) {
     if (this.temp[member.getId()]) return false;
-    this.setTempMember(member);
+    this.setTempMember(from, member);
     return true;
   }
 
   registTempMember(
+    from: string,
     id: string,
     name: string,
     pass: string,
@@ -131,7 +145,7 @@ export class Members {
   ) {
     if (this.getMember(id)) return undefined;
     const member = Member.create(id, name, pass, admin);
-    return this.addTempMember(member) ? member : undefined;
+    return this.addTempMember(from, member) ? member : undefined;
   }
 
   admitTempMember(id: string) {
@@ -139,7 +153,7 @@ export class Members {
     if (!temp) return undefined;
     if (this.getMember(id)) return false;
     delete this.temp[id];
-    this.setMember(temp);
+    this.setMember(temp.member);
     return true;
   }
 
@@ -151,14 +165,22 @@ export class Members {
     return true;
   }
 
-  setPreRequest(id: string, ip: string, token: string) {
-    this.preRquests[id] = { ip, token };
+  setPreRequest(token: string, from: string) {
+    this.preRquests[token] = { from, date: new Date() };
+    const keys = Object.keys(this.preRquests);
+    for (const key of keys) {
+      const value = this.preRquests[key]!;
+      if (checkExpire(value.date)) delete this.preRquests[key];
+    }
     // @TODO ログだしてもいいかも
   }
 
-  popPreRequest(id: string) {
-    const request = this.preRquests[id];
-    if (request) delete this.preRquests[id];
+  popPreRequest(token: string) {
+    const request = this.preRquests[token];
+    if (request) {
+      delete this.preRquests[token];
+      if (checkExpire(request.date)) return null;
+    }
     return request;
   }
 }

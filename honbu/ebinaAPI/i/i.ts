@@ -27,10 +27,8 @@ iRouter.post("/login/option", async (ctx) => {
   const body = await ctx.request.body({ type: "json" }).value;
   const id: string | undefined = body.id;
   try {
-    const am = AuthManager.instance();
-    const ret = id && am.requestRegistNewMemeber(id, ctx.request.ip);
-    if (ret) ctx.response.body = ret;
-    else ctx.response.body = await am.loginWebAuthnOption(origin, id);
+    ctx.response.body = await AuthManager.instance()
+      .loginWebAuthnOption(origin, id);
     ctx.response.status = 202;
   } catch (err) {
     return ctx.response.status = hadleAMErrorToStatus(err);

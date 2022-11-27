@@ -6,7 +6,7 @@ import {
   AuthManager,
   hadleAMErrorToStatus,
 } from "../../../auth_manager/mod.ts";
-import { randomString } from "../../../utils/utils.ts";
+import { randomBase64url } from "../../../utils/utils.ts";
 
 const webauthnRouter = new oak.Router();
 
@@ -22,7 +22,7 @@ webauthnRouter.get("/regist", authToken, async (ctx) => {
   const payload = ctx.state.payload;
   if (!payload) return ctx.response.status = 401;
   const deviceName = ctx.request.url.searchParams
-    .get("deviceName") ?? randomString(8);
+    .get("deviceName") ?? randomBase64url(8);
 
   try {
     const option = await AuthManager.instance()

@@ -1,9 +1,48 @@
 import { isString, oak } from "../../deps.ts";
-import { authToken } from "../../auth_manager/token.ts";
+import { authToken, JwtPayload } from "../../auth_manager/token.ts";
 import { Members } from "../../project_data/members/mod.ts";
 import { AuthManager, hadleAMErrorToStatus } from "../../auth_manager/mod.ts";
 
 const memberRouter = new oak.Router();
+
+// ユーザー登録リクエスト
+// { front, server, id, name }
+// 20
+// 400 パラメ足らん
+// 409 メンバー上限
+// 500 URLエラー
+memberRouter.post("/regist/request", authToken, async (ctx) => {
+  const payload: JwtPayload = ctx.state.payload!;
+  let { front, server, id, name } = await ctx.request
+    .body({ type: "json" }).value;
+
+  if (!server) server = `${ctx.request.url.protocol}//${ctx.request.url.host}`;
+  if (!isString(server)) return ctx.response.status = 400;
+
+  if (!front) {
+    const origin = ctx.request.headers.get("origin");
+    if (!origin) return ctx.response.status = 400;
+    front = `${origin}/ebina-station`;
+  }
+  if (!isString(front)) return ctx.response.status = 400;
+
+  const token = AuthManager.instance().getRegistNewMemeberToken(payload.id);
+  if (!token) return ctx.response.status = 409;
+
+  let url: string | undefined = undefined;
+  try {
+    const registURL = new URL(`${front}/regist`);
+    registURL.searchParams.set("t", token);
+    registURL.searchParams.set("s", server);
+    if (id && isString(id)) registURL.searchParams.set("i", id);
+    if (name && isString(name)) registURL.searchParams.set("n", name);
+    url = registURL.toString();
+  } catch (err) {
+    if (!(err instanceof TypeError)) throw err;
+  }
+  ctx.response.status = 201;
+  ctx.response.body = { token, url };
+});
 
 // 仮登録
 // { id, name, pass }
@@ -13,12 +52,13 @@ const memberRouter = new oak.Router();
 memberRouter.post("/regist/option", async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
-  const { id, name, pass } = await ctx.request.body({ type: "json" }).value;
-  if (!id || !name || !pass) return ctx.response.status = 400;
+  const { id, name, pass, token } = await ctx.request
+    .body({ type: "json" }).value;
+  if (!id || !name || !pass || !token) return ctx.response.status = 400;
 
   try {
     const option = await AuthManager.instance()
-      .registTempMemberOption(origin, id, name, pass);
+      .registTempMemberOption(origin, token, id, name, pass);
     ctx.response.body = option;
     ctx.response.status = 201;
   } catch (err) {
@@ -36,14 +76,11 @@ memberRouter.post("/regist/verify", async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
   const body = await ctx.request.body({ type: "json" }).value;
-  const { id, result, token } = body;
-  if (!id || !isString(id) || !result || !token || !isString(token)) {
-    return ctx.response.status = 400;
-  }
+  const { id, result } = body;
+  if (!id || !isString(id) || !result) return ctx.response.status = 400;
 
   try {
-    await AuthManager.instance()
-      .registTempMemberVerify(origin, id, token, result);
+    await AuthManager.instance().registTempMemberVerify(origin, id, result);
     ctx.response.status = 200;
   } catch (err) {
     return ctx.response.status = hadleAMErrorToStatus(err);
