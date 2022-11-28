@@ -125,7 +125,7 @@ memberRouter.delete("/", authToken, (ctx) => {
 // 200 メンバー
 // 400 IDない
 // 404 みつからない
-memberRouter.get("/:id", authToken, (ctx) => {
+memberRouter.get("/member/:id", authToken, (ctx) => {
   const { id } = ctx.params;
   if (!id) return ctx.response.status = 400;
 
@@ -134,6 +134,95 @@ memberRouter.get("/:id", authToken, (ctx) => {
     ctx.response.body = { ...member, auth: undefined };
   } else {
     ctx.response.status = 404;
+  }
+});
+
+// 仮メンバーたち
+// 200 ok
+memberRouter.get("/temp", authToken, (ctx) => {
+  const members = Members.instance().getTempMembers();
+  const arrangedMembers = Object.keys(members).map((id) => {
+    const member = members[id]!;
+    return { id, from: member.from, member: member.member.getValue() };
+  });
+
+  ctx.response.status = 200;
+  ctx.response.body = arrangedMembers;
+});
+
+// 仮メンバー承認
+// 200 ok
+// 202 認証して
+// 400 足らない
+// 401 認証できてない
+memberRouter.post("/temp/admit", authToken, async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload = ctx.state.payload;
+  if (!payload) return ctx.response.status = 401;
+  const body = await ctx.request.body({ type: "json" }).value;
+
+  try {
+    const am = AuthManager.instance();
+    if (body.type === "public-key") {
+      const successIds = await am.verifyAuthResponse(origin, payload.id, body);
+      ctx.response.body = successIds;
+      ctx.response.status = 200;
+    } else {
+      const ids = body.ids;
+      if (!ids || !Array.isArray(ids)) return ctx.response.status = 400;
+
+      const option = await am.createAuthOption(origin, payload.id, {
+        id: payload.id,
+        action: () => {
+          const successIds = ids
+            .filter((id) => Members.instance().admitTempMember(id));
+          return Promise.resolve(successIds);
+        },
+      });
+      ctx.response.body = option;
+      ctx.response.status = 202;
+    }
+  } catch (err) {
+    return ctx.response.status = hadleAMErrorToStatus(err);
+  }
+});
+
+// 仮メンバー否認
+// 200 ok
+// 202 認証して
+// 400 足らない
+// 401 認証できてない
+memberRouter.post("/temp/deny", authToken, async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload = ctx.state.payload;
+  if (!payload) return ctx.response.status = 401;
+  const body = await ctx.request.body({ type: "json" }).value;
+
+  try {
+    const am = AuthManager.instance();
+    if (body.type === "public-key") {
+      const failedIds = await am.verifyAuthResponse(origin, payload.id, body);
+      ctx.response.body = failedIds;
+      ctx.response.status = 200;
+    } else {
+      const ids = body.ids;
+      if (!ids || !Array.isArray(ids)) return ctx.response.status = 400;
+
+      const option = await am.createAuthOption(origin, payload.id, {
+        id: payload.id,
+        action: () => {
+          const successIds = ids
+            .filter((id) => Members.instance().denyTempMember(id));
+          return Promise.resolve(successIds);
+        },
+      });
+      ctx.response.body = option;
+      ctx.response.status = 202;
+    }
+  } catch (err) {
+    return ctx.response.status = hadleAMErrorToStatus(err);
   }
 });
 

@@ -162,6 +162,52 @@ export class AuthManager {
       });
   }
 
+  // WebAuthn auth
+
+  async createAuthOption(
+    origin: string,
+    key: string,
+    option?: { id?: string; deviceNames?: string[]; action?: AuthAction },
+  ) {
+    let allowCredentials;
+    if (option?.id) {
+      const member = Members.instance().getMember(option.id);
+      if (!member) throw new AuthManagerError("No member");
+
+      const rpID = getRPID(origin);
+      const webAuthnItem = member.getWebAuthnItem(rpID);
+      if (!webAuthnItem) throw new AuthManagerError("No WebAuthn auth");
+      allowCredentials = option.deviceNames && option.deviceNames.length !== 0
+        ? webAuthnItem.getPublicKeyCredentials(option.deviceNames)
+        : webAuthnItem.getEnabledPublicKeyCredentials();
+    }
+    const result = await createOptionsForAuth(origin, allowCredentials);
+    AuthChallenge.set(key, result.challenge, option?.action);
+    return result;
+  }
+
+  async verifyAuthResponse(
+    origin: string,
+    id: string,
+    response: AuthenticationResponseJSON,
+    sessionId?: string,
+  ) {
+    const member = Members.instance().getMember(id);
+    if (!member) throw new AuthManagerError("No member");
+
+    const challengeItem = AuthChallenge.pop(sessionId ?? id);
+
+    await verifyChallengeForAuth(
+      origin,
+      member,
+      response,
+      challengeItem.challenge,
+    );
+    return challengeItem.action
+      ? await challengeItem.action(member)
+      : undefined;
+  }
+
   // Login
 
   loginWithPassword(hostname: string, id: string, password: string) {
@@ -183,47 +229,20 @@ export class AuthManager {
   }
 
   async loginWebAuthnOption(origin: string, id?: string) {
-    const members = Members.instance();
-
-    let allowCredentials;
-    if (id) {
-      const member = members.getMember(id);
-      if (member) {
-        const rpID = getRPID(origin);
-        const webAuthnItem = member.getWebAuthnItem(rpID);
-        if (!webAuthnItem) return { type: "Password" };
-        allowCredentials = webAuthnItem.getEnabledPublicKeyCredentials();
-      } else {
-        throw new AuthManagerError("No member");
-      }
-    }
-
-    const options = await createOptionsForAuth(origin, allowCredentials);
     const sessionId = randomBase64url(16);
-    AuthChallenge.set(
-      sessionId,
-      options.challenge,
-      (member) => generateTokens(member.getId()),
-    );
-    return { type: "WebAuthn", options, sessionId };
+    return await this.createAuthOption(origin, sessionId, {
+      id,
+      action: (member) => generateTokens(member.getId()),
+    }).then((options) => {
+      return { type: "WebAuthn", options, sessionId };
+    }).catch((err: AuthManagerError) => {
+      if (err.type === "No WebAuthn auth") return { type: "Password" };
+      throw err;
+    });
   }
 
-  async checkDevicesOption(origin: string, id: string, deviceNames?: string[]) {
-    const member = Members.instance().getMember(id);
-    if (!member) throw new AuthManagerError("No member");
-
-    const rpID = getRPID(origin);
-    const webAuthnItem = member.getWebAuthnItem(rpID);
-    if (!webAuthnItem) throw new AuthManagerError("No WebAuthn auth");
-
-    const allowCredentials = deviceNames && deviceNames.length !== 0
-      ? webAuthnItem.getPublicKeyCredentials(deviceNames)
-      : webAuthnItem.getEnabledPublicKeyCredentials();
-
-    const options = await createOptionsForAuth(origin, allowCredentials);
-    AuthChallenge.set(id, options.challenge);
-
-    return options;
+  checkDevicesOption(origin: string, id: string, deviceNames?: string[]) {
+    return this.createAuthOption(origin, id, { id, deviceNames });
   }
 
   // Regist WebAuthn device
@@ -252,7 +271,7 @@ export class AuthManager {
 
   // Change password
 
-  async changePasswordOption(
+  changePasswordOption(
     origin: string,
     id: string,
     current: string,
@@ -261,12 +280,6 @@ export class AuthManager {
     const members = Members.instance();
     const member = members.getMember(id);
     if (!member) throw new AuthManagerError("No member");
-    const rpID = getRPID(origin);
-    const webAuthnItem = member.getWebAuthnItem(rpID);
-    if (!webAuthnItem) throw new AuthManagerError("No WebAuthn auth");
-    const allowCredentials = webAuthnItem.getEnabledPublicKeyCredentials();
-
-    const options = await createOptionsForAuth(origin, allowCredentials);
     const action = member.authMemberWithPassword(current)
       ? (member: Member) => {
         member.setPassword(createPasswordAuth(to));
@@ -274,31 +287,6 @@ export class AuthManager {
         return Promise.resolve(true);
       }
       : undefined;
-    AuthChallenge.set(id, options.challenge, action);
-    return options;
-  }
-
-  // Verify WebAuthn response
-
-  async verifyAuthResponse(
-    origin: string,
-    id: string,
-    response: AuthenticationResponseJSON,
-    sessionId?: string,
-  ) {
-    const member = Members.instance().getMember(id);
-    if (!member) throw new AuthManagerError("No member");
-
-    const challengeItem = AuthChallenge.pop(sessionId ?? id);
-
-    await verifyChallengeForAuth(
-      origin,
-      member,
-      response,
-      challengeItem.challenge,
-    );
-    return challengeItem.action
-      ? await challengeItem.action(member)
-      : undefined;
+    return this.createAuthOption(origin, id, { id, action });
   }
 }

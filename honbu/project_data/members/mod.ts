@@ -108,7 +108,7 @@ export class Members {
     const memberIds = Object.keys(this.members);
     return memberIds
       .filter((id) => ids.length !== 0 ? ids.includes(id) : true)
-      .map((id) => ({ ...this.getMember(id), id, auth: undefined }));
+      .map((id) => ({ id, ...this.getMember(id)?.getValue() }));
   }
 
   memberCount = () => Object.keys(this.members).length;
