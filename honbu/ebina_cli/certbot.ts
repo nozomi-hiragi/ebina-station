@@ -1,5 +1,6 @@
 import { certCertbot, renewCertbot } from "../action_delegate/certbot.ts";
 import { Command, CommandOption, OptionValue } from "../cli.ts";
+import { logConsole, logger } from "../utils/log.ts";
 import { RunCommandExeption } from "../utils/utils.ts";
 
 const executeCertonly = (options: OptionValue[]) => {
@@ -12,34 +13,34 @@ const executeCertonly = (options: OptionValue[]) => {
     }
   }
   if (args.domain) {
-    console.log("...");
+    logConsole.info("...");
     certCertbot(args.domain, args.email).then((ret) => {
-      console.log(ret.output);
+      logConsole.info(ret.output);
     }).catch((err: RunCommandExeption) => {
-      console.log(err);
+      logger.error("certbot error:", err);
     }).finally(() => {
-      console.log("finish.");
+      logConsole.info("finish.");
     });
   } else {
-    console.log("no domain arg");
+    logConsole.info("no domain arg");
   }
 };
 
 const executeRenew = () => {
-  console.log("...");
+  logConsole.info("...");
   renewCertbot().then((ret) => {
-    console.log(ret.output);
+    logConsole.info(ret.output);
   }).catch((err: RunCommandExeption) => {
-    console.log(err);
+    logger.error("renew error:", err);
   }).finally(() => {
-    console.log("finish.");
+    logConsole.info("finish.");
   });
 };
 
 export const createCertbotCommand = () =>
   new Command("certbot", (options) => {
     const sc = options[0];
-    if (!sc) return console.log("no sub command");
+    if (!sc) return logConsole.info("no sub command");
     switch (sc.option) {
       case "certonly":
         executeCertonly(options);
@@ -48,7 +49,7 @@ export const createCertbotCommand = () =>
         executeRenew();
         break;
       default:
-        console.log("wrong sub command");
+        logConsole.info("wrong sub command");
     }
   }, {
     options: [

@@ -10,6 +10,7 @@ import { initProjectData } from "./project_data/mod.ts";
 import { Settings } from "./project_data/settings/mod.ts";
 import { startEbinaCLI } from "./ebina_cli/mod.ts";
 import { renewCertbot } from "./action_delegate/certbot.ts";
+import { logEbina, logger } from "./utils/log.ts";
 
 const CERTBOT_RENEW_SCHEDULE = "0 0 22-28 * 1";
 
@@ -32,7 +33,7 @@ export class Service {
       router.routes(),
       router.allowedMethods(),
     ).listen({ port: projectSettings.getPortNumber() });
-    console.log("start listeing");
+    logger.info("start listeing");
   }
 
   async start() {
@@ -40,7 +41,7 @@ export class Service {
       .then(() => initDockerComposeFile())
       .then(() => startContainers())
       .catch((err) => {
-        console.log(err);
+        logger.error("Service start error:", err);
         this.exit(1);
       });
 
@@ -48,10 +49,7 @@ export class Service {
     this.startListen();
 
     this.renewCron = new Cron(CERTBOT_RENEW_SCHEDULE, () => {
-      renewCertbot().then((ret) => {
-        // @TODO ログに入れる
-        console.log(`renew: ${ret}`);
-      });
+      renewCertbot().then((ret) => logEbina.info(`renew: ${ret}`));
     });
 
     Deno.addSignalListener("SIGTERM", () => this.exit());

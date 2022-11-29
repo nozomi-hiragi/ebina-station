@@ -1,3 +1,4 @@
+import { logEbina } from "../../utils/log.ts";
 import { mkdirIfNotExist } from "../../utils/utils.ts";
 import { APPS_DIR, GOMI_DIR } from "../mod.ts";
 import { APIs } from "./apis.ts";
@@ -61,7 +62,7 @@ export const deleteApp = (appName: string) => {
     Deno.renameSync(`${APPS_DIR}/${appName}`, `${GOMI_DIR}/${appName}`);
     return true;
   } catch (err) {
-    console.log(err);
+    logEbina.error(`delete app ${appName} error:`, err);
     return false;
   }
 };

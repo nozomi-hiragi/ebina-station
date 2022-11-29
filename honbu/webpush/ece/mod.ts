@@ -1,8 +1,6 @@
-import hkdf from "https://deno.land/x/hkdf@v1.0.2/index.ts";
-
 import { encrypt } from "./encode.ts";
 import { decrypt } from "./decode.ts";
-import { base64url } from "../../deps.ts";
+import { base64url, hkdf } from "../../deps.ts";
 
 const NONCE_SIZE = 12;
 const SHA_256_SIZE = 32;

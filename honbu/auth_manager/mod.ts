@@ -2,6 +2,7 @@ import { createPasswordAuth } from "../project_data/members/auth/password.ts";
 import { Member } from "../project_data/members/member.ts";
 import { Members } from "../project_data/members/mod.ts";
 import { Settings } from "../project_data/settings/mod.ts";
+import { logEbina } from "../utils/log.ts";
 import { randomBase64url } from "../utils/utils.ts";
 import {
   AttestationResponseJSON,
@@ -64,14 +65,14 @@ const convertAMErrorToStatus = (error: AuthManagerError) => {
   }
 };
 
-export const hadleAMErrorToStatus = (err: Error) => {
+export const handleAMErrorToStatus = (err: Error) => {
   if (err instanceof AuthManagerError) {
     const ret = convertAMErrorToStatus(err);
     if (ret.status !== 500) {
       return ret.status;
     }
   }
-  console.log(err);
+  logEbina.error("AuthManagerError:", err);
   return 500;
 };
 

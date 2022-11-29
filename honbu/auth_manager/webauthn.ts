@@ -4,6 +4,7 @@ import { WebAuthnItemController } from "../project_data/members/auth/webauthn.ts
 import { Member } from "../project_data/members/member.ts";
 import { Members } from "../project_data/members/mod.ts";
 import { Settings } from "../project_data/settings/mod.ts";
+import { logEbina } from "../utils/log.ts";
 import {
   AttestationOptionUser,
   AttestationResponseJSON,
@@ -105,7 +106,7 @@ export const verifyChallengeForRegist = async (
     member.setWebAuthnItem(rpID, webAuthnItem);
     return member;
   } catch (err) {
-    console.log(err);
+    logEbina.error("WebAuthn verify regist option error:", err);
     throw new AuthManagerError("Failed auth");
   }
 };
@@ -151,7 +152,7 @@ export const verifyChallengeForAuth = async (
     Members.instance().setMember(member);
     return result;
   } catch (err) {
-    console.log(err);
+    logEbina.error("WebAuthn verify auth option error:", err);
     throw new AuthManagerError("Failed auth");
   }
 };

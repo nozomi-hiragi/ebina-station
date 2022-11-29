@@ -1,6 +1,7 @@
 import { mongodb, Mutex, oak } from "../../deps.ts";
 import { Settings } from "../../project_data/settings/mod.ts";
 import { authToken } from "../../auth_manager/token.ts";
+import { logEbina } from "../../utils/log.ts";
 
 const databaseRouter = new oak.Router();
 
@@ -13,7 +14,7 @@ const initClient = async () => {
   if (!mongodbSettings) return;
   await mutex.use(async () => {
     if (client.buildInfo) return;
-    console.log("start init db");
+    logEbina.info("start init db");
     const op: mongodb.ConnectOptions = {
       db: "admin",
       servers: [{ host: "localhost", port: mongodbSettings.getPortNumber() }],

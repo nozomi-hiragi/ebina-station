@@ -1,4 +1,5 @@
 import { djwt, oak } from "../deps.ts";
+import { logEbina } from "../utils/log.ts";
 import { createKey } from "../utils/utils.ts";
 
 const tokenKey = await createKey();
@@ -28,7 +29,7 @@ const verifyToken = (token: string, key: CryptoKey) =>
     .then((payload) => payload as JwtPayload)
     .catch((_: RangeError) => undefined)
     .catch((err) => {
-      console.log(err);
+      logEbina.error("Verify token error:", err);
       return undefined;
     });
 

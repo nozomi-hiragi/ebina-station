@@ -1,6 +1,7 @@
 import { Settings } from "./settings/mod.ts";
 import { isExist } from "../utils/utils.ts";
 import { NGINX_CONFS_FILE_PATH, NGINX_GENERATE_DIR } from "./mod.ts";
+import { logger } from "../utils/log.ts";
 
 export type NginxConf = {
   hostname: string;
@@ -171,6 +172,6 @@ export const generateNginxConfsFromJson = () => {
   if (!confs) throw new Error(`something wrong on ${NGINX_CONFS_FILE_PATH}`);
   Object.keys(confs).forEach((name) => {
     const err = generateNginxConf(name, confs[name]);
-    if (err) console.log(err);
+    if (err) logger.error("generate nginx confs error:", err);
   });
 };

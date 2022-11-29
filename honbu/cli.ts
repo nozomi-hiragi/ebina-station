@@ -1,3 +1,4 @@
+import { logConsole } from "./utils/log.ts";
 import { ReaderBuffer } from "./utils/utils.ts";
 
 const readReader = async (
@@ -106,7 +107,7 @@ export class CLI {
           this.exitCommand.execute(input);
           return true;
         } else {
-          console.log("><");
+          logConsole.info("><");
         }
       }
     });

@@ -1,34 +1,35 @@
-import { log } from "../deps.ts";
+import { datetime, log, TypeUtils } from "../deps.ts";
+import { mkdirIfNotExist } from "./utils.ts";
 
-await log.setup({
+const parseArgs = (args: unknown[]) =>
+  args.map((arg) => {
+    if (TypeUtils.isString(arg)) return arg;
+    if (TypeUtils.isObject(arg)) return JSON.stringify(arg);
+    return String(arg);
+  }).join(", ");
+
+const formatDate = (date: Date) => datetime.format(date, "yyyy/MM/dd HH:mm:ss");
+
+mkdirIfNotExist("./logs");
+log.setup({
   handlers: {
     Ebina: new log.handlers.FileHandler("INFO", {
       filename: "./logs/ebina.log",
-      formatter: "{levelName} {msg}",
-      mode: "w",
+      formatter: (r) =>
+        formatDate(r.datetime) +
+        ` [${r.levelName}] ${r.msg} ${parseArgs(r.args)}`.trimEnd(),
     }),
-    EbinaAPI: new log.handlers.FileHandler("INFO", {
-      filename: "./logs/ebinaAPI.log",
-      formatter: "{levelName} {msg}",
-      mode: "w",
+    console: new log.handlers.ConsoleHandler("DEBUG", {
+      formatter: (r) => `${r.msg} ${parseArgs(r.args)}`.trimEnd(),
     }),
-    console: new log.handlers.ConsoleHandler("INFO"),
   },
   loggers: {
-    default: {
-      level: "INFO",
-      handlers: ["Ebina", "console"],
-    },
-    Koujou: {
-      level: "INFO",
-      handlers: ["Ebina", "console"],
-    },
-    API: {
-      level: "INFO",
-      handlers: ["EbinaAPI", "console"],
-    },
+    default: { level: "DEBUG", handlers: ["Ebina", "console"] },
+    console: { level: "DEBUG", handlers: ["console"] },
+    ebina: { level: "INFO", handlers: ["Ebina"] },
   },
 });
 
-export const logKoujou = log.getLogger("Koujou");
-export const logApi = log.getLogger("API");
+export const logger = log.getLogger();
+export const logEbina = log.getLogger("ebina");
+export const logConsole = log.getLogger("console");

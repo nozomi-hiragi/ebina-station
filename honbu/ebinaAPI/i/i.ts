@@ -1,8 +1,8 @@
-import { isString, oak } from "../../deps.ts";
+import { oak, TypeUtils } from "../../deps.ts";
 import { authToken } from "../../auth_manager/token.ts";
 import { Members } from "../../project_data/members/mod.ts";
 import webauthnRouter from "./webauthn/index.ts";
-import { AuthManager, hadleAMErrorToStatus } from "../../auth_manager/mod.ts";
+import { AuthManager, handleAMErrorToStatus } from "../../auth_manager/mod.ts";
 import webpushRouter from "./webpush.ts";
 
 const iRouter = new oak.Router();
@@ -31,7 +31,7 @@ iRouter.post("/login/option", async (ctx) => {
       .loginWebAuthnOption(origin, id);
     ctx.response.status = 202;
   } catch (err) {
-    return ctx.response.status = hadleAMErrorToStatus(err);
+    return ctx.response.status = handleAMErrorToStatus(err);
   }
 });
 
@@ -47,7 +47,7 @@ iRouter.post("/login/verify", async (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const body = await ctx.request.body({ type: "json" }).value;
   const { sessionId, result } = body;
-  if (!sessionId || !isString(sessionId) || !result) {
+  if (!sessionId || !TypeUtils.isString(sessionId) || !result) {
     return ctx.response.status = 400;
   }
   const id = result.response.userHandle;
@@ -55,12 +55,12 @@ iRouter.post("/login/verify", async (ctx) => {
   try {
     const token = await AuthManager.instance()
       .verifyAuthResponse(origin, id, result, sessionId);
-    if (!isString(token)) return ctx.response.status = 502;
+    if (!TypeUtils.isString(token)) return ctx.response.status = 502;
 
     ctx.response.body = token;
     ctx.response.status = 200;
   } catch (err) {
-    return ctx.response.status = hadleAMErrorToStatus(err);
+    return ctx.response.status = handleAMErrorToStatus(err);
   }
 });
 
@@ -89,7 +89,7 @@ iRouter.post("/login", async (ctx) => {
     ctx.response.body = token;
     ctx.response.status = 200;
   } catch (err) {
-    return ctx.response.status = hadleAMErrorToStatus(err);
+    return ctx.response.status = handleAMErrorToStatus(err);
   }
 });
 
@@ -142,7 +142,7 @@ iRouter.put("/password", authToken, async (ctx) => {
       ctx.response.status = 202;
     }
   } catch (err) {
-    return ctx.response.status = hadleAMErrorToStatus(err);
+    return ctx.response.status = handleAMErrorToStatus(err);
   }
 });
 

@@ -8,6 +8,7 @@ import {
 import { NGINX_DIR, PROJECT_PATH } from "./project_data/mod.ts";
 import { generateNginxConfsFromJson } from "./project_data/nginx.ts";
 import { Settings } from "./project_data/settings/mod.ts";
+import { logger } from "./utils/log.ts";
 import { isExist } from "./utils/utils.ts";
 
 export enum ServiceName {
@@ -51,6 +52,7 @@ const createJinjiSettings = (isDesktop: boolean) => {
     `${nginxConfPath}:/etc/nginx/nginx.conf`,
     `${NGINX_DIR}/sites-enabled:/etc/nginx/sites-enabled`,
     `${NGINX_DIR}/nginx/generate:/etc/nginx/generate`,
+    `./logs/nginx:/var/log/nginx`,
   ].concat(volumesLetsencrypt);
   if (isExist("/etc/ssl/certs/dhparam.pem")) {
     volumes.push("/etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem");
@@ -112,6 +114,8 @@ export const startContainers = async () => {
 
 export const removeContainers = () => {
   return Promise.all([
-    execDCCRm(ServiceName.Jinji).catch((msg) => console.error(msg)),
+    execDCCRm(ServiceName.Jinji).catch((msg) =>
+      logger.error("remove jinji container error", msg)
+    ),
   ]);
 };

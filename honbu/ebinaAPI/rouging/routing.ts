@@ -9,6 +9,7 @@ import {
   execDCCUp,
 } from "../../docker/DockerComposeCommand.ts";
 import { ServiceName } from "../../ebina_docker_compose.ts";
+import { logEbina } from "../../utils/log.ts";
 
 const routingRouter = new oak.Router();
 
@@ -97,9 +98,9 @@ routingRouter.put("/status", authToken, async (ctx) => {
 
 export default routingRouter;
 
-const getDoclerComposePs = async (name: string) => {
+const getDockerComposePs = async (name: string) => {
   const ret = await execDCCPs(name).catch((msg) => {
-    console.log(msg);
+    logEbina.error("docker compose ps error:", msg);
     return undefined;
   });
   if (ret) {
@@ -118,7 +119,7 @@ const getDoclerComposePs = async (name: string) => {
 };
 
 export const containerState = async (name: string) => {
-  return await getDoclerComposePs(name);
+  return await getDockerComposePs(name);
 };
 
 const setNginxStatus = async (status: string) => {
@@ -128,7 +129,7 @@ const setNginxStatus = async (status: string) => {
       return await execDCCUp(ServiceName.Jinji)
         .then(() => 200)
         .catch((msg) => {
-          console.log(msg);
+          logEbina.error("nginx container up error:", msg);
           return 500;
         });
     }
@@ -137,7 +138,7 @@ const setNginxStatus = async (status: string) => {
       return await execDCCRestart(ServiceName.Jinji)
         .then(() => 200)
         .catch((msg) => {
-          console.log(msg);
+          logEbina.error("nginx container restart error:", msg);
           return 500;
         });
     }
@@ -146,7 +147,7 @@ const setNginxStatus = async (status: string) => {
       return await execDCCRm(ServiceName.Jinji)
         .then(() => 200)
         .catch((msg) => {
-          console.log(msg);
+          logEbina.error("nginx container rm error:", msg);
           return 500;
         });
     }

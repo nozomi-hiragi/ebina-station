@@ -1,4 +1,5 @@
-import { parse, stringify } from "../deps.ts";
+import { yaml } from "../deps.ts";
+import { logger } from "../utils/log.ts";
 
 type DockerComposeYamlBase = {
   version: string;
@@ -32,11 +33,11 @@ export class DockerComposeYamlManager {
   loadFromFile(path: string) {
     try {
       this.data = {
-        ...parse(Deno.readTextFileSync(path)) as DockerComposeYamlBase,
+        ...yaml.parse(Deno.readTextFileSync(path)) as DockerComposeYamlBase,
       };
       return true;
     } catch (err) {
-      console.log(err.message);
+      logger.error("Docker compose yaml load file error:", err.message);
       return false;
     }
   }
@@ -46,7 +47,7 @@ export class DockerComposeYamlManager {
       Deno.writeTextFileSync(path, this.toYamlString());
       return true;
     } catch (err) {
-      console.log(err.message);
+      logger.error("Docker compose yaml save file error:", err.message);
       return false;
     }
   }
@@ -62,6 +63,6 @@ export class DockerComposeYamlManager {
   }
 
   toYamlString() {
-    return stringify(this.data);
+    return yaml.stringify(this.data);
   }
 }

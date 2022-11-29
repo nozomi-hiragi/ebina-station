@@ -1,10 +1,4 @@
-import {
-  abToBuf,
-  base64url,
-  coerceToArrayBuffer,
-  coerceToBase64,
-  Fido2Lib,
-} from "../deps.ts";
+import { base64url, fido2 } from "../deps.ts";
 import {
   AttestationConveyancePreference,
   AuthenticatorAttachment,
@@ -131,18 +125,18 @@ export interface AuthenticationResponseJSON {
 }
 
 export class Fido2Wrap {
-  fido2: Fido2Lib;
+  fido2Lib: fido2.Fido2Lib;
 
   constructor(options?: Fido2LibOptions) {
-    this.fido2 = new Fido2Lib(options);
+    this.fido2Lib = new fido2.Fido2Lib(options);
   }
 
   async attestationOptions(options: Fido2AttestationOptions) {
     // deno-lint-ignore no-explicit-any
-    const raw = await this.fido2.attestationOptions(options) as any;
+    const raw = await this.fido2Lib.attestationOptions(options) as any;
     const ret: AttestationOptionsRet = {
       ...raw,
-      challenge: coerceToBase64(raw.challenge, "challenge"),
+      challenge: fido2.coerceToBase64(raw.challenge, "challenge"),
       user: {
         ...options.user,
         displayName: options.user.displayName ?? options.user.name,
@@ -169,29 +163,29 @@ export class Fido2Wrap {
       flags?: [];
     },
   ) {
-    return await this.fido2.attestationResult({
+    return await this.fido2Lib.attestationResult({
       ...response,
       response: {
         ...response.response,
-        attestationObject: coerceToArrayBuffer(
+        attestationObject: fido2.coerceToArrayBuffer(
           response.response.attestationObject,
           "response.attestationObject",
         ),
       },
-      rawId: coerceToArrayBuffer(response.rawId, "rawId"),
+      rawId: fido2.coerceToArrayBuffer(response.rawId, "rawId"),
     }, expectations);
   }
 
   async assertionOptions(options: Fido2AssertionOptions) {
     // deno-lint-ignore no-explicit-any
-    const raw = await this.fido2.assertionOptions(options) as any;
+    const raw = await this.fido2Lib.assertionOptions(options) as any;
     const ret: AssertionOptionsRet = {
       ...raw,
-      challenge: coerceToBase64(raw.challenge, "challenge"),
+      challenge: fido2.coerceToBase64(raw.challenge, "challenge"),
       allowCredentials: options.allowCredentials,
     };
     if (raw.rawChallenge) {
-      ret.rawChallenge = coerceToBase64(raw.rawChallenge, "rawChallenge");
+      ret.rawChallenge = fido2.coerceToBase64(raw.rawChallenge, "rawChallenge");
     }
     return ret;
   }
@@ -208,15 +202,15 @@ export class Fido2Wrap {
       allowCredentials?: PublicKeyCredentialDescriptor[];
     },
   ) {
-    return await this.fido2.assertionResult({
+    return await this.fido2Lib.assertionResult({
       ...response,
       response: {
         ...response.response,
         userHandle: response.response.userHandle
-          ? abToBuf(response.response.userHandle)
+          ? fido2.abToBuf(response.response.userHandle)
           : undefined,
       },
-      rawId: coerceToArrayBuffer(response.rawId, "rawId"),
+      rawId: fido2.coerceToArrayBuffer(response.rawId, "rawId"),
     }, {
       ...expectations,
       userHandle: expectations.userHandle

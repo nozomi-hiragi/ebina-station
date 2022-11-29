@@ -1,4 +1,5 @@
 import { Cron } from "../../deps.ts";
+import { logEbina, logger } from "../../utils/log.ts";
 import { APPS_DIR } from "../mod.ts";
 
 const CRON_JSON_FILE_NAME = "cron.json";
@@ -83,16 +84,16 @@ export class CronItem {
     try {
       const module = await import(modelPath);
       if (!Object.keys(module).includes(funcName)) {
-        console.log("no value in module", funcName);
+        logger.error("no value in module", funcName);
         return false;
       }
 
       this.cron = new Cron(this.getPattern(), () => {
         const ret = module[funcName]() as string;
-        console.log(`${this.appName}:${filename}:${funcName}: ${ret}`);
+        logEbina.info(`${this.appName}:${filename}:${funcName}: ${ret}`);
       });
     } catch (err) {
-      console.log(err);
+      logger.error("cron start error:", err);
       return false;
     }
     return true;
@@ -139,7 +140,7 @@ export class CronItems {
       );
       return true;
     } catch (err) {
-      console.log(err);
+      logEbina.error("save cron.json error:", err);
       return false;
     }
   }
