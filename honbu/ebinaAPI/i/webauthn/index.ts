@@ -4,7 +4,7 @@ import { getRPID } from "../../../auth_manager/webauthn.ts";
 import deviceRouter from "./device.ts";
 import {
   AuthManager,
-  hadleAMErrorToStatus,
+  handleAMErrorToStatus,
 } from "../../../auth_manager/mod.ts";
 import { randomBase64url } from "../../../utils/utils.ts";
 
@@ -30,7 +30,7 @@ webauthnRouter.get("/regist", authToken, async (ctx) => {
     ctx.response.body = option;
     ctx.response.status = 200;
   } catch (err) {
-    return ctx.response.status = hadleAMErrorToStatus(err);
+    return ctx.response.status = handleAMErrorToStatus(err);
   }
 });
 
@@ -60,7 +60,7 @@ webauthnRouter.post("/regist", authToken, async (ctx) => {
     ctx.response.body = enabledDeviceNames;
     ctx.response.status = 200;
   } catch (err) {
-    return ctx.response.status = hadleAMErrorToStatus(err);
+    return ctx.response.status = handleAMErrorToStatus(err);
   }
 });
 
@@ -89,7 +89,7 @@ webauthnRouter.get("/verify", authToken, async (ctx) => {
     ctx.response.body = options;
     ctx.response.status = 200;
   } catch (err) {
-    return ctx.response.status = hadleAMErrorToStatus(err);
+    return ctx.response.status = handleAMErrorToStatus(err);
   }
 });
 
@@ -115,7 +115,7 @@ webauthnRouter.post("/verify", authToken, async (ctx) => {
     await AuthManager.instance().verifyAuthResponse(origin, payload.id, body);
     ctx.response.status = 200;
   } catch (err) {
-    return ctx.response.status = hadleAMErrorToStatus(err);
+    return ctx.response.status = handleAMErrorToStatus(err);
   }
 });
 

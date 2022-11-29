@@ -1,3 +1,4 @@
+import { logEbina } from "../../utils/log.ts";
 import { MEMBERS_FILE_PATH } from "../mod.ts";
 import { Member, MemberValues } from "./member.ts";
 
@@ -66,7 +67,7 @@ export class Members {
       );
       return true;
     } catch (err) {
-      console.log(err);
+      logEbina.error("members save error:", err);
       return false;
     }
   }

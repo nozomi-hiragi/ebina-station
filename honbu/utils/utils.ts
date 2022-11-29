@@ -1,4 +1,5 @@
 import { base64url } from "../deps.ts";
+import { logger } from "./log.ts";
 
 export const mkdirIfNotExist = (path: string) => {
   try {
@@ -121,7 +122,7 @@ export const loadKey = (filename: string) =>
       ["verify", "sign"],
     );
   }).catch((err) => {
-    console.log(err);
+    logger.error(`load ${filename} key error:`, err);
     return undefined;
   });
 

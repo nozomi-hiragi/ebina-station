@@ -1,3 +1,4 @@
+import { logEbina } from "../../utils/log.ts";
 import { isExist, mkdirIfNotExist } from "../../utils/utils.ts";
 import { APPS_DIR } from "../mod.ts";
 
@@ -26,7 +27,7 @@ export class Scripts {
       }
       return files;
     } catch (err) {
-      console.log(err);
+      logEbina.error(`get ${this.scriptDir} files error:`, err);
       return undefined;
     }
   }
@@ -39,7 +40,7 @@ export class Scripts {
       Deno.writeTextFileSync(fullPath, content);
       return true;
     } catch (err) {
-      console.log(err);
+      logEbina.error(`write ${fullPath} error:`, err);
       return false;
     }
   }
@@ -52,7 +53,7 @@ export class Scripts {
       const content = Deno.readTextFileSync(fullPath);
       return content;
     } catch (err) {
-      console.log(err);
+      logEbina.error(`get ${fullPath} error:`, err);
       return undefined;
     }
   }
@@ -66,7 +67,7 @@ export class Scripts {
       Deno.removeSync(fullPath);
       return true;
     } catch (err) {
-      console.log(err);
+      logEbina.error(`delete ${fullPath} error:`, err);
       return false;
     }
   }

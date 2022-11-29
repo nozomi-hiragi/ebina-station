@@ -1,4 +1,4 @@
-import { isString } from "../deps.ts";
+import { TypeUtils } from "../deps.ts";
 import { execDCCRun } from "../docker/DockerComposeCommand.ts";
 import { ServiceName } from "../ebina_docker_compose.ts";
 
@@ -14,7 +14,7 @@ export const certCertbot = (domains: string | string[], email?: string) => {
     "--webroot",
     "-w",
     "/var/www/html",
-    ...(isString(domains) ? [domains] : domains)
+    ...(TypeUtils.isString(domains) ? [domains] : domains)
       .filter(Boolean)
       .map((domain) => `-d ${domain}`),
   ]);

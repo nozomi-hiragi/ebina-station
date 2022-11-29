@@ -2,15 +2,16 @@ import { AuthManager } from "../auth_manager/mod.ts";
 import { Command, CommandOption } from "../cli.ts";
 import { qrcode } from "../deps.ts";
 import { Members } from "../project_data/members/mod.ts";
+import { logConsole } from "../utils/log.ts";
 
 export const createMemeberCommand = () =>
   new Command("member", (options) => {
     if (options.length < 2) {
-      console.log("not enough options");
+      logConsole.info("not enough options");
       return;
     }
     if (options[0].option !== "temp") {
-      console.log("no temp");
+      logConsole.info("no temp");
       return;
     }
     const cmd = options[1];
@@ -23,14 +24,14 @@ export const createMemeberCommand = () =>
             from: tempMembers[id]?.from,
             ...tempMembers[id]?.member.getValue(),
           }));
-        console.log(tempMemberArray);
+        logConsole.info(tempMemberArray);
         break;
       }
       case "regist": {
         const token = AuthManager.instance()
           .getRegistNewMemeberToken("console");
         if (!token) {
-          console.log("reached regist limit");
+          logConsole.info("reached regist limit");
           break;
         }
         let frontURL = "https://nozomi-hiragi.github.io/ebina-station";
@@ -54,42 +55,42 @@ export const createMemeberCommand = () =>
             if (name) registURL.searchParams.append("n", name);
             const registURLStr = registURL.toString();
             qrcode.generate(registURLStr, { small: true });
-            console.log(`URL: ${registURLStr}`);
+            logConsole.info(`URL: ${registURLStr}`);
           } catch (err) {
-            if (err instanceof TypeError) console.log("Invarid front URL");
-            else console.log(err);
+            if (err instanceof TypeError) logConsole.info("Invarid front URL");
+            else logConsole.error("temp member regist error:", err);
           }
         }
-        console.log(`token: ${token}`);
+        logConsole.info(`token: ${token}`);
         break;
       }
       case "admit":
-        if (!cmd.value) console.log("id is required");
+        if (!cmd.value) logConsole.info("id is required");
         else {
           switch (cmd.value && Members.instance().admitTempMember(cmd.value)) {
             case true:
-              console.log("ok");
+              logConsole.info("ok");
               break;
             case false:
-              console.log("this id is already used");
+              logConsole.info("this id is already used");
               break;
             case undefined:
             default:
-              console.log("wrong id");
+              logConsole.info("wrong id");
               break;
           }
         }
         break;
       case "deny":
-        if (!cmd.value) console.log("id is required");
+        if (!cmd.value) logConsole.info("id is required");
         else if (Members.instance().denyTempMember(cmd.value)) {
-          console.log("ok");
+          logConsole.info("ok");
         } else {
-          console.log("wrong id");
+          logConsole.info("wrong id");
         }
         break;
       default:
-        console.log("list, admit or deny");
+        logConsole.info("list, admit or deny");
         break;
     }
   }, {

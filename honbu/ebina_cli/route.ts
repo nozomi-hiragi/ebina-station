@@ -6,6 +6,7 @@ import {
   generateNginxConfsFromJson,
   NginxConfs,
 } from "../project_data/nginx.ts";
+import { logConsole } from "../utils/log.ts";
 
 const executeAddRoute = (
   name: string,
@@ -17,18 +18,18 @@ const executeAddRoute = (
 ) => {
   const nginxConfs = NginxConfs.instance();
   if (nginxConfs.getConf(name)) {
-    console.log("this name is already used");
+    logConsole.info("this name is already used");
     return;
   }
   nginxConfs.setConf(name, { hostname, port, certWebRoot: certbot });
   if (restart || certbot) {
-    console.log("Restart Jinji");
+    logConsole.info("Restart Jinji");
     generateNginxConfsFromJson();
     execDCCRestart(ServiceName.Jinji).then(async () => {
       if (certbot) {
-        console.log("Start certbot...");
+        logConsole.info("Start certbot...");
         const ret = await certCertbot(hostname, email);
-        console.log(`result: ${ret.status.success}`);
+        logConsole.info(`result: ${ret.status.success}`);
         if (ret.status.success) {
           nginxConfs.setConf(name, {
             hostname,
@@ -39,17 +40,17 @@ const executeAddRoute = (
           await execDCCRestart(ServiceName.Jinji);
         }
       }
-    }).catch((err) => console.log(err));
+    }).catch((err) => logConsole.error(err));
   }
 };
 
 export const createRouteCommand = () =>
   new Command("route", (options) => {
     const sc = options[0];
-    if (!sc) return console.log("no sub command");
+    if (!sc) return logConsole.info("no sub command");
     if (sc.option === "add") {
       const name = sc.option;
-      if (!name) return console.log("name is required");
+      if (!name) return logConsole.info("name is required");
 
       const args: {
         port?: number | "koujou";
@@ -79,9 +80,9 @@ export const createRouteCommand = () =>
         }
       }
 
-      if (!args.hostname) return console.log("hostname is required");
+      if (!args.hostname) return logConsole.info("hostname is required");
       if (!args.port || Number.isNaN(args.port)) {
-        return console.log("port is required");
+        return logConsole.info("port is required");
       }
 
       executeAddRoute(
@@ -92,7 +93,7 @@ export const createRouteCommand = () =>
         args.certbot,
         args.email,
       );
-    } else console.log(`sub command "add"`);
+    } else logConsole.info(`sub command "add"`);
   }, {
     options: [
       new CommandOption("add", { takeValue: true }),

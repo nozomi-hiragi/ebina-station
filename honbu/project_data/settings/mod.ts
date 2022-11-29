@@ -1,3 +1,4 @@
+import { logEbina } from "../../utils/log.ts";
 import { PROJECT_PATH, SETTINGS_FILE_PATH } from "../mod.ts";
 import { MemberSettings, SettingMemberValues } from "./member.ts";
 import { MongodbSettings, SettingMongodbValues } from "./mongodb.ts";
@@ -77,7 +78,7 @@ export class Settings {
       );
       return true;
     } catch (err) {
-      console.error(err);
+      logEbina.error("setting save error:", err);
       return false;
     }
   }

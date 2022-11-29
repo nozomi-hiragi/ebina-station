@@ -1,3 +1,4 @@
+import { logConsole } from "../utils/log.ts";
 import { ReaderBuffer } from "../utils/utils.ts";
 import { initApps } from "./apps/mod.ts";
 import { Members } from "./members/mod.ts";
@@ -29,25 +30,25 @@ const initProjectSettingsInteract = async () => {
   const rb = new ReaderBuffer(Deno.stdin);
 
   // Let's encrypt同意して
-  console.log(
+  logConsole.info(
     "このアプリはcertbotコンテナを使用したLet's Encryptを使用してます。\n" +
       "Let's Encrypt Subscriber Agreementの同意が必要です。 https://letsencrypt.org/repository/\n" +
       "同意しますか？" + yon,
   );
   const agree = await rb.read().then((ret) => ret?.toLowerCase());
   if (agree !== "y") {
-    console.log("同意できなきゃ多分使っちゃダメ");
+    logConsole.info("同意できなきゃ多分使っちゃダメ");
     throw new Error("Not agree let's encrype agreement");
   }
 
   const projectSettings = Settings.instance();
 
-  console.log(
+  logConsole.info(
     "こんにちは。\n" +
       "プロジェクトフォルダの設定をはじめます。\n",
   );
 
-  console.log(
+  logConsole.info(
     "サーバーが許可するフロントのオリジンを設定します。\n" +
       `現在、${projectSettings.origins.join(", ")}が設定されてます。\n` +
       "追加しますか？" + yon,
@@ -55,12 +56,12 @@ const initProjectSettingsInteract = async () => {
   while (await rb.read() !== null) {
     const buf = rb.message().toLocaleLowerCase();
     if (buf === "y") {
-      console.log("カンマ区切りでオリジンを入れてください。");
+      logConsole.info("カンマ区切りでオリジンを入れてください。");
       const ret = await rb.read();
       if (ret === null) throw new Error("input is null");
 
       const inputOrigin = ret.replaceAll(/\s+/g, "").split(",\n");
-      console.log(
+      logConsole.info(
         `${inputOrigin}を追加します。\n` +
           msgPleaseChangeFromSettingFile,
       );
@@ -68,24 +69,24 @@ const initProjectSettingsInteract = async () => {
     } else if (buf === "n") {
       break;
     } else {
-      console.log(yon);
+      logConsole.info(yon);
     }
   }
 
-  console.log(
+  logConsole.info(
     "WebAuthnの設定をします。\n" +
       "rpNameを入力してください。",
   );
   const rpName = await rb.read();
   if (rpName === null) throw new Error("input is null");
 
-  console.log(
+  logConsole.info(
     `"${rpName}"に設定します。\n` +
       msgPleaseChangeFromSettingFile,
   );
   projectSettings.WebAuthn.setRpName(rpName);
 
-  console.log(
+  logConsole.info(
     "これにて設定は終わりです。\n" +
       "その他" + msgPleaseChangeFromSettingFile,
   );
