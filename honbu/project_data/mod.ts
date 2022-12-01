@@ -5,6 +5,7 @@ import { Members } from "./members/mod.ts";
 import { Settings } from "./settings/mod.ts";
 
 export const PROJECT_PATH = "./project";
+export const SH_DIR = `./sh`;
 export const SETTINGS_FILE_PATH = `${PROJECT_PATH}/settings.json`;
 export const MEMBERS_FILE_PATH = `${PROJECT_PATH}/members.json`;
 

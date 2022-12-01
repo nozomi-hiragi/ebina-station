@@ -113,6 +113,7 @@ html
 
 #  Ebina project folder
 project
+sh
 
 # Geneare docker-compose
 docker-compose.yml
