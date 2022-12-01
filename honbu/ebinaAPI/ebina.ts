@@ -2,7 +2,6 @@ import { AuthManager, handleAMErrorToStatus } from "../auth_manager/mod.ts";
 import { authToken } from "../auth_manager/token.ts";
 import { oak } from "../deps.ts";
 import { SH_DIR } from "../project_data/mod.ts";
-import { mkdirIfNotExist } from "../utils/utils.ts";
 import appRouter from "./app/app.ts";
 import databaseRouter from "./database/database.ts";
 import iRouter from "./i/i.ts";
@@ -39,10 +38,10 @@ ebinaRouter.post("/ex", authToken, async (ctx) => {
       const option = await am.createAuthOption(origin, payload.id, {
         id: payload.id,
         action: () => {
-          mkdirIfNotExist(SH_DIR);
-          const cmd = [`${SH_DIR}/${n}.sh`];
-          if (o) cmd.push(...o);
           try {
+            Deno.statSync(SH_DIR);
+            const cmd = [`${SH_DIR}/${n}.sh`];
+            if (o) cmd.push(...o);
             Deno.run({ cmd });
             return Promise.resolve(true);
           } catch {
