@@ -35,7 +35,7 @@ export class Scripts {
   writeText(path: string, content: string) {
     const fullPath = `${this.scriptDir}/${path}`;
     const info = isExist(fullPath);
-    if (!info || info.isDirectory) return false;
+    if (info && info.isDirectory) return false;
     try {
       Deno.writeTextFileSync(fullPath, content);
       return true;
