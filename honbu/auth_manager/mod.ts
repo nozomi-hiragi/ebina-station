@@ -16,6 +16,7 @@ import {
   verifyChallengeForAuth,
   verifyChallengeForRegist,
 } from "./webauthn.ts";
+import { PublicKeyCredentialDescriptor } from "../webauthn/types.ts";
 
 export type AuthManagerErrorType =
   | "No member"
@@ -170,7 +171,7 @@ export class AuthManager {
     key: string,
     option?: { id?: string; deviceNames?: string[]; action?: AuthAction },
   ) {
-    let allowCredentials;
+    let allowCredentials: PublicKeyCredentialDescriptor[] = [];
     if (option?.id) {
       const member = Members.instance().getMember(option.id);
       if (!member) throw new AuthManagerError("No member");
@@ -286,6 +287,20 @@ export class AuthManager {
         member.setPassword(createPasswordAuth(to));
         members.setMember(member);
         return Promise.resolve(true);
+      }
+      : undefined;
+    return this.createAuthOption(origin, id, { id, action });
+  }
+
+  changeTOTP(origin: string, id: string, pass: string, code: string) {
+    const members = Members.instance();
+    const member = members.getMember(id);
+    if (!member) throw new AuthManagerError("No member");
+    const action = member.authMemberWithPassword(pass)
+      ? (member: Member) => {
+        const ret = member.registTempTOTP(code);
+        members.setMember(member);
+        return Promise.resolve(ret);
       }
       : undefined;
     return this.createAuthOption(origin, id, { id, action });

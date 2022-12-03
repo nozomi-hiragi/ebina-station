@@ -146,6 +146,46 @@ iRouter.put("/password", authToken, async (ctx) => {
   }
 });
 
+// TOTP生成
+iRouter.post("/totp/request", authToken, (ctx) => {
+  const payload = ctx.state.payload;
+  if (!payload) return ctx.response.status = 401;
+
+  const member = Members.instance().getMember(payload.id);
+  if (!member) return ctx.response.status = 404;
+  const uri = member.generateTempTOTP();
+
+  ctx.response.status = 200;
+  ctx.response.body = uri;
+});
+
+// TOTP登録
+iRouter.post("/totp/regist", authToken, async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload = ctx.state.payload;
+  if (!payload) return ctx.response.status = 401;
+  const body = await ctx.request.body({ type: "json" }).value;
+
+  try {
+    const am = AuthManager.instance();
+    if (body.type === "public-key") {
+      const ret = await am.verifyAuthResponse(origin, payload.id, body);
+      return ctx.response.status = ret ? 200 : 406;
+    } else {
+      const pass: string | undefined = body.pass;
+      const code: string | undefined = body.code;
+      if (!pass || !code) return ctx.response.status = 400;
+
+      const option = await am.changeTOTP(origin, payload.id, pass, code);
+      ctx.response.body = option;
+      ctx.response.status = 202;
+    }
+  } catch (err) {
+    return ctx.response.status = handleAMErrorToStatus(err);
+  }
+});
+
 iRouter.use("/webauthn", webauthnRouter.routes());
 iRouter.use("/webpush", webpushRouter.routes());
 

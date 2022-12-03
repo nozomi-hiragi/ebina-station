@@ -4,6 +4,12 @@ import {
   PasswordAuth,
 } from "./auth/password.ts";
 import {
+  authTOTP,
+  createTOTPAuth,
+  generateTOTPURI,
+  TOTPAuth,
+} from "./auth/totp.ts";
+import {
   hasHostname,
   WebAuthn,
   WebAuthnItemController,
@@ -19,6 +25,7 @@ export interface MemberValues {
   auth: {
     password?: PasswordAuth;
     webAuthn?: WebAuthn;
+    totpAuth?: TOTPAuth;
   };
   webpush?: WebPushParams;
   flags?: Flags;
@@ -28,6 +35,7 @@ export class Member {
   private id: string;
   private value: MemberValues;
   private challengeWebAuthn?: { name: string; challenge: string };
+  private tempTOTP?: TOTPAuth;
 
   constructor(id: string, value: MemberValues) {
     this.id = id;
@@ -127,6 +135,20 @@ export class Member {
     const device = this.value.webpush.devices[name];
     this.value.webpush.devices[name] = { ...device, subscription };
     return device !== undefined;
+  }
+
+  generateTempTOTP() {
+    this.tempTOTP = createTOTPAuth();
+    return generateTOTPURI(this.tempTOTP, this.getName());
+  }
+
+  registTempTOTP(code: string) {
+    if (!this.tempTOTP) return false;
+    const ret = authTOTP(this.tempTOTP, code);
+    if (ret === null) return false;
+    this.value.auth.totpAuth = this.tempTOTP;
+    this.tempTOTP = undefined;
+    return true;
   }
 
   static create(id: string, name: string, pass: string, admin = false) {

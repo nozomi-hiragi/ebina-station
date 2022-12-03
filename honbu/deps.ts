@@ -16,3 +16,4 @@ export * as djwt from "https://deno.land/x/djwt@v2.7/mod.ts";
 export * as fido2 from "https://deno.land/x/fido2@3.3.4/dist/main.js";
 export { hkdf } from "https://deno.land/x/hkdf@v1.0.2/index.ts";
 export { default as qrcode } from "https://deno.land/x/qrcode_terminal@v1.1.1/mod.js";
+export * as OTPAuth from "https://deno.land/x/otpauth@v9.0.2/dist/otpauth.esm.js";
