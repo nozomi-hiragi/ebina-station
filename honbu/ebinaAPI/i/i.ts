@@ -133,11 +133,45 @@ iRouter.put("/password", authToken, async (ctx) => {
       return ctx.response.status = ret ? 200 : 422;
     } else {
       const current: string | undefined = body.current;
-      const to: string | undefined = body.new;
+      const to: string | undefined = body.to;
       if (!current || !to) return ctx.response.status = 400;
 
       const option = await am
         .changePasswordOption(origin, payload.id, current, to);
+      ctx.response.body = option;
+      ctx.response.status = 202;
+    }
+  } catch (err) {
+    return ctx.response.status = handleAMErrorToStatus(err);
+  }
+});
+
+// パスワードリセット
+// 200 変えれた
+// 202 認証して
+// 400 足らない
+// 401 認証できてない
+// 403 許可されてない
+// 404 データない
+// 422 パスワードのデータおかしい
+iRouter.post("/password", authToken, async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload = ctx.state.payload;
+  if (!payload) return ctx.response.status = 401;
+  const body = await ctx.request.body({ type: "json" }).value;
+
+  try {
+    const am = AuthManager.instance();
+    if (body.type === "public-key") {
+      const ret = await am.verifyAuthResponse(origin, payload.id, body);
+      return ctx.response.status = ret ? 200 : 422;
+    } else {
+      const code: string | undefined = body.code;
+      const to: string | undefined = body.to;
+      if (!code || !to) return ctx.response.status = 400;
+
+      const option = await am.resetPasswordOption(origin, payload.id, code, to);
       ctx.response.body = option;
       ctx.response.status = 202;
     }

@@ -306,6 +306,25 @@ export class AuthManager {
     return this.createAuthOption(origin, id, { id, action });
   }
 
+  resetPasswordOption(
+    origin: string,
+    id: string,
+    code: string,
+    to: string,
+  ) {
+    const members = Members.instance();
+    const member = members.getMember(id);
+    if (!member) throw new AuthManagerError("No member");
+    const action = member.verifyTOTP(code)
+      ? (member: Member) => {
+        member.setPassword(createPasswordAuth(to));
+        members.setMember(member);
+        return Promise.resolve(true);
+      }
+      : undefined;
+    return this.createAuthOption(origin, id, { id, action });
+  }
+
   changeTOTP(origin: string, id: string, pass: string, code: string) {
     const members = Members.instance();
     const member = members.getMember(id);
