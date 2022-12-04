@@ -151,6 +151,14 @@ export class Member {
     return true;
   }
 
+  verifyTOTP(code: string) {
+    const totpAuth = this.value.auth.totpAuth;
+    if (!totpAuth) return undefined;
+    const ret = authTOTP(totpAuth, code);
+    if (ret === null) return false;
+    return true;
+  }
+
   static create(id: string, name: string, pass: string, admin = false) {
     const member = new Member(id, {
       name,

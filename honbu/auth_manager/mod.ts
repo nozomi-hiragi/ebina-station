@@ -23,6 +23,7 @@ export type AuthManagerErrorType =
   | "Failed auth"
   | "No password auth"
   | "No WebAuthn auth"
+  | "No TOTP auth"
   | "WebAuthn Enabled"
   | "Wrong rpId"
   | "No matching session id"
@@ -48,6 +49,8 @@ const convertAMErrorToStatus = (error: AuthManagerError) => {
     case "No password auth":
       return { status: 405, message: error.type };
     case "No WebAuthn auth":
+      return { status: 405, message: error.type };
+    case "No TOTP auth":
       return { status: 405, message: error.type };
     case "WebAuthn Enabled":
       return { status: 406, message: error.type };
@@ -249,10 +252,21 @@ export class AuthManager {
 
   // Regist WebAuthn device
 
-  registWebAuthnOption(origin: string, id: string, deviceName: string) {
+  registWebAuthnOption(
+    origin: string,
+    id: string,
+    values: { deviceName: string; pass: string; code: string },
+  ) {
     const member = Members.instance().getMember(id);
     if (!member) throw new AuthManagerError("No member");
-    return createOptionsForRegist(origin, member, deviceName);
+    const verifyPass = member.authMemberWithPassword(values.pass);
+    if (verifyPass === undefined) {
+      throw new AuthManagerError("No password auth");
+    }
+    const verifyTOTP = member.verifyTOTP(values.code);
+    if (verifyTOTP === undefined) throw new AuthManagerError("No TOTP auth");
+    if (!verifyPass || !verifyTOTP) throw new AuthManagerError("Failed auth");
+    return createOptionsForRegist(origin, member, values.deviceName);
   }
 
   async registWebAuthnVerify(

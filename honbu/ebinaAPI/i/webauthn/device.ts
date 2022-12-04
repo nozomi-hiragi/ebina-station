@@ -3,6 +3,13 @@ import { Members } from "../../../project_data/members/mod.ts";
 import { authToken, JwtPayload } from "../../../auth_manager/token.ts";
 import { HttpExeption } from "../../../utils/utils.ts";
 import { getRPID } from "../../../auth_manager/webauthn.ts";
+import {
+  AuthManager,
+  AuthManagerError,
+  handleAMErrorToStatus,
+} from "../../../auth_manager/mod.ts";
+import { Member } from "../../../project_data/members/member.ts";
+import { isString } from "https://deno.land/std@0.166.0/encoding/_yaml/utils.ts";
 
 const deviceRouter = new oak.Router();
 
@@ -38,58 +45,6 @@ deviceRouter.get("/", authToken, (ctx) => {
     } else {
       throw err;
     }
-  }
-});
-
-// デバイスら削除
-// origin:
-// :deviceName
-// ?names
-// 200 OK
-// 404 みつからない
-// 500 WebAuthnの設定おかしい
-deviceRouter.delete("/", authToken, (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  const payload: JwtPayload = ctx.state.payload!;
-  const memberId = payload.id;
-  const member = Members.instance().getMember(memberId);
-  if (!member) return ctx.response.status = 404;
-
-  const deviceNames = ctx.request.url.searchParams
-    .get("deviceNames")?.split(",");
-
-  const rpID = getRPID(origin);
-  const webAuthnItem = member.getWebAuthnItem(rpID);
-  if (!webAuthnItem) {
-    ctx.response.status = 405;
-    ctx.response.body = "Disable WebAuthn on this account";
-    return;
-  }
-  const authenticatorNames = webAuthnItem.getAuthenticatorNames() ?? [];
-  if (authenticatorNames.length === 0) {
-    ctx.response.status = 404;
-    ctx.response.body = "Disable WebAuthn on this account";
-    return;
-  }
-  const failedNames: string[] = [];
-  authenticatorNames.forEach((name) => {
-    const isTarget = deviceNames?.includes(name) ?? true;
-    if (!isTarget) return;
-    if (!webAuthnItem.deleteAuthenticator(name)) {
-      failedNames.push(name);
-    }
-  });
-  member.setWebAuthnItem(rpID, webAuthnItem);
-  Members.instance().setMember(member);
-  if (failedNames.length === 0) {
-    ctx.response.status = 200;
-  } else if (failedNames.length === deviceNames?.length) {
-    ctx.response.status = 404;
-    ctx.response.body = { message: "Can't find all devices" };
-  } else {
-    ctx.response.status = 206;
-    ctx.response.body = { failedNames: failedNames };
   }
 });
 
@@ -131,48 +86,68 @@ deviceRouter.get("/:deviceName", authToken, (ctx) => {
   }
 });
 
-// デバイス削除
+// WebAuthnデバイス削除
 // origin:
 // :deviceName
 // 200 OK
 // 404 みつからない
 // 500 WebAuthnの設定おかしい
-deviceRouter.delete("/:deviceName", authToken, (ctx) => {
+deviceRouter.post("/:deviceName/delete", authToken, async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
   const payload = ctx.state.payload!;
-  const memberId = payload.id;
-  const member = Members.instance().getMember(memberId);
-  if (!member) return ctx.response.status = 404;
+  const body = await ctx.request.body({ type: "json" }).value.catch(() => ({}));
 
   const { deviceName } = ctx.params;
   if (!deviceName) return ctx.response.status = 400;
+  const key = payload.id + deviceName;
 
-  const rpID = getRPID(origin);
   try {
-    const webAuthnItem = member.getWebAuthnItem(rpID);
-    if (!webAuthnItem) {
-      ctx.response.status = 405;
-      ctx.response.body = "Disable WebAuthn on this account";
-      return;
+    const am = AuthManager.instance();
+    if (body.type === "public-key") {
+      await am.verifyAuthResponse(origin, payload.id, body, key);
+      return ctx.response.status = 200;
     }
 
-    const ret = webAuthnItem.deleteAuthenticator(deviceName);
-    member.setWebAuthnItem(rpID, webAuthnItem);
-    Members.instance().setMember(member);
+    const member = Members.instance().getMember(payload.id);
+    if (!member) return ctx.response.status = 404;
+    const rpID = getRPID(origin);
 
-    if (ret) {
+    const deleteDevice = (member: Member) => {
+      const webAuthnItem = member.getWebAuthnItem(rpID);
+      if (!webAuthnItem) throw new AuthManagerError("No WebAuthn auth");
+      const ret = webAuthnItem.deleteAuthenticator(deviceName);
+      if (!ret) throw new AuthManagerError("No WebAuthn auth");
+      member.setWebAuthnItem(rpID, webAuthnItem);
+      Members.instance().setMember(member);
+    };
+
+    if (body.type === "password") {
+      const { pass, code } = body;
+      if (!pass || !isString(pass) || !code || !isString(code)) {
+        return ctx.response.status = 400;
+      }
+      const verifyPass = member.authMemberWithPassword(pass);
+      if (verifyPass === undefined) {
+        throw new AuthManagerError("No password auth");
+      }
+      const verifyTOTP = member.verifyTOTP(code);
+      if (verifyTOTP === undefined) {
+        throw new AuthManagerError("No TOTP auth");
+      }
+      if (!verifyPass || !verifyTOTP) throw new AuthManagerError("Failed auth");
+      deleteDevice(member);
       ctx.response.status = 200;
     } else {
-      ctx.response.status = 500;
+      const option = await am.createAuthOption(origin, key, {
+        id: payload.id,
+        action: (member) => Promise.resolve(deleteDevice(member)),
+      });
+      ctx.response.body = option;
+      ctx.response.status = 202;
     }
   } catch (err) {
-    if (err instanceof HttpExeption) {
-      ctx.response.status = err.status;
-      ctx.response.body = err.message;
-    } else {
-      throw err;
-    }
+    return ctx.response.status = handleAMErrorToStatus(err);
   }
 });
 
