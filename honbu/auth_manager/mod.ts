@@ -329,6 +329,12 @@ export class AuthManager {
     const members = Members.instance();
     const member = members.getMember(id);
     if (!member) throw new AuthManagerError("No member");
+    const hasWebAuthn = member.hasWebAuthn(new URL(origin).hostname);
+    if (!hasWebAuthn) {
+      const ret = member.registTempTOTP(code);
+      members.setMember(member);
+      return ret;
+    }
     const action = member.authMemberWithPassword(pass)
       ? (member: Member) => {
         const ret = member.registTempTOTP(code);

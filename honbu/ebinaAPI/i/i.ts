@@ -212,8 +212,9 @@ iRouter.post("/totp/regist", authToken, async (ctx) => {
       if (!pass || !code) return ctx.response.status = 400;
 
       const option = await am.changeTOTP(origin, payload.id, pass, code);
-      ctx.response.body = option;
-      ctx.response.status = 202;
+      const isOption = !TypeUtils.isBoolean(option);
+      ctx.response.body = isOption ? option : { result: option };
+      ctx.response.status = isOption ? 202 : 200;
     }
   } catch (err) {
     return ctx.response.status = handleAMErrorToStatus(err);

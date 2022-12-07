@@ -20,24 +20,26 @@ const webauthnRouter = new oak.Router();
 // 409 チャレンジ控えがない
 // 410 チャレンジ古い
 // 500 WebAuthnの設定おかしい
-webauthnRouter.post("/regist", authToken, async (ctx) => {
+webauthnRouter.post("/regist", async (ctx) => {
   const origin = ctx.request.headers.get("origin");
   if (!origin) return ctx.response.status = 400;
+  await authToken(ctx, async () => {});
   const payload = ctx.state.payload;
-  if (!payload) return ctx.response.status = 401;
   const body = await ctx.request.body({ type: "json" }).value;
+  const id = payload ? payload.id : ctx.request.headers.get("id");
+  if (!id) return ctx.response.status = 400;
 
   try {
     const am = AuthManager.instance();
     if (body.type === "public-key") {
       const enabledDeviceNames = await am
-        .registWebAuthnVerify(origin, payload.id, body).then((member) =>
+        .registWebAuthnVerify(origin, id, body).then((member) =>
           member.getWebAuthnItem(getRPID(origin))?.getEnableDeviceNames() ?? []
         );
       ctx.response.body = enabledDeviceNames;
       ctx.response.status = 200;
     } else {
-      const option = await am.registWebAuthnOption(origin, payload.id, {
+      const option = await am.registWebAuthnOption(origin, id, {
         ...body,
         deviceName: body.deviceName ?? randomBase64url(8),
       });
