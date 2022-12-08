@@ -50,41 +50,13 @@ iRouter.post("/login/verify", async (ctx) => {
   if (!sessionId || !TypeUtils.isString(sessionId) || !result) {
     return ctx.response.status = 400;
   }
-  const id = result.response.userHandle;
+  const id = result.response.userHandle ?? ctx.request.headers.get("id");
+  if (!id) return ctx.response.status = 400;
 
   try {
     const token = await AuthManager.instance()
       .verifyAuthResponse(origin, id, result, sessionId);
     if (!TypeUtils.isString(token)) return ctx.response.status = 502;
-
-    ctx.response.body = token;
-    ctx.response.status = 200;
-  } catch (err) {
-    return ctx.response.status = handleAMErrorToStatus(err);
-  }
-});
-
-// パスワードでログイン
-// { type, id, pass }
-// 200 トークン
-// 400 情報足らない
-// 403 パスワードが違う
-// 404 メンバーない
-// 405 パスワードが設定されてない
-// 406 パスワードはだめ
-iRouter.post("/login", async (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  const hostname = new URL(origin).hostname;
-  const body = await ctx.request.body({ type: "json" }).value;
-
-  const id: string = body.id;
-  const pass: string = body.pass;
-  if (!id || !pass) return ctx.response.status = 400;
-
-  try {
-    const token = await AuthManager.instance()
-      .loginWithPassword(hostname, id, pass);
 
     ctx.response.body = token;
     ctx.response.status = 200;

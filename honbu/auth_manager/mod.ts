@@ -182,7 +182,7 @@ export class AuthManager {
       const rpID = getRPID(origin);
       const webAuthnItem = member.getWebAuthnItem(rpID);
       if (!webAuthnItem) throw new AuthManagerError("No WebAuthn auth");
-      allowCredentials = option.deviceNames && option.deviceNames.length !== 0
+      allowCredentials = (option.deviceNames && option.deviceNames.length !== 0)
         ? webAuthnItem.getPublicKeyCredentials(option.deviceNames)
         : webAuthnItem.getEnabledPublicKeyCredentials();
     }
@@ -215,35 +215,12 @@ export class AuthManager {
 
   // Login
 
-  loginWithPassword(hostname: string, id: string, password: string) {
-    const member = Members.instance().getMember(id);
-    if (!member) throw new AuthManagerError("No member");
-
-    if (member.hasWebAuthn(hostname)) {
-      throw new AuthManagerError("WebAuthn Enabled");
-    }
-
-    switch (member.authMemberWithPassword(password)) {
-      case true:
-        return generateTokens(member.getId());
-      case false:
-        throw new AuthManagerError("Failed auth");
-      case undefined:
-        throw new AuthManagerError("No password auth");
-    }
-  }
-
   async loginWebAuthnOption(origin: string, id?: string) {
     const sessionId = randomBase64url(16);
     return await this.createAuthOption(origin, sessionId, {
       id,
       action: (member) => generateTokens(member.getId()),
-    }).then((options) => {
-      return { type: "WebAuthn", options, sessionId };
-    }).catch((err: AuthManagerError) => {
-      if (err.type === "No WebAuthn auth") return { type: "Password" };
-      throw err;
-    });
+    }).then((options) => ({ type: "WebAuthn", options, sessionId }));
   }
 
   checkDevicesOption(origin: string, id: string, deviceNames?: string[]) {
