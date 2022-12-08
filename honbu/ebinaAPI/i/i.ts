@@ -50,41 +50,13 @@ iRouter.post("/login/verify", async (ctx) => {
   if (!sessionId || !TypeUtils.isString(sessionId) || !result) {
     return ctx.response.status = 400;
   }
-  const id = result.response.userHandle;
+  const id = result.response.userHandle ?? ctx.request.headers.get("id");
+  if (!id) return ctx.response.status = 400;
 
   try {
     const token = await AuthManager.instance()
       .verifyAuthResponse(origin, id, result, sessionId);
     if (!TypeUtils.isString(token)) return ctx.response.status = 502;
-
-    ctx.response.body = token;
-    ctx.response.status = 200;
-  } catch (err) {
-    return ctx.response.status = handleAMErrorToStatus(err);
-  }
-});
-
-// パスワードでログイン
-// { type, id, pass }
-// 200 トークン
-// 400 情報足らない
-// 403 パスワードが違う
-// 404 メンバーない
-// 405 パスワードが設定されてない
-// 406 パスワードはだめ
-iRouter.post("/login", async (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  const hostname = new URL(origin).hostname;
-  const body = await ctx.request.body({ type: "json" }).value;
-
-  const id: string = body.id;
-  const pass: string = body.pass;
-  if (!id || !pass) return ctx.response.status = 400;
-
-  try {
-    const token = await AuthManager.instance()
-      .loginWithPassword(hostname, id, pass);
 
     ctx.response.body = token;
     ctx.response.status = 200;
@@ -133,13 +105,88 @@ iRouter.put("/password", authToken, async (ctx) => {
       return ctx.response.status = ret ? 200 : 422;
     } else {
       const current: string | undefined = body.current;
-      const to: string | undefined = body.new;
+      const to: string | undefined = body.to;
       if (!current || !to) return ctx.response.status = 400;
 
       const option = await am
         .changePasswordOption(origin, payload.id, current, to);
       ctx.response.body = option;
       ctx.response.status = 202;
+    }
+  } catch (err) {
+    return ctx.response.status = handleAMErrorToStatus(err);
+  }
+});
+
+// パスワードリセット
+// 200 変えれた
+// 202 認証して
+// 400 足らない
+// 401 認証できてない
+// 403 許可されてない
+// 404 データない
+// 422 パスワードのデータおかしい
+iRouter.post("/password", authToken, async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload = ctx.state.payload;
+  if (!payload) return ctx.response.status = 401;
+  const body = await ctx.request.body({ type: "json" }).value;
+
+  try {
+    const am = AuthManager.instance();
+    if (body.type === "public-key") {
+      const ret = await am.verifyAuthResponse(origin, payload.id, body);
+      return ctx.response.status = ret ? 200 : 422;
+    } else {
+      const code: string | undefined = body.code;
+      const to: string | undefined = body.to;
+      if (!code || !to) return ctx.response.status = 400;
+
+      const option = await am.resetPasswordOption(origin, payload.id, code, to);
+      ctx.response.body = option;
+      ctx.response.status = 202;
+    }
+  } catch (err) {
+    return ctx.response.status = handleAMErrorToStatus(err);
+  }
+});
+
+// TOTP生成
+iRouter.post("/totp/request", authToken, (ctx) => {
+  const payload = ctx.state.payload;
+  if (!payload) return ctx.response.status = 401;
+
+  const member = Members.instance().getMember(payload.id);
+  if (!member) return ctx.response.status = 404;
+  const uri = member.generateTempTOTP();
+
+  ctx.response.status = 200;
+  ctx.response.body = uri;
+});
+
+// TOTP登録
+iRouter.post("/totp/regist", authToken, async (ctx) => {
+  const origin = ctx.request.headers.get("origin");
+  if (!origin) return ctx.response.status = 400;
+  const payload = ctx.state.payload;
+  if (!payload) return ctx.response.status = 401;
+  const body = await ctx.request.body({ type: "json" }).value;
+
+  try {
+    const am = AuthManager.instance();
+    if (body.type === "public-key") {
+      const ret = await am.verifyAuthResponse(origin, payload.id, body);
+      return ctx.response.status = ret ? 200 : 406;
+    } else {
+      const pass: string | undefined = body.pass;
+      const code: string | undefined = body.code;
+      if (!pass || !code) return ctx.response.status = 400;
+
+      const option = await am.changeTOTP(origin, payload.id, pass, code);
+      const isOption = !TypeUtils.isBoolean(option);
+      ctx.response.body = isOption ? option : { result: option };
+      ctx.response.status = isOption ? 202 : 200;
     }
   } catch (err) {
     return ctx.response.status = handleAMErrorToStatus(err);

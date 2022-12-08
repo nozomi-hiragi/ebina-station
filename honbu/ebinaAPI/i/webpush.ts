@@ -59,14 +59,14 @@ webpushRouter.post("/device", authToken, async (ctx) => {
 // 200 ok
 // 401 ログインおかしい
 // 404 居ない
-webpushRouter.delete("/device", authToken, async (ctx) => {
+webpushRouter.delete("/device/:name", authToken, (ctx) => {
   const payload = ctx.state.payload;
   if (!payload) return ctx.response.status = 401;
   const members = Members.instance();
   const member = members.getMember(payload.id);
   if (!member) return ctx.response.status = 404;
 
-  const { deviceName } = await ctx.request.body({ type: "json" }).value;
+  const deviceName = ctx.params.name;
   if (!TypeUtils.isString(deviceName)) return ctx.response.status = 400;
 
   const webpushSeettings = Settings.instance().WebPush.values;

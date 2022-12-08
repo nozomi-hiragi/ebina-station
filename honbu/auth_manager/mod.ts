@@ -16,12 +16,14 @@ import {
   verifyChallengeForAuth,
   verifyChallengeForRegist,
 } from "./webauthn.ts";
+import { PublicKeyCredentialDescriptor } from "../webauthn/types.ts";
 
 export type AuthManagerErrorType =
   | "No member"
   | "Failed auth"
   | "No password auth"
   | "No WebAuthn auth"
+  | "No TOTP auth"
   | "WebAuthn Enabled"
   | "Wrong rpId"
   | "No matching session id"
@@ -47,6 +49,8 @@ const convertAMErrorToStatus = (error: AuthManagerError) => {
     case "No password auth":
       return { status: 405, message: error.type };
     case "No WebAuthn auth":
+      return { status: 405, message: error.type };
+    case "No TOTP auth":
       return { status: 405, message: error.type };
     case "WebAuthn Enabled":
       return { status: 406, message: error.type };
@@ -170,7 +174,7 @@ export class AuthManager {
     key: string,
     option?: { id?: string; deviceNames?: string[]; action?: AuthAction },
   ) {
-    let allowCredentials;
+    let allowCredentials: PublicKeyCredentialDescriptor[] = [];
     if (option?.id) {
       const member = Members.instance().getMember(option.id);
       if (!member) throw new AuthManagerError("No member");
@@ -178,7 +182,7 @@ export class AuthManager {
       const rpID = getRPID(origin);
       const webAuthnItem = member.getWebAuthnItem(rpID);
       if (!webAuthnItem) throw new AuthManagerError("No WebAuthn auth");
-      allowCredentials = option.deviceNames && option.deviceNames.length !== 0
+      allowCredentials = (option.deviceNames && option.deviceNames.length !== 0)
         ? webAuthnItem.getPublicKeyCredentials(option.deviceNames)
         : webAuthnItem.getEnabledPublicKeyCredentials();
     }
@@ -211,35 +215,12 @@ export class AuthManager {
 
   // Login
 
-  loginWithPassword(hostname: string, id: string, password: string) {
-    const member = Members.instance().getMember(id);
-    if (!member) throw new AuthManagerError("No member");
-
-    if (member.hasWebAuthn(hostname)) {
-      throw new AuthManagerError("WebAuthn Enabled");
-    }
-
-    switch (member.authMemberWithPassword(password)) {
-      case true:
-        return generateTokens(member.getId());
-      case false:
-        throw new AuthManagerError("Failed auth");
-      case undefined:
-        throw new AuthManagerError("No password auth");
-    }
-  }
-
   async loginWebAuthnOption(origin: string, id?: string) {
     const sessionId = randomBase64url(16);
     return await this.createAuthOption(origin, sessionId, {
       id,
       action: (member) => generateTokens(member.getId()),
-    }).then((options) => {
-      return { type: "WebAuthn", options, sessionId };
-    }).catch((err: AuthManagerError) => {
-      if (err.type === "No WebAuthn auth") return { type: "Password" };
-      throw err;
-    });
+    }).then((options) => ({ type: "WebAuthn", options, sessionId }));
   }
 
   checkDevicesOption(origin: string, id: string, deviceNames?: string[]) {
@@ -248,10 +229,21 @@ export class AuthManager {
 
   // Regist WebAuthn device
 
-  registWebAuthnOption(origin: string, id: string, deviceName: string) {
+  registWebAuthnOption(
+    origin: string,
+    id: string,
+    values: { deviceName: string; pass: string; code: string },
+  ) {
     const member = Members.instance().getMember(id);
     if (!member) throw new AuthManagerError("No member");
-    return createOptionsForRegist(origin, member, deviceName);
+    const verifyPass = member.authMemberWithPassword(values.pass);
+    if (verifyPass === undefined) {
+      throw new AuthManagerError("No password auth");
+    }
+    const verifyTOTP = member.verifyTOTP(values.code);
+    if (verifyTOTP === undefined) throw new AuthManagerError("No TOTP auth");
+    if (!verifyPass || !verifyTOTP) throw new AuthManagerError("Failed auth");
+    return createOptionsForRegist(origin, member, values.deviceName);
   }
 
   async registWebAuthnVerify(
@@ -286,6 +278,45 @@ export class AuthManager {
         member.setPassword(createPasswordAuth(to));
         members.setMember(member);
         return Promise.resolve(true);
+      }
+      : undefined;
+    return this.createAuthOption(origin, id, { id, action });
+  }
+
+  resetPasswordOption(
+    origin: string,
+    id: string,
+    code: string,
+    to: string,
+  ) {
+    const members = Members.instance();
+    const member = members.getMember(id);
+    if (!member) throw new AuthManagerError("No member");
+    const action = member.verifyTOTP(code)
+      ? (member: Member) => {
+        member.setPassword(createPasswordAuth(to));
+        members.setMember(member);
+        return Promise.resolve(true);
+      }
+      : undefined;
+    return this.createAuthOption(origin, id, { id, action });
+  }
+
+  changeTOTP(origin: string, id: string, pass: string, code: string) {
+    const members = Members.instance();
+    const member = members.getMember(id);
+    if (!member) throw new AuthManagerError("No member");
+    const hasWebAuthn = member.hasWebAuthn(new URL(origin).hostname);
+    if (!hasWebAuthn) {
+      const ret = member.registTempTOTP(code);
+      members.setMember(member);
+      return ret;
+    }
+    const action = member.authMemberWithPassword(pass)
+      ? (member: Member) => {
+        const ret = member.registTempTOTP(code);
+        members.setMember(member);
+        return Promise.resolve(ret);
       }
       : undefined;
     return this.createAuthOption(origin, id, { id, action });
