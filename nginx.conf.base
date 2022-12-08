@@ -25,5 +25,5 @@ http {
 
     #gzip  on;
 
-    include /etc/nginx/generate/includes.conf;
+    include /etc/nginx/generate/*.conf;
 }
