@@ -60,6 +60,7 @@ export const deleteApp = (appName: string) => {
   mkdirIfNotExist(GOMI_DIR);
   try {
     Deno.renameSync(`${APPS_DIR}/${appName}`, `${GOMI_DIR}/${appName}`);
+    delete apps[appName];
     return true;
   } catch (err) {
     logEbina.error(`delete app ${appName} error:`, err);
