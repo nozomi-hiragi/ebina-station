@@ -3,6 +3,7 @@ import { authToken } from "../../auth_manager/token.ts";
 import { APIItem } from "../../project_data/apps/apis.ts";
 import { APPS_DIR } from "../../project_data/mod.ts";
 import { getApp } from "../../project_data/apps/mod.ts";
+import { getPort, setPort } from "../../project_data/apps/ports.ts";
 
 const apiRouter = new oak.Router();
 
@@ -77,7 +78,7 @@ apiRouter.get("/port", authToken, (ctx) => {
   if (!appName) return ctx.response.status = 400;
   const apis = getApp(appName)?.apis;
   if (!apis) return ctx.response.status = 404;
-  ctx.response.body = { port: apis.getPort() };
+  ctx.response.body = { port: getPort(appName) };
 });
 
 // ポート設定
@@ -92,7 +93,7 @@ apiRouter.put("/port", authToken, async (ctx) => {
 
   const apis = getApp(appName)?.apis;
   if (!apis) return ctx.response.status = 404;
-  apis.setPort(port);
+  setPort(appName, port);
   ctx.response.status = 200;
 });
 
@@ -116,15 +117,15 @@ apiRouter.get("/endpoint", authToken, (ctx) => {
 apiRouter.post("/endpoint/:path", authToken, async (ctx) => {
   const { appName, path } = ctx.params;
   if (!appName) return ctx.response.status = 400;
-  const { name, method, type, value } = await ctx.request.body({ type: "json" })
-    .value;
-  if (!path || !name || !method || !type || !value) {
+  const { name, method, filename, value } = await ctx.request
+    .body({ type: "json" }).value;
+  if (!path || !name || !method || !value) {
     return ctx.response.status = 400;
   }
 
   const apis = getApp(appName)?.apis;
   if (!apis) return ctx.response.status = 404;
-  apis.setAPI(path, new APIItem({ name, method, type, value }));
+  apis.setAPI(path, new APIItem({ name, method, filename, value }));
   ctx.response.status = 200;
 });
 
@@ -139,7 +140,7 @@ apiRouter.get("/endpoint/:path", authToken, (ctx) => {
 
   const apis = getApp(appName)?.apis;
   if (!apis) return ctx.response.status = 404;
-  const api = apis.getAPI(path)?.getRawValues();
+  const api = apis.getAPIValue(path);
   if (api) {
     ctx.response.body = api;
   } else {
@@ -154,15 +155,15 @@ apiRouter.get("/endpoint/:path", authToken, (ctx) => {
 apiRouter.put("/endpoint/:path", authToken, async (ctx) => {
   const { appName, path } = ctx.params;
   if (!appName) return ctx.response.status = 400;
-  const { name, method, type, value } = await ctx.request.body({ type: "json" })
-    .value;
-  if (!path || !name || !method || !type || !value) {
+  const { name, method, filename, value } = await ctx.request
+    .body({ type: "json" }).value;
+  if (!path || !name || !method || !value) {
     return ctx.response.status = 400;
   }
 
   const apis = getApp(appName)?.apis;
   if (!apis) return ctx.response.status = 404;
-  apis.setAPI(path, new APIItem({ name, method, type, value }));
+  apis.setAPI(path, new APIItem({ name, method, filename, value }));
   ctx.response.status = 200;
 });
 

@@ -6,21 +6,21 @@ import { authToken } from "../../auth_manager/token.ts";
 import {
   createApp,
   deleteApp,
-  getAppList,
+  getAppNameList,
 } from "../../project_data/apps/mod.ts";
 
 const appRouter = new oak.Router();
 
 // アプリ配列取得
 // 200 名前ら
-appRouter.get("/", authToken, (ctx) => ctx.response.body = getAppList());
+appRouter.get("/", authToken, (ctx) => ctx.response.body = getAppNameList());
 
 // アプリ作成
 // 200 OK
 // 400 情報足らない
 appRouter.post("/:appName", authToken, (ctx) => {
   const appName = ctx.params.appName;
-  const appList = getAppList();
+  const appList = getAppNameList();
   const found = appList.find((name) =>
     name.toLowerCase() === appName.toLowerCase()
   );
@@ -39,7 +39,7 @@ appRouter.post("/:appName", authToken, (ctx) => {
 // 404 なかった
 appRouter.get("/:appName", authToken, (ctx) => {
   const appName = ctx.params.appName;
-  const appList = getAppList();
+  const appList = getAppNameList();
   const found = appList.find((name) =>
     name.toLowerCase() === appName.toLowerCase()
   );
@@ -52,7 +52,7 @@ appRouter.get("/:appName", authToken, (ctx) => {
 // 500 フォルダ移動ミスった
 appRouter.delete("/:appName", authToken, (ctx) => {
   const appName = ctx.params.appName;
-  const appList = getAppList();
+  const appList = getAppNameList();
   const found = appList.find((name) =>
     name.toLowerCase() === appName.toLowerCase()
   );

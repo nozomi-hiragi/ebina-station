@@ -3,6 +3,7 @@ import { mkdirIfNotExist } from "../../utils/utils.ts";
 import { APPS_DIR, GOMI_DIR } from "../mod.ts";
 import { APIs } from "./apis.ts";
 import { CronItems } from "./cron.ts";
+import { initPorts } from "./ports.ts";
 import { Scripts } from "./scripts.ts";
 
 const FIRST_APP_NAME = "FirstApp";
@@ -34,11 +35,13 @@ export const initApps = () => {
       const appName = dir.name;
       loadApp(appName);
     }
-    // deno-lint-ignore no-empty
-  } catch {}
-  if (Object.keys(apps).length === 0) {
+  } catch {
+    Deno.mkdirSync(APPS_DIR, { recursive: true });
+  }
+  if (getAppNameList().length === 0) {
     createApp(FIRST_APP_NAME);
   }
+  initPorts(getAppNameList());
 };
 
 const loadApp = (appName: string) => {
@@ -68,7 +71,4 @@ export const deleteApp = (appName: string) => {
   }
 };
 
-export const getAppList = () => {
-  const appList = Object.keys(apps);
-  return appList;
-};
+export const getAppNameList = () => Object.keys(apps);
