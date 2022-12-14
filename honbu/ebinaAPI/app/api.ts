@@ -1,6 +1,6 @@
 import { oak } from "../../deps.ts";
 import { authToken } from "../../auth_manager/token.ts";
-import { APIItem } from "../../project_data/apps/apis.ts";
+import { APIItemValuesV2 } from "../../project_data/apps/apis.ts";
 import { APPS_DIR } from "../../project_data/mod.ts";
 import { getApp } from "../../project_data/apps/mod.ts";
 import { getPort, setPort } from "../../project_data/apps/ports.ts";
@@ -109,26 +109,6 @@ apiRouter.get("/endpoint", authToken, (ctx) => {
   ctx.response.body = apiList;
 });
 
-// API作成
-// :path
-// { name, method, type, value }
-// 200 OK
-// 400 情報おかしい
-apiRouter.post("/endpoint/:path", authToken, async (ctx) => {
-  const { appName, path } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
-  const { name, method, filename, value } = await ctx.request
-    .body({ type: "json" }).value;
-  if (!path || !name || !method || !value) {
-    return ctx.response.status = 400;
-  }
-
-  const apis = getApp(appName)?.apis;
-  if (!apis) return ctx.response.status = 404;
-  apis.setAPI(path, new APIItem({ name, method, filename, value }));
-  ctx.response.status = 200;
-});
-
 // API取得
 // :path
 // 200 API
@@ -152,19 +132,19 @@ apiRouter.get("/endpoint/:path", authToken, (ctx) => {
 // :path
 // 200 OK
 // 400 情報おかしい
-apiRouter.put("/endpoint/:path", authToken, async (ctx) => {
-  const { appName, path } = ctx.params;
+apiRouter.put("/endpoint/:curPath", authToken, async (ctx) => {
+  const { appName, curPath } = ctx.params;
   if (!appName) return ctx.response.status = 400;
-  const { name, method, filename, value } = await ctx.request
+  const { name, path, method, filename, value } = await ctx.request
     .body({ type: "json" }).value;
-  if (!path || !name || !method || !value) {
+  if (!name || !path || !method || !value) {
     return ctx.response.status = 400;
   }
 
   const apis = getApp(appName)?.apis;
   if (!apis) return ctx.response.status = 404;
-  apis.setAPI(path, new APIItem({ name, method, filename, value }));
-  ctx.response.status = 200;
+  const api: APIItemValuesV2 = { name, path, method, filename, value };
+  ctx.response.status = apis.updateAPI(curPath, api) ? 200 : 409;
 });
 
 // API削除
