@@ -1,14 +1,10 @@
-import { isString } from "https://deno.land/std@0.158.0/encoding/_yaml/utils.ts";
+import { isString } from "https://deno.land/std@0.167.0/encoding/_yaml/utils.ts";
 import * as oak from "https://deno.land/x/oak@v11.1.0/mod.ts";
 
-type Method = "get" | "head" | "post" | "put" | "delete" | "options" | "patch";
-type Type = "static" | "JavaScript";
-
-const DEFAULT_PORT = 1234;
 const DIR_SCRIPTS = "scripts";
 const FILE_APIS = "apis.json";
 
-async function main(appDirPath: string) {
+async function main(appDirPath: string, port: string) {
   const apiJsonPath = `${appDirPath}/${FILE_APIS}`;
   try {
     Deno.statSync(apiJsonPath);
@@ -17,7 +13,6 @@ async function main(appDirPath: string) {
     return;
   }
   const apisJson = JSON.parse(Deno.readTextFileSync(apiJsonPath));
-
   const router = new oak.Router();
   const methods: {
     [m: string]: (p: string, f: oak.RouterMiddleware<string>) => void;
@@ -30,43 +25,28 @@ async function main(appDirPath: string) {
     "delete": (p, f) => router.delete(p, f),
     "options": (p, f) => router.options(p, f),
   };
-  for (const apiKey of Object.keys(apisJson.apis)) {
-    const api: { type: Type; method: Method; value: string } =
-      apisJson.apis[apiKey];
-    if (
-      !api.type || !isString(api.type) ||
-      !api.method || !isString(api.method) ||
-      !api.value || !isString(api.value)
-    ) continue;
-
+  for (const api of apisJson.apis) {
+    if (!api.path || !isString(api.path)) continue;
+    if (!api.method || !isString(api.method)) continue;
+    if (!api.value || !isString(api.value)) continue;
     let func: oak.RouterMiddleware<string>;
-    switch (api.type) {
-      case "static":
-        func = (ctx) => ctx.response.body = api.value;
-        break;
-      case "JavaScript":
-        try {
-          const args = api.value.split(">");
-          const scriptPaht = `${appDirPath}/${DIR_SCRIPTS}/${args[0]}`;
-          const module = await import(scriptPaht);
-          func = module[args[1]];
-        } catch (err) {
-          func = (ctx) => {
-            ctx.response.body = err;
-            ctx.response.status = 502;
-          };
-        }
-        break;
-      default:
-        func = (ctx) => ctx.response.status = 501;
-    }
-    const apiPath = `/${apiKey}`;
-    methods[api.method](apiPath, func);
+    if (api.filename) {
+      try {
+        const scriptPaht = `${appDirPath}/${DIR_SCRIPTS}/${api.filename}`;
+        const module = await import(scriptPaht);
+        func = module[api.value];
+      } catch (err) {
+        func = (ctx) => {
+          ctx.response.body = err;
+          ctx.response.status = 502;
+        };
+      }
+    } else func = (ctx) => ctx.response.body = api.value;
+    methods[api.method](`/${api.path}`, func);
   }
-  new oak.Application()
-    .use(router.routes(), router.allowedMethods())
-    .listen({ port: apisJson.port || DEFAULT_PORT });
+  new oak.Application().use(router.routes(), router.allowedMethods())
+    .listen({ port: Number(port) });
 }
 
-if (Deno.args.length) main(Deno.args[0]);
+if (Deno.args.length >= 2) main(Deno.args[0], Deno.args[1]);
 else console.log("no args");

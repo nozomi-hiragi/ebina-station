@@ -2,7 +2,7 @@ import { logEbina } from "../../utils/log.ts";
 import { isExist, mkdirIfNotExist } from "../../utils/utils.ts";
 import { APPS_DIR } from "../mod.ts";
 
-const SCRIPTS_DIR = "scripts";
+export const SCRIPTS_DIR = "scripts";
 
 export class Scripts {
   private scriptDir: string;
@@ -10,6 +10,10 @@ export class Scripts {
   constructor(appName: string) {
     this.scriptDir = `${APPS_DIR}/${appName}/${SCRIPTS_DIR}`;
     mkdirIfNotExist(this.scriptDir);
+    const entrancePath = `${this.scriptDir}/entrance.ts`;
+    if (!isExist(entrancePath)) {
+      Deno.copyFileSync("./entrance.ts", entrancePath);
+    }
   }
 
   exist(path: string) {

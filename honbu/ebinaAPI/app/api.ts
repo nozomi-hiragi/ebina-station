@@ -4,6 +4,11 @@ import { APIItemValuesV2 } from "../../project_data/apps/apis.ts";
 import { APPS_DIR } from "../../project_data/mod.ts";
 import { getApp } from "../../project_data/apps/mod.ts";
 import { getPort, setPort } from "../../project_data/apps/ports.ts";
+import { SCRIPTS_DIR } from "../../project_data/apps/scripts.ts";
+
+globalThis.addEventListener("unload", () => {
+  Object.values(entrances).forEach((it) => it?.entranceProc?.kill("SIGINT"));
+});
 
 const apiRouter = new oak.Router();
 
@@ -49,13 +54,16 @@ apiRouter.put("/status", authToken, async (ctx) => {
 
   switch (status) {
     case "start": {
+      const appPath = `${APPS_DIR}/${appName}`;
       const entranceProc = Deno.run({
         cmd: [
           "deno",
           "run",
-          "--allow-all",
-          "./entrance.ts",
-          `${APPS_DIR}/${appName}`,
+          "--allow-net",
+          `--allow-read=${appPath}`,
+          `${appPath}/${SCRIPTS_DIR}/entrance.ts`,
+          appPath,
+          getPort(appName).toString(),
         ],
       });
       const startedDate = Date.now();

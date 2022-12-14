@@ -12,11 +12,13 @@ const PORT_START = 15346;
 const ports: PortsValues = {};
 const usedPort: number[] = [];
 
-const parsePorts = (jsonString: string) => {
+const parsePorts = (jsonString: string, appNames: string[]) => {
   const json = JSON.parse(jsonString);
   const keys = Object.keys(json);
   const rawPorts: number[] = [];
-  keys.forEach((name) => rawPorts.push(ports[name] = json[name]));
+  keys.forEach((name) => {
+    if (appNames.includes(name)) rawPorts.push(ports[name] = json[name]);
+  });
   rawPorts.sort((a, b) => a - b);
   const double = rawPorts.filter((v, i, a) => {
     const isFindFirst = a.indexOf(v) === i;
@@ -29,7 +31,7 @@ const parsePorts = (jsonString: string) => {
 export const initPorts = (appNames: string[]) => {
   const portsPath = `${APPS_DIR}/${PORTS_JSON_NAME}`;
   isExist(portsPath)?.isFile
-    ? parsePorts(Deno.readTextFileSync(portsPath))
+    ? parsePorts(Deno.readTextFileSync(portsPath), appNames)
     : [];
   appNames.forEach((name) => {
     if (name in ports) return;
