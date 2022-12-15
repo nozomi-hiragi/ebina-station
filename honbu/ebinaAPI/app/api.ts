@@ -3,12 +3,25 @@ import { authToken } from "../../auth_manager/token.ts";
 import { APIItemValuesV2 } from "../../project_data/apps/apis.ts";
 import { APPS_DIR } from "../../project_data/mod.ts";
 import { getApp } from "../../project_data/apps/mod.ts";
-import { getPort, setPort } from "../../project_data/apps/ports.ts";
+import { getPort } from "../../project_data/apps/ports.ts";
 import { SCRIPTS_DIR } from "../../project_data/apps/scripts.ts";
 
 globalThis.addEventListener("unload", () => {
   Object.values(entrances).forEach((it) => it?.entranceProc?.kill("SIGINT"));
 });
+
+interface EntranceArgs {
+  appDirPath: string;
+  port: number;
+  init?: {
+    filename: string;
+    function: string;
+  };
+  final?: {
+    filename: string;
+    function: string;
+  };
+}
 
 const apiRouter = new oak.Router();
 
@@ -54,16 +67,19 @@ apiRouter.put("/status", authToken, async (ctx) => {
 
   switch (status) {
     case "start": {
-      const appPath = `${APPS_DIR}/${appName}`;
+      const appDirPath = `${APPS_DIR}/${appName}`;
+      const args: EntranceArgs = {
+        appDirPath,
+        port: getPort(appName)!,
+      };
       const entranceProc = Deno.run({
         cmd: [
           "deno",
           "run",
           "--allow-net",
-          `--allow-read=${appPath}`,
-          `${appPath}/${SCRIPTS_DIR}/entrance.ts`,
-          appPath,
-          getPort(appName).toString(),
+          `--allow-read=${appDirPath}`,
+          `${appDirPath}/${SCRIPTS_DIR}/entrance.ts`,
+          JSON.stringify(args),
         ],
       });
       const startedDate = Date.now();
@@ -77,32 +93,6 @@ apiRouter.put("/status", authToken, async (ctx) => {
       ctx.response.status = 400;
       break;
   }
-});
-
-// ポート取得
-// 200 { port: number }
-apiRouter.get("/port", authToken, (ctx) => {
-  const { appName } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
-  const apis = getApp(appName)?.apis;
-  if (!apis) return ctx.response.status = 404;
-  ctx.response.body = { port: getPort(appName) };
-});
-
-// ポート設定
-// { port: number }
-// 200 OK
-// 400 情報おかしい
-apiRouter.put("/port", authToken, async (ctx) => {
-  const { appName } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
-  const { port } = await ctx.request.body({ type: "json" }).value;
-  if (!port) return ctx.response.status = 400;
-
-  const apis = getApp(appName)?.apis;
-  if (!apis) return ctx.response.status = 404;
-  setPort(appName, port);
-  ctx.response.status = 200;
 });
 
 // API一覧取得

@@ -1,22 +1,61 @@
-import { isString } from "https://deno.land/std@0.167.0/encoding/_yaml/utils.ts";
 import * as oak from "https://deno.land/x/oak@v11.1.0/mod.ts";
 
 const DIR_SCRIPTS = "scripts";
 const FILE_APIS = "apis.json";
 
-async function main(appDirPath: string, port: string) {
-  const apiJsonPath = `${appDirPath}/${FILE_APIS}`;
-  try {
-    Deno.statSync(apiJsonPath);
-  } catch (err) {
-    console.error("API JSON Error", err);
-    return;
+interface EntranceArgs {
+  appDirPath: string;
+  port: number;
+  init?: {
+    filename: string;
+    function: string;
+  };
+  final?: {
+    filename: string;
+    function: string;
+  };
+}
+type RouterFunc = oak.RouterMiddleware<string>;
+interface APIItem {
+  name: string;
+  path: string;
+  method: string;
+  filename?: string;
+  value: string;
+}
+
+let appDirPath: string;
+// deno-lint-ignore no-explicit-any
+const moduleCache: { [filename: string]: any } = {};
+
+const getModule = async (filename: string) => {
+  const module = moduleCache[filename];
+  if (module) return module;
+  const scriptPaht = `${appDirPath}/${DIR_SCRIPTS}/${filename}`;
+  return moduleCache[filename] = await import(scriptPaht);
+};
+
+const readAPIsJson = (): APIItem[] =>
+  JSON.parse(Deno.readTextFileSync(`${appDirPath}/${FILE_APIS}`)).apis;
+
+const apiToFunction = async (api: APIItem): Promise<RouterFunc> => {
+  if (api.filename) {
+    try {
+      const module = await getModule(api.filename);
+      return module[api.value];
+    } catch (err) {
+      return (ctx) => {
+        ctx.response.body = err;
+        ctx.response.status = 502;
+      };
+    }
   }
-  const apisJson = JSON.parse(Deno.readTextFileSync(apiJsonPath));
+  return (ctx) => ctx.response.body = api.value;
+};
+
+const createRouter = async () => {
   const router = new oak.Router();
-  const methods: {
-    [m: string]: (p: string, f: oak.RouterMiddleware<string>) => void;
-  } = {
+  const methods: { [m: string]: (p: string, f: RouterFunc) => void } = {
     "get": (p, f) => router.get(p, f),
     "put": (p, f) => router.put(p, f),
     "head": (p, f) => router.head(p, f),
@@ -25,28 +64,40 @@ async function main(appDirPath: string, port: string) {
     "delete": (p, f) => router.delete(p, f),
     "options": (p, f) => router.options(p, f),
   };
-  for (const api of apisJson.apis) {
-    if (!api.path || !isString(api.path)) continue;
-    if (!api.method || !isString(api.method)) continue;
-    if (!api.value || !isString(api.value)) continue;
-    let func: oak.RouterMiddleware<string>;
-    if (api.filename) {
-      try {
-        const scriptPaht = `${appDirPath}/${DIR_SCRIPTS}/${api.filename}`;
-        const module = await import(scriptPaht);
-        func = module[api.value];
-      } catch (err) {
-        func = (ctx) => {
-          ctx.response.body = err;
-          ctx.response.status = 502;
-        };
-      }
-    } else func = (ctx) => ctx.response.body = api.value;
-    methods[api.method](`/${api.path}`, func);
-  }
-  new oak.Application().use(router.routes(), router.allowedMethods())
-    .listen({ port: Number(port) });
-}
+  await Promise.all(
+    readAPIsJson().map(async (api) =>
+      methods[api.method](`/${api.path}`, await apiToFunction(api))
+    ),
+  );
+  return router;
+};
 
-if (Deno.args.length >= 2) main(Deno.args[0], Deno.args[1]);
-else console.log("no args");
+const main = () => {
+  if (!Deno.args.length) throw new Error("no args");
+  const { port, init, final, ...args } = JSON.parse(
+    Deno.args[0],
+  ) as EntranceArgs;
+  appDirPath = args.appDirPath;
+  createRouter().then(async (router) => {
+    const app = new oak.Application();
+    app.use(router.routes(), router.allowedMethods());
+    if (init) {
+      const module = await getModule(init.filename);
+      const func = module[init.function];
+      if (func) func(app, router, port);
+      else console.log("init finction load failed");
+    }
+    app.listen({ port });
+    if (final) {
+      const module = await getModule(final.filename);
+      const func = module[final.function];
+      if (func) globalThis.addEventListener("unload", () => func(app));
+      else console.log("final finction load failed");
+    }
+  });
+};
+try {
+  main();
+} catch (err) {
+  console.error(err.toString());
+}

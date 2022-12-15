@@ -3,11 +3,11 @@ import { isExist } from "../../utils/utils.ts";
 import { APPS_DIR } from "../mod.ts";
 
 interface PortsValues {
-  [name: string]: number;
+  [name: string]: number | undefined;
 }
 
 const PORTS_JSON_NAME = "ports.json";
-const PORT_START = 15346;
+export const PORT_START = 15346;
 
 const ports: PortsValues = {};
 const usedPort: number[] = [];
@@ -59,14 +59,21 @@ export const setPort = (
   port: number,
   options: { force?: boolean; save?: boolean } = { force: false, save: true },
 ) => {
-  if (options.force === false && usedPort.includes(port)) {
-    return false;
-  }
-  ports[name] = port;
-  usedPort.push(port);
+  if (options.force === false && usedPort.includes(port)) return false;
+  const prevPort = ports[name];
+  if (prevPort) {
+    usedPort.find((v, i, a) => {
+      if (v !== prevPort) return false;
+      a[i] = port;
+      return true;
+    });
+  } else usedPort.push(port);
   usedPort.sort((a, b) => a - b);
+  ports[name] = port;
   if (options.save === true) savePorts();
   return true;
 };
 
 export const getPort = (name: string) => ports[name];
+
+export const getPorts = () => ({ ...ports });
