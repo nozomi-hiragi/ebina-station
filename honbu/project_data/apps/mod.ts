@@ -14,6 +14,22 @@ export const getApp = (appName: string) => {
   return apps[appName];
 };
 
+export const changeAppName = (prev: string, name: string) => {
+  const app = apps[prev];
+  if (!app) return false;
+  if (apps[name]) return false;
+  try {
+    Deno.renameSync(`${APPS_DIR}/${prev}`, `${APPS_DIR}/${name}`);
+  } catch (err) {
+    logEbina.error("Change app name error", err.toString());
+    return false;
+  }
+  delete apps[prev];
+  app.appName = name;
+  apps[name] = app;
+  return true;
+};
+
 class App {
   appName: string;
   cron: CronItems;
