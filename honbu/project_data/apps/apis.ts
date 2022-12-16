@@ -27,6 +27,8 @@ interface APIValuesV1 {
 
 interface APIValuesV2 {
   version: 2;
+  init?: { filename: string; function: string };
+  final?: { filename: string; function: string };
   apis: APIItemValuesV2[];
 }
 
@@ -42,12 +44,13 @@ const migrateV1toV2 = (appName: string, json: APIValuesV1): APIValuesV2 => {
   const result: APIValuesV2 = { version: 2, apis: [] };
   Object.keys(json.apis).forEach((path) => {
     const { type, ...it } = json.apis[path]!;
+    const values: APIItemValuesV2 = { ...it, path };
     if (type === "JavaScript") {
       const args = it.value.split(">");
-      result.apis.push({ ...it, path, filename: args[0], value: args[1] });
-    } else {
-      result.apis.push({ ...it, path });
+      values.filename = args[0];
+      values.value = args[1];
     }
+    result.apis.push(values);
   });
   return result;
 };
@@ -143,5 +146,27 @@ export class APIs {
     }
     this.setAPI(prevPath, api);
     return true;
+  }
+
+  public setInit(values: { filename: string; function: string } | undefined) {
+    const ret = this.values.init === undefined;
+    this.values.init = values;
+    this.saveAPIsToFile();
+    return ret;
+  }
+
+  public getInit() {
+    return this.values.init;
+  }
+
+  public setFinal(values: { filename: string; function: string } | undefined) {
+    const ret = this.values.final === undefined;
+    this.values.final = values;
+    this.saveAPIsToFile();
+    return ret;
+  }
+
+  public getFinal() {
+    return this.values.final;
   }
 }

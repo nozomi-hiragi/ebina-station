@@ -57,6 +57,7 @@ apiRouter.put("/status", authToken, async (ctx) => {
   if (!status) return ctx.response.status = 400;
   const isStop = status === "stop";
   const entrance = entrances[appName];
+  const app = getApp(appName);
 
   if (entrance && entrance.entranceProc) {
     entrance.entranceProc.kill("SIGINT");
@@ -71,6 +72,8 @@ apiRouter.put("/status", authToken, async (ctx) => {
       const args: EntranceArgs = {
         appDirPath,
         port: getPort(appName)!,
+        init: app?.apis.getInit(),
+        final: app?.apis.getFinal(),
       };
       const entranceProc = Deno.run({
         cmd: [

@@ -1,6 +1,6 @@
 import * as oak from "https://deno.land/x/oak@v11.1.0/mod.ts";
 
-const DIR_SCRIPTS = "scripts";
+Deno.addSignalListener("SIGINT", () => Deno.exit(0));
 const FILE_APIS = "apis.json";
 
 interface EntranceArgs {
@@ -31,7 +31,7 @@ const moduleCache: { [filename: string]: any } = {};
 const getModule = async (filename: string) => {
   const module = moduleCache[filename];
   if (module) return module;
-  const scriptPaht = `${appDirPath}/${DIR_SCRIPTS}/${filename}`;
+  const scriptPaht = `./${filename}`;
   return moduleCache[filename] = await import(scriptPaht);
 };
 
