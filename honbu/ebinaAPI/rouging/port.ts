@@ -18,7 +18,7 @@ portRouter.get("/number/:name", authToken, (ctx) => {
   const { name } = ctx.params;
   const port = getPort(name);
   ctx.response.status = port === undefined ? 404 : 200;
-  ctx.response.body = port;
+  ctx.response.body = { port };
 });
 
 portRouter.put("/number/:name", authToken, async (ctx) => {

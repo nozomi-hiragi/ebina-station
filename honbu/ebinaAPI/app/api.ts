@@ -98,6 +98,34 @@ apiRouter.put("/status", authToken, async (ctx) => {
   }
 });
 
+// ポート取得互換 @TODO 消す
+apiRouter.get("/port", authToken, (ctx) => {
+  const { appName } = ctx.params;
+  if (!appName) return ctx.response.status = 400;
+  const url = ctx.request.url;
+  const encodedAppName = encodeURIComponent(appName);
+  url.pathname = url.pathname.replace(
+    `app/${encodedAppName}/api/port`,
+    `routing/port/number/${encodedAppName}`,
+  );
+  ctx.response.redirect(url);
+  ctx.response.status = 308;
+});
+
+// ポート設定互換 @TODO 消す
+apiRouter.put("/port", authToken, (ctx) => {
+  const { appName } = ctx.params;
+  if (!appName) return ctx.response.status = 400;
+  const url = ctx.request.url;
+  const encodedAppName = encodeURIComponent(appName);
+  url.pathname = url.pathname.replace(
+    `app/${encodedAppName}/api/port`,
+    `routing/port/number/${encodedAppName}`,
+  );
+  ctx.response.redirect(url);
+  ctx.response.status = 308;
+});
+
 // API一覧取得
 // 200 { path, api }
 apiRouter.get("/endpoint", authToken, (ctx) => {
