@@ -10,6 +10,7 @@ import {
 } from "../../docker/DockerComposeCommand.ts";
 import { ServiceName } from "../../ebina_docker_compose.ts";
 import { logEbina } from "../../utils/log.ts";
+import portRouter from "./port.ts";
 
 const routingRouter = new oak.Router();
 
@@ -96,6 +97,7 @@ routingRouter.put("/status", authToken, async (ctx) => {
   ctx.response.status = await updateNginxStatus(status) ?? 500;
 });
 
+routingRouter.use("/port", portRouter.routes());
 export default routingRouter;
 
 const getDockerComposePs = async (name: string) => {

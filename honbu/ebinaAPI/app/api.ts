@@ -1,8 +1,27 @@
 import { oak } from "../../deps.ts";
 import { authToken } from "../../auth_manager/token.ts";
-import { APIItem } from "../../project_data/apps/apis.ts";
+import { APIItemValuesV2 } from "../../project_data/apps/apis.ts";
 import { APPS_DIR } from "../../project_data/mod.ts";
 import { getApp } from "../../project_data/apps/mod.ts";
+import { getPort } from "../../project_data/apps/ports.ts";
+import { SCRIPTS_DIR } from "../../project_data/apps/scripts.ts";
+
+globalThis.addEventListener("unload", () => {
+  Object.values(entrances).forEach((it) => it?.entranceProc?.kill("SIGINT"));
+});
+
+interface EntranceArgs {
+  appDirPath: string;
+  port: number;
+  init?: {
+    filename: string;
+    function: string;
+  };
+  final?: {
+    filename: string;
+    function: string;
+  };
+}
 
 const apiRouter = new oak.Router();
 
@@ -38,6 +57,7 @@ apiRouter.put("/status", authToken, async (ctx) => {
   if (!status) return ctx.response.status = 400;
   const isStop = status === "stop";
   const entrance = entrances[appName];
+  const app = getApp(appName);
 
   if (entrance && entrance.entranceProc) {
     entrance.entranceProc.kill("SIGINT");
@@ -48,13 +68,21 @@ apiRouter.put("/status", authToken, async (ctx) => {
 
   switch (status) {
     case "start": {
+      const appDirPath = `${APPS_DIR}/${appName}`;
+      const args: EntranceArgs = {
+        appDirPath,
+        port: getPort(appName)!,
+        init: app?.apis.getInit(),
+        final: app?.apis.getFinal(),
+      };
       const entranceProc = Deno.run({
         cmd: [
           "deno",
           "run",
-          "--allow-all",
-          "./entrance.ts",
-          `${APPS_DIR}/${appName}`,
+          "--allow-net",
+          `--allow-read=${appDirPath}`,
+          `${appDirPath}/${SCRIPTS_DIR}/entrance.ts`,
+          JSON.stringify(args),
         ],
       });
       const startedDate = Date.now();
@@ -70,30 +98,32 @@ apiRouter.put("/status", authToken, async (ctx) => {
   }
 });
 
-// ポート取得
-// 200 { port: number }
+// ポート取得互換 @TODO 消す
 apiRouter.get("/port", authToken, (ctx) => {
   const { appName } = ctx.params;
   if (!appName) return ctx.response.status = 400;
-  const apis = getApp(appName)?.apis;
-  if (!apis) return ctx.response.status = 404;
-  ctx.response.body = { port: apis.getPort() };
+  const url = ctx.request.url;
+  const encodedAppName = encodeURIComponent(appName);
+  url.pathname = url.pathname.replace(
+    `app/${encodedAppName}/api/port`,
+    `routing/port/number/${encodedAppName}`,
+  );
+  ctx.response.redirect(url);
+  ctx.response.status = 308;
 });
 
-// ポート設定
-// { port: number }
-// 200 OK
-// 400 情報おかしい
-apiRouter.put("/port", authToken, async (ctx) => {
+// ポート設定互換 @TODO 消す
+apiRouter.put("/port", authToken, (ctx) => {
   const { appName } = ctx.params;
   if (!appName) return ctx.response.status = 400;
-  const { port } = await ctx.request.body({ type: "json" }).value;
-  if (!port) return ctx.response.status = 400;
-
-  const apis = getApp(appName)?.apis;
-  if (!apis) return ctx.response.status = 404;
-  apis.setPort(port);
-  ctx.response.status = 200;
+  const url = ctx.request.url;
+  const encodedAppName = encodeURIComponent(appName);
+  url.pathname = url.pathname.replace(
+    `app/${encodedAppName}/api/port`,
+    `routing/port/number/${encodedAppName}`,
+  );
+  ctx.response.redirect(url);
+  ctx.response.status = 308;
 });
 
 // API一覧取得
@@ -108,26 +138,6 @@ apiRouter.get("/endpoint", authToken, (ctx) => {
   ctx.response.body = apiList;
 });
 
-// API作成
-// :path
-// { name, method, type, value }
-// 200 OK
-// 400 情報おかしい
-apiRouter.post("/endpoint/:path", authToken, async (ctx) => {
-  const { appName, path } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
-  const { name, method, type, value } = await ctx.request.body({ type: "json" })
-    .value;
-  if (!path || !name || !method || !type || !value) {
-    return ctx.response.status = 400;
-  }
-
-  const apis = getApp(appName)?.apis;
-  if (!apis) return ctx.response.status = 404;
-  apis.setAPI(path, new APIItem({ name, method, type, value }));
-  ctx.response.status = 200;
-});
-
 // API取得
 // :path
 // 200 API
@@ -139,7 +149,7 @@ apiRouter.get("/endpoint/:path", authToken, (ctx) => {
 
   const apis = getApp(appName)?.apis;
   if (!apis) return ctx.response.status = 404;
-  const api = apis.getAPI(path)?.getRawValues();
+  const api = apis.getAPIValue(path);
   if (api) {
     ctx.response.body = api;
   } else {
@@ -151,19 +161,19 @@ apiRouter.get("/endpoint/:path", authToken, (ctx) => {
 // :path
 // 200 OK
 // 400 情報おかしい
-apiRouter.put("/endpoint/:path", authToken, async (ctx) => {
-  const { appName, path } = ctx.params;
+apiRouter.put("/endpoint/:curPath", authToken, async (ctx) => {
+  const { appName, curPath } = ctx.params;
   if (!appName) return ctx.response.status = 400;
-  const { name, method, type, value } = await ctx.request.body({ type: "json" })
-    .value;
-  if (!path || !name || !method || !type || !value) {
+  const { name, path, method, filename, value } = await ctx.request
+    .body({ type: "json" }).value;
+  if (!name || !path || !method || !value) {
     return ctx.response.status = 400;
   }
 
   const apis = getApp(appName)?.apis;
   if (!apis) return ctx.response.status = 404;
-  apis.setAPI(path, new APIItem({ name, method, type, value }));
-  ctx.response.status = 200;
+  const api: APIItemValuesV2 = { name, path, method, filename, value };
+  ctx.response.status = apis.updateAPI(curPath, api) ? 200 : 409;
 });
 
 // API削除

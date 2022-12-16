@@ -6,21 +6,22 @@ import { authToken } from "../../auth_manager/token.ts";
 import {
   createApp,
   deleteApp,
-  getAppList,
+  getApp,
+  getAppNameList,
 } from "../../project_data/apps/mod.ts";
 
 const appRouter = new oak.Router();
 
 // アプリ配列取得
 // 200 名前ら
-appRouter.get("/", authToken, (ctx) => ctx.response.body = getAppList());
+appRouter.get("/", authToken, (ctx) => ctx.response.body = getAppNameList());
 
 // アプリ作成
 // 200 OK
 // 400 情報足らない
 appRouter.post("/:appName", authToken, (ctx) => {
   const appName = ctx.params.appName;
-  const appList = getAppList();
+  const appList = getAppNameList();
   const found = appList.find((name) =>
     name.toLowerCase() === appName.toLowerCase()
   );
@@ -39,7 +40,7 @@ appRouter.post("/:appName", authToken, (ctx) => {
 // 404 なかった
 appRouter.get("/:appName", authToken, (ctx) => {
   const appName = ctx.params.appName;
-  const appList = getAppList();
+  const appList = getAppNameList();
   const found = appList.find((name) =>
     name.toLowerCase() === appName.toLowerCase()
   );
@@ -52,7 +53,7 @@ appRouter.get("/:appName", authToken, (ctx) => {
 // 500 フォルダ移動ミスった
 appRouter.delete("/:appName", authToken, (ctx) => {
   const appName = ctx.params.appName;
-  const appList = getAppList();
+  const appList = getAppNameList();
   const found = appList.find((name) =>
     name.toLowerCase() === appName.toLowerCase()
   );
@@ -63,6 +64,54 @@ appRouter.delete("/:appName", authToken, (ctx) => {
   } else {
     ctx.response.status = 500;
   }
+});
+
+// init設定
+// 200 OK
+// 400 情報足らない
+appRouter.put("/:appName/init", authToken, async (ctx) => {
+  const appName = ctx.params.appName;
+  const apis = getApp(appName)?.apis;
+  if (!apis) return ctx.response.status = 404;
+  const body = await ctx.request.body({ type: "json" }).value;
+  const value = !body.filename || !body.function ? undefined : body;
+  apis.setInit(value);
+  ctx.response.status = 200;
+});
+
+// init取得
+// 200 OK
+// 400 情報足らない
+appRouter.get("/:appName/init", authToken, (ctx) => {
+  const appName = ctx.params.appName;
+  const apis = getApp(appName)?.apis;
+  if (!apis) return ctx.response.status = 404;
+  ctx.response.body = apis.getInit();
+  ctx.response.status = 200;
+});
+
+// final設定
+// 200 OK
+// 400 情報足らない
+appRouter.put("/:appName/final", authToken, async (ctx) => {
+  const appName = ctx.params.appName;
+  const apis = getApp(appName)?.apis;
+  if (!apis) return ctx.response.status = 404;
+  const body = await ctx.request.body({ type: "json" }).value;
+  const value = !body.filename || !body.function ? undefined : body;
+  apis.setFinal(value);
+  ctx.response.status = 200;
+});
+
+// final取得
+// 200 OK
+// 400 情報足らない
+appRouter.get("/:appName/final", authToken, (ctx) => {
+  const appName = ctx.params.appName;
+  const apis = getApp(appName)?.apis;
+  if (!apis) return ctx.response.status = 404;
+  ctx.response.body = apis.getFinal();
+  ctx.response.status = 200;
 });
 
 appRouter.use("/:appName/api", apiRouter.routes());
