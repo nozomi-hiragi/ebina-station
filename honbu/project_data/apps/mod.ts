@@ -1,5 +1,9 @@
 import { logEbina } from "../../utils/log.ts";
-import { mkdirIfNotExist } from "../../utils/utils.ts";
+import {
+  isExist,
+  mkdirIfNotExist,
+  randomBase64url,
+} from "../../utils/utils.ts";
 import { APPS_DIR, GOMI_DIR } from "../mod.ts";
 import { APIs } from "./apis.ts";
 import { CronItems } from "./cron.ts";
@@ -12,6 +16,22 @@ const apps: { [name: string]: App | undefined } = {};
 
 export const getApp = (appName: string) => {
   return apps[appName];
+};
+
+export const changeAppName = (prev: string, name: string) => {
+  const app = apps[prev];
+  if (!app) return false;
+  if (apps[name]) return false;
+  try {
+    Deno.renameSync(`${APPS_DIR}/${prev}`, `${APPS_DIR}/${name}`);
+  } catch (err) {
+    logEbina.error("Change app name error", err.toString());
+    return false;
+  }
+  delete apps[prev];
+  app.appName = name;
+  apps[name] = app;
+  return true;
 };
 
 class App {
@@ -62,7 +82,20 @@ export const createApp = (appName: string) => {
 export const deleteApp = (appName: string) => {
   mkdirIfNotExist(GOMI_DIR);
   try {
-    Deno.renameSync(`${APPS_DIR}/${appName}`, `${GOMI_DIR}/${appName}`);
+    const src = `${APPS_DIR}/${appName}`;
+    const dest = `${GOMI_DIR}/${appName}`;
+    const d = new Date();
+    let now = `_${d.getFullYear()}-${
+      d.getMonth() + 1
+    }-${d.getDate()}-${d.getHours()}-${d.getMinutes()}`;
+    if (isExist(dest + now)) {
+      now += "-" + d.getSeconds();
+      if (isExist(dest + now)) {
+        now += "-" + d.getMilliseconds();
+        if (isExist(dest + now)) now += randomBase64url(8);
+      }
+    }
+    Deno.renameSync(src, dest + now);
     delete apps[appName];
     return true;
   } catch (err) {

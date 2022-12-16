@@ -1,9 +1,10 @@
-import { oak } from "../../deps.ts";
+import { oak, TypeUtils } from "../../deps.ts";
 import apiRouter from "./api.ts";
 import jsRouter from "./scripts.ts";
 import cronRouter from "./cron.ts";
 import { authToken } from "../../auth_manager/token.ts";
 import {
+  changeAppName,
   createApp,
   deleteApp,
   getApp,
@@ -64,6 +65,17 @@ appRouter.delete("/:appName", authToken, (ctx) => {
   } else {
     ctx.response.status = 500;
   }
+});
+
+// 名前設定
+// 200 OK
+// 400 情報足らない
+appRouter.put("/:appName/name", authToken, async (ctx) => {
+  const appName = ctx.params.appName;
+  const { name } = await ctx.request.body({ type: "json" }).value;
+  if (!name || !TypeUtils.isString(name)) return ctx.response.status = 400;
+  const ret = changeAppName(appName, name);
+  ctx.response.status = ret ? 200 : 409;
 });
 
 // init設定
