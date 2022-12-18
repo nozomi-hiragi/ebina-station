@@ -31,6 +31,7 @@ iRouter.post("/login/option", async (ctx) => {
       .loginWebAuthnOption(origin, id);
     ctx.response.status = 202;
   } catch (err) {
+    console.log(err);
     return ctx.response.status = handleAMErrorToStatus(err);
   }
 });
