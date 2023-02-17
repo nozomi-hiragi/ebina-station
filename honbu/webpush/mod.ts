@@ -1,4 +1,5 @@
-import { base64url, djwt } from "../deps.ts";
+import * as djwt from "djwt";
+import * as base64url from "std/encoding/base64url.ts";
 import ece from "./ece/mod.ts";
 
 const DEFAULT_TTL = 60 * 60 * 24 * 28;

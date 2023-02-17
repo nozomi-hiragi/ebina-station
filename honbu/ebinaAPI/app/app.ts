@@ -1,4 +1,5 @@
-import { oak, TypeUtils } from "../../deps.ts";
+import { isString } from "std/encoding/_yaml/utils.ts";
+import { oak } from "../../deps.ts";
 import apiRouter from "./api.ts";
 import jsRouter from "./scripts.ts";
 import cronRouter from "./cron.ts";
@@ -73,7 +74,7 @@ appRouter.delete("/:appName", authToken, (ctx) => {
 appRouter.put("/:appName/name", authToken, async (ctx) => {
   const appName = ctx.params.appName;
   const { name } = await ctx.request.body({ type: "json" }).value;
-  if (!name || !TypeUtils.isString(name)) return ctx.response.status = 400;
+  if (!name || !isString(name)) return ctx.response.status = 400;
   const ret = changeAppName(appName, name);
   ctx.response.status = ret ? 200 : 409;
 });

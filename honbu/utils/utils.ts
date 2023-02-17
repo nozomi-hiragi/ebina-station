@@ -1,4 +1,4 @@
-import { base64url } from "../deps.ts";
+import * as base64url from "std/encoding/base64url.ts";
 import { logger } from "./log.ts";
 
 export const mkdirIfNotExist = (path: string) => {
@@ -17,7 +17,7 @@ export const isExist = (path: string) => {
   }
 };
 
-export class HttpExeption extends Error {
+export class HttpException extends Error {
   status: number;
   constructor(status: number, message: string) {
     super(message);
@@ -52,7 +52,7 @@ export class ReaderBuffer {
   message = () => this._msg;
 }
 
-export class RunCommandExeption extends Error {
+export class RunCommandException extends Error {
   command: string;
   status: number;
   output: string;
@@ -78,7 +78,7 @@ export const runCommand = async (cmd: string[]) => {
   const output = decoder.decode(await process.output());
   const err = decoder.decode(await process.stderrOutput());
   if (status.code !== 0) {
-    throw new RunCommandExeption(
+    throw new RunCommandException(
       cmd.join(" "),
       status.code,
       output,

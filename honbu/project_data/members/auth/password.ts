@@ -1,4 +1,4 @@
-import { bcrypt } from "../../../deps.ts";
+import * as bcrypt from "bcrypt";
 
 export type PasswordAuth = {
   hash: string;

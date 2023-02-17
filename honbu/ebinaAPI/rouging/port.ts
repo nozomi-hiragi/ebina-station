@@ -1,4 +1,5 @@
-import { oak, TypeUtils } from "../../deps.ts";
+import { isNumber } from "std/encoding/_yaml/utils.ts";
+import { oak } from "../../deps.ts";
 import { authToken } from "../../auth_manager/token.ts";
 import {
   getPort,
@@ -24,7 +25,7 @@ portRouter.get("/number/:name", authToken, (ctx) => {
 portRouter.put("/number/:name", authToken, async (ctx) => {
   const { name } = ctx.params;
   const { port } = await ctx.request.body({ type: "json" }).value;
-  if (!port || !TypeUtils.isNumber(port)) return ctx.response.status = 400;
+  if (!port || !isNumber(port)) return ctx.response.status = 400;
   ctx.response.status = setPort(name, port) ? 200 : 409;
 });
 

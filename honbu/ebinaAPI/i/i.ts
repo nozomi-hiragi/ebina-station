@@ -1,4 +1,5 @@
-import { oak, TypeUtils } from "../../deps.ts";
+import { isBoolean, isString } from "std/encoding/_yaml/utils.ts";
+import { oak } from "../../deps.ts";
 import { authToken } from "../../auth_manager/token.ts";
 import { Members } from "../../project_data/members/mod.ts";
 import webauthnRouter from "./webauthn/index.ts";
@@ -48,7 +49,7 @@ iRouter.post("/login/verify", async (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const body = await ctx.request.body({ type: "json" }).value;
   const { sessionId, result } = body;
-  if (!sessionId || !TypeUtils.isString(sessionId) || !result) {
+  if (!sessionId || !isString(sessionId) || !result) {
     return ctx.response.status = 400;
   }
   const id = result.response.userHandle ?? ctx.request.headers.get("id");
@@ -57,7 +58,7 @@ iRouter.post("/login/verify", async (ctx) => {
   try {
     const token = await AuthManager.instance()
       .verifyAuthResponse(origin, id, result, sessionId);
-    if (!TypeUtils.isString(token)) return ctx.response.status = 502;
+    if (!isString(token)) return ctx.response.status = 502;
 
     ctx.response.body = token;
     ctx.response.status = 200;
@@ -185,7 +186,7 @@ iRouter.post("/totp/regist", authToken, async (ctx) => {
       if (!pass || !code) return ctx.response.status = 400;
 
       const option = await am.changeTOTP(origin, payload.id, pass, code);
-      const isOption = !TypeUtils.isBoolean(option);
+      const isOption = !isBoolean(option);
       ctx.response.body = isOption ? option : { result: option };
       ctx.response.status = isOption ? 202 : 200;
     }

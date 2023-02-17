@@ -1,4 +1,4 @@
-import { Cron } from "../../deps.ts";
+import Cron from "croner";
 import { logEbina, logger } from "../../utils/log.ts";
 import { APPS_DIR } from "../mod.ts";
 

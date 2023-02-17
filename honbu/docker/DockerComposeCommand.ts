@@ -1,4 +1,4 @@
-import { TypeUtils } from "../deps.ts";
+import { isString } from "std/encoding/_yaml/utils.ts";
 import { runCommand } from "../utils/utils.ts";
 
 export const execDCCRun = (
@@ -11,7 +11,7 @@ export const execDCCRun = (
   cmd.push("run");
   if (remove) cmd.push("--rm");
   cmd.push(containerName);
-  cmd.push(...(TypeUtils.isString(command) ? command.split(" ") : command));
+  cmd.push(...(isString(command) ? command.split(" ") : command));
   return runCommand(cmd);
 };
 

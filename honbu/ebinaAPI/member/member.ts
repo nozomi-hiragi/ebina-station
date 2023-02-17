@@ -1,4 +1,5 @@
-import { oak, TypeUtils } from "../../deps.ts";
+import { isString } from "std/encoding/_yaml/utils.ts";
+import { oak } from "../../deps.ts";
 import { authToken, JwtPayload } from "../../auth_manager/token.ts";
 import { Members } from "../../project_data/members/mod.ts";
 import { AuthManager, handleAMErrorToStatus } from "../../auth_manager/mod.ts";
@@ -17,14 +18,14 @@ memberRouter.post("/regist/request", authToken, async (ctx) => {
     .body({ type: "json" }).value;
 
   if (!server) server = `${ctx.request.url.protocol}//${ctx.request.url.host}`;
-  if (!TypeUtils.isString(server)) return ctx.response.status = 400;
+  if (!isString(server)) return ctx.response.status = 400;
 
   if (!front) {
     const origin = ctx.request.headers.get("origin");
     if (!origin) return ctx.response.status = 400;
     front = `${origin}/ebina-station`;
   }
-  if (!TypeUtils.isString(front)) return ctx.response.status = 400;
+  if (!isString(front)) return ctx.response.status = 400;
 
   const token = AuthManager.instance().getRegistNewMemeberToken(payload.id);
   if (!token) return ctx.response.status = 409;
@@ -34,8 +35,8 @@ memberRouter.post("/regist/request", authToken, async (ctx) => {
     const registURL = new URL(`${front}/regist`);
     registURL.searchParams.set("t", token);
     registURL.searchParams.set("s", server);
-    if (id && TypeUtils.isString(id)) registURL.searchParams.set("i", id);
-    if (name && TypeUtils.isString(name)) registURL.searchParams.set("n", name);
+    if (id && isString(id)) registURL.searchParams.set("i", id);
+    if (name && isString(name)) registURL.searchParams.set("n", name);
     url = registURL.toString();
   } catch (err) {
     if (!(err instanceof TypeError)) throw err;
@@ -77,7 +78,7 @@ memberRouter.post("/regist/verify", async (ctx) => {
   if (!origin) return ctx.response.status = 400;
   const body = await ctx.request.body({ type: "json" }).value;
   const { id, result } = body;
-  if (!id || !TypeUtils.isString(id) || !result) {
+  if (!id || !isString(id) || !result) {
     return ctx.response.status = 400;
   }
 

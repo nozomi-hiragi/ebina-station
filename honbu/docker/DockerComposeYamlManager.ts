@@ -1,4 +1,4 @@
-import { yaml } from "../deps.ts";
+import * as yaml from "std/encoding/yaml.ts";
 import { logger } from "../utils/log.ts";
 
 type DockerComposeYamlBase = {

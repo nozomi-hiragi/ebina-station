@@ -1,4 +1,5 @@
-import { djwt, oak } from "../deps.ts";
+import * as djwt from "djwt";
+import { oak } from "../deps.ts";
 import { logEbina } from "../utils/log.ts";
 import { createKey } from "../utils/utils.ts";
 

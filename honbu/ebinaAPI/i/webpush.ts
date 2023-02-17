@@ -1,4 +1,5 @@
-import { oak, TypeUtils } from "../../deps.ts";
+import { isString } from "std/encoding/_yaml/utils.ts";
+import { oak } from "../../deps.ts";
 import { authToken } from "../../auth_manager/token.ts";
 import { Members } from "../../project_data/members/mod.ts";
 import { isPushSubscriptionJSON } from "../../project_data/members/webpush.ts";
@@ -45,7 +46,7 @@ webpushRouter.post("/device", authToken, async (ctx) => {
   const { deviceName, subscription } = await ctx.request
     .body({ type: "json" }).value;
   if (
-    !TypeUtils.isString(deviceName) || !isPushSubscriptionJSON(subscription)
+    !isString(deviceName) || !isPushSubscriptionJSON(subscription)
   ) {
     return ctx.response.status = 400;
   }
@@ -67,7 +68,7 @@ webpushRouter.delete("/device/:name", authToken, (ctx) => {
   if (!member) return ctx.response.status = 404;
 
   const deviceName = ctx.params.name;
-  if (!TypeUtils.isString(deviceName)) return ctx.response.status = 400;
+  if (!isString(deviceName)) return ctx.response.status = 400;
 
   const webpushSeettings = Settings.instance().WebPush.values;
   const serverProps = {
@@ -121,7 +122,7 @@ webpushRouter.post("/test", authToken, async (ctx) => {
   if (!member) return ctx.response.status = 404;
   const body = await ctx.request.body({ type: "json" }).value;
   const { deviceName } = body;
-  if (!TypeUtils.isString(deviceName)) return ctx.response.status = 400;
+  if (!isString(deviceName)) return ctx.response.status = 400;
 
   const webpushSeettings = Settings.instance().WebPush.values;
   const serverProps = {

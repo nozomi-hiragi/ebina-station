@@ -1,4 +1,4 @@
-import { config } from "./deps.ts";
+import { loadSync } from "std/dotenv/mod.ts";
 import { isDockerDesktop } from "./docker/docker.ts";
 import { execDCCRm, execDCCUp } from "./docker/DockerComposeCommand.ts";
 import {
@@ -86,9 +86,8 @@ export const initDockerComposeFile = async () => {
     execDCCRm(ServiceName.certbot).catch(() => {}),
   ]);
 
-  const envObj = config({ path: "./.env" });
-  const envKeys = Object.keys(envObj)
-    .map((key) => `${key}=${envObj[key]}`);
+  const envObj = loadSync();
+  const envKeys = Object.keys(envObj).map((key) => `${key}=${envObj[key]}`);
 
   const dockerComposeYaml = new DockerComposeYamlManager();
 

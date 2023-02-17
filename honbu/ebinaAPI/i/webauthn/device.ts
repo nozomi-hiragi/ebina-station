@@ -1,7 +1,7 @@
 import { oak } from "../../../deps.ts";
 import { Members } from "../../../project_data/members/mod.ts";
 import { authToken, JwtPayload } from "../../../auth_manager/token.ts";
-import { HttpExeption } from "../../../utils/utils.ts";
+import { HttpException } from "../../../utils/utils.ts";
 import { getRPID } from "../../../auth_manager/webauthn.ts";
 import {
   AuthManager,
@@ -39,7 +39,7 @@ deviceRouter.get("/", authToken, (ctx) => {
       ? authenticatorNames
       : authenticatorNames.filter((name) => deviceNames.includes(name));
   } catch (err) {
-    if (err instanceof HttpExeption) {
+    if (err instanceof HttpException) {
       ctx.response.status = err.status;
       ctx.response.body = err.message;
     } else {
@@ -77,7 +77,7 @@ deviceRouter.get("/:deviceName", authToken, (ctx) => {
       ctx.response.status = 404;
     }
   } catch (err) {
-    if (err instanceof HttpExeption) {
+    if (err instanceof HttpException) {
       ctx.response.status = err.status;
       ctx.response.body = err.message;
     } else {
@@ -177,7 +177,7 @@ deviceRouter.get("/:deviceName/enable", authToken, (ctx) => {
     const enableDevices = webAuthnItem.getRawEnableDeviceNames();
     ctx.response.body = enableDevices.includes(deviceName);
   } catch (err) {
-    if (err instanceof HttpExeption) {
+    if (err instanceof HttpException) {
       ctx.response.status = err.status;
       ctx.response.body = err.message;
     } else {

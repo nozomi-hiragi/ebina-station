@@ -1,4 +1,4 @@
-import { base64url } from "../deps.ts";
+import * as base64url from "std/encoding/base64url.ts";
 import { PasswordAuth } from "../project_data/members/auth/password.ts";
 import { WebAuthnItemController } from "../project_data/members/auth/webauthn.ts";
 import { Member } from "../project_data/members/member.ts";

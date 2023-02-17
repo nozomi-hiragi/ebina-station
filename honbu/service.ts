@@ -1,4 +1,5 @@
-import { Cron, oak } from "./deps.ts";
+import Cron from "croner";
+import { oak } from "./deps.ts";
 import { oakCors } from "./deps.ts";
 import ebinaRouter from "./ebinaAPI/ebina.ts";
 import {

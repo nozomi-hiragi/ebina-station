@@ -1,11 +1,13 @@
-import { mongodb, Mutex, oak } from "../../deps.ts";
+import { Mutex } from "semaphore";
+import { ConnectOptions, Document, MongoClient } from "mongo";
+import { oak } from "../../deps.ts";
 import { Settings } from "../../project_data/settings/mod.ts";
 import { authToken } from "../../auth_manager/token.ts";
 import { logEbina } from "../../utils/log.ts";
 
 const databaseRouter = new oak.Router();
 
-const client = new mongodb.MongoClient();
+const client = new MongoClient();
 const mutex = new Mutex();
 
 const initClient = async () => {
@@ -15,7 +17,7 @@ const initClient = async () => {
   await mutex.use(async () => {
     if (client.buildInfo) return;
     logEbina.info("start init db");
-    const op: mongodb.ConnectOptions = {
+    const op: ConnectOptions = {
       db: "admin",
       servers: [{ host: "localhost", port: mongodbSettings.getPortNumber() }],
       credential: {
@@ -32,7 +34,7 @@ const initClient = async () => {
 databaseRouter.get("/", authToken, async (ctx) => {
   await initClient();
   const mongodbSettings = Settings.instance().Mongodb;
-  let filter: mongodb.Document | undefined = undefined;
+  let filter: Document | undefined = undefined;
   const names = mongodbSettings.getFilterEnabledDBNames();
   filter = { name: { "$nin": names } };
   const list = await client.listDatabases({ filter });
