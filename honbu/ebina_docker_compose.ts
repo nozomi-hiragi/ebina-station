@@ -62,7 +62,6 @@ const createJinjiSettings = (isDesktop: boolean) => {
     image: "nginx:latest",
     container_name: "EbinaStationJinji",
     restart: "always",
-    ports: ["80:80", "443:443"],
     volumes,
   } as DockerComposeYamlService;
 
