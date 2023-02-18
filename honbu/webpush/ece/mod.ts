@@ -1,6 +1,7 @@
+import { hkdf } from "hkdf";
+import * as base64url from "std/encoding/base64url.ts";
 import { encrypt } from "./encode.ts";
 import { decrypt } from "./decode.ts";
-import { base64url, hkdf } from "../../deps.ts";
 
 const NONCE_SIZE = 12;
 const SHA_256_SIZE = 32;

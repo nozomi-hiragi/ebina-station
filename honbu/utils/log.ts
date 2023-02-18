@@ -1,10 +1,12 @@
-import { datetime, log, TypeUtils } from "../deps.ts";
+import { isObject, isString } from "std/encoding/_yaml/utils.ts";
+import * as datetime from "std/datetime/mod.ts";
+import * as log from "std/log/mod.ts";
 import { mkdirIfNotExist } from "./utils.ts";
 
 const parseArgs = (args: unknown[]) =>
   args.map((arg) => {
-    if (TypeUtils.isString(arg)) return arg;
-    if (TypeUtils.isObject(arg)) return JSON.stringify(arg);
+    if (isString(arg)) return arg;
+    if (isObject(arg)) return JSON.stringify(arg);
     return String(arg);
   }).join(", ");
 

@@ -1,4 +1,5 @@
-import { oak } from "../../deps.ts";
+import { Hono } from "hono/mod.ts";
+import { StatusCode } from "hono/utils/http-status.ts";
 import { NginxConf, NginxConfs } from "../../project_data/nginx.ts";
 import { authToken } from "../../auth_manager/token.ts";
 import { generateNginxConfsFromJson } from "../../project_data/nginx.ts";
@@ -12,59 +13,59 @@ import { ServiceName } from "../../ebina_docker_compose.ts";
 import { logEbina } from "../../utils/log.ts";
 import portRouter from "./port.ts";
 
-const routingRouter = new oak.Router();
+const routingRouter = new Hono();
 
 // ルート一覧
-routingRouter.get("/", authToken, (ctx) => {
+routingRouter.get("/", authToken, (c) => {
   const confs = NginxConfs.instance().getConfs();
-  ctx.response.status = 200;
-  ctx.response.body = Object.keys(confs);
+  return c.json(Object.keys(confs), 200);
 });
 
 // ルート詳細
-routingRouter.get("/route/:route", authToken, (ctx) => {
-  const { route } = ctx.params;
+routingRouter.get("/route/:route", authToken, (c) => {
+  const { route } = c.req.param();
   const conf = NginxConfs.instance().getConf(route);
   if (conf) {
-    ctx.response.status = 200;
-    ctx.response.body = conf;
+    return c.json(conf, 200);
   } else {
-    ctx.response.status = 404;
+    return c.json({}, 404);
   }
 });
 
 // ルート作成
-routingRouter.post("/route/:route", authToken, async (ctx) => {
-  const { route } = ctx.params;
-  const body = await ctx.request.body({ type: "json" }).value as NginxConf;
+routingRouter.post("/route/:route", authToken, async (c) => {
+  const { route } = c.req.param();
+  const body = await c.req.json<NginxConf>();
   if (
     body.hostname === undefined ||
     body.port === undefined
   ) {
-    return ctx.response.status = 400;
+    return c.json({}, 400);
   }
   const nginxConfs = NginxConfs.instance();
   if (nginxConfs.getConf(route)) {
-    return ctx.response.status = 409;
+    return c.json({}, 409);
   }
   nginxConfs.setConf(route, body);
-  ctx.response.status = 201;
+  return c.json({}, 201);
 });
 
 // ルート削除
-routingRouter.delete("/route/:route", authToken, (ctx) => {
-  const { route } = ctx.params;
-  ctx.response.status = NginxConfs.instance().deleteConf(route) ? 200 : 404;
+routingRouter.delete("/route/:route", authToken, (c) => {
+  const { route } = c.req.param();
+  return c.json({}, NginxConfs.instance().deleteConf(route) ? 200 : 404);
 });
 
 // ルート更新
-routingRouter.put("/route/:route", authToken, async (ctx) => {
-  const { route } = ctx.params;
-  const body = await ctx.request.body({ type: "json" }).value;
+routingRouter.put("/route/:route", authToken, async (c) => {
+  const { route } = c.req.param();
+  const body = await c.req.json<
+    { hostname: string; port: number | "koujou" }
+  >();
 
   let isChanged = false;
   const conf = NginxConfs.instance().getConf(route);
-  if (!conf) return ctx.response.status = 404;
+  if (!conf) return c.json({}, 404);
   if (body.hostname !== undefined) {
     conf.hostname = body.hostname;
     isChanged = true;
@@ -76,28 +77,27 @@ routingRouter.put("/route/:route", authToken, async (ctx) => {
 
   if (isChanged) {
     NginxConfs.instance().setConf(route, conf);
-    ctx.response.status = 201;
+    return c.json({}, 201);
   } else {
-    ctx.response.status = 200;
+    return c.json({}, 200);
   }
 });
 
 // ルート詳細
-routingRouter.get("/status", authToken, async (ctx) => {
-  ctx.response.body = await containerState("Jinji");
-  ctx.response.status = 200;
+routingRouter.get("/status", authToken, async (c) => {
+  return c.json(await containerState("Jinji"), 200);
 });
 
 // ルート詳細
-routingRouter.put("/status", authToken, async (ctx) => {
-  const body = await ctx.request.body({ type: "json" }).value;
+routingRouter.put("/status", authToken, async (c) => {
+  const body = await c.req.json<{ status: string }>();
   const status = body.status;
-  if (!status) return ctx.response.status = 400;
+  if (!status) return c.json({}, 400);
 
-  ctx.response.status = await updateNginxStatus(status) ?? 500;
+  return c.json({}, await updateNginxStatus(status) as StatusCode ?? 500);
 });
 
-routingRouter.use("/port", portRouter.routes());
+routingRouter.route("/port", portRouter);
 export default routingRouter;
 
 const getDockerComposePs = async (name: string) => {

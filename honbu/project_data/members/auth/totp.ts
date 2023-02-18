@@ -1,4 +1,4 @@
-import { OTPAuth } from "../../../deps.ts";
+import * as OTPAuth from "otpauth";
 
 export type TOTPAuth = {
   secret: string;

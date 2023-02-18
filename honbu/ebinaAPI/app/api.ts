@@ -1,4 +1,4 @@
-import { oak } from "../../deps.ts";
+import { Hono } from "hono/mod.ts";
 import { authToken } from "../../auth_manager/token.ts";
 import { APIItemValuesV2 } from "../../project_data/apps/apis.ts";
 import { APPS_DIR } from "../../project_data/mod.ts";
@@ -23,7 +23,7 @@ interface EntranceArgs {
   };
 }
 
-const apiRouter = new oak.Router();
+const apiRouter = new Hono();
 
 const entrances: {
   [name: string]: {
@@ -34,15 +34,15 @@ const entrances: {
 
 // API起動状態取得
 // 200 { status: 'started' | 'stop', started_at: number }
-apiRouter.get("/status", authToken, (ctx) => {
-  const { appName } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
+apiRouter.get("/status", authToken, (c) => {
+  const { appName } = c.req.param();
+  if (!appName) return c.json({}, 400);
   const entrance = entrances[appName];
   const isStarted = entrance && entrance.entranceProc;
-  ctx.response.body = {
+  return c.json({
     status: isStarted ? "started" : "stop",
     started_at: isStarted ? entrance.startedDate : undefined,
-  };
+  });
 });
 
 // API起動状態更新
@@ -50,11 +50,11 @@ apiRouter.get("/status", authToken, (ctx) => {
 // 200 できた
 // 400 情報おかしい
 // 500 起動できなかった
-apiRouter.put("/status", authToken, async (ctx) => {
-  const { appName } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
-  const { status } = await ctx.request.body({ type: "json" }).value;
-  if (!status) return ctx.response.status = 400;
+apiRouter.put("/status", authToken, async (c) => {
+  const { appName } = c.req.param();
+  if (!appName) return c.json({}, 400);
+  const { status } = await c.req.json<{ status: string }>();
+  if (!status) return c.json({}, 400);
   const isStop = status === "stop";
   const entrance = entrances[appName];
   const app = getApp(appName);
@@ -63,8 +63,8 @@ apiRouter.put("/status", authToken, async (ctx) => {
     entrance.entranceProc.kill("SIGINT");
     entrance.entranceProc = null;
     entrance.startedDate = null;
-    if (isStop) return ctx.response.body = { message: "stop" };
-  } else if (isStop) return ctx.response.body = { message: "already stoped" };
+    if (isStop) return c.json({ message: "stop" });
+  } else if (isStop) return c.json({ message: "already stoped" });
 
   switch (status) {
     case "start": {
@@ -88,54 +88,50 @@ apiRouter.put("/status", authToken, async (ctx) => {
       const startedDate = Date.now();
 
       entrances[appName] = { entranceProc, startedDate };
-      ctx.response.body = { message: "start" };
-      break;
+      return c.json({ message: "start" });
     }
 
     default:
-      ctx.response.status = 400;
-      break;
+      return c.json({}, 400);
   }
 });
 
 // ポート取得互換 @TODO 消す
-apiRouter.get("/port", authToken, (ctx) => {
-  const { appName } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
-  const url = ctx.request.url;
+apiRouter.get("/port", authToken, (c) => {
+  const { appName } = c.req.param();
+  if (!appName) return c.json({}, 400);
+  const url = new URL(c.req.url);
   const encodedAppName = encodeURIComponent(appName);
   url.pathname = url.pathname.replace(
     `app/${encodedAppName}/api/port`,
     `routing/port/number/${encodedAppName}`,
   );
-  ctx.response.redirect(url);
-  ctx.response.status = 308;
+  return c.redirect(url.toString(), 308);
 });
 
 // ポート設定互換 @TODO 消す
-apiRouter.put("/port", authToken, (ctx) => {
-  const { appName } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
-  const url = ctx.request.url;
+apiRouter.put("/port", authToken, (c) => {
+  const { appName } = c.req.param();
+  if (!appName) return c.json({}, 400);
+  const url = new URL(c.req.url);
   const encodedAppName = encodeURIComponent(appName);
   url.pathname = url.pathname.replace(
     `app/${encodedAppName}/api/port`,
     `routing/port/number/${encodedAppName}`,
   );
-  ctx.response.redirect(url);
-  ctx.response.status = 308;
+  return c.redirect(url.toString(), 308);
 });
 
 // API一覧取得
 // 200 { path, api }
-apiRouter.get("/endpoint", authToken, (ctx) => {
-  const { appName } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
+apiRouter.get("/endpoint", authToken, (c) => {
+  const { appName } = c.req.param();
+  if (!appName) return c.json({}, 400);
   const apis = getApp(appName)?.apis;
-  if (!apis) return ctx.response.status = 404;
+  if (!apis) return c.json({}, 404);
 
   const apiList = apis.getAPIItemValueList();
-  ctx.response.body = apiList;
+  return c.json(apiList);
 });
 
 // API取得
@@ -143,17 +139,17 @@ apiRouter.get("/endpoint", authToken, (ctx) => {
 // 200 API
 // 400 情報おかしい
 // 404 ない
-apiRouter.get("/endpoint/:path", authToken, (ctx) => {
-  const { appName, path } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
+apiRouter.get("/endpoint/:path", authToken, (c) => {
+  const { appName, path } = c.req.param();
+  if (!appName) return c.json({}, 400);
 
   const apis = getApp(appName)?.apis;
-  if (!apis) return ctx.response.status = 404;
+  if (!apis) return c.json({}, 404);
   const api = apis.getAPIValue(path);
   if (api) {
-    ctx.response.body = api;
+    return c.json(api);
   } else {
-    ctx.response.status = 404;
+    return c.json({}, 404);
   }
 });
 
@@ -161,32 +157,32 @@ apiRouter.get("/endpoint/:path", authToken, (ctx) => {
 // :path
 // 200 OK
 // 400 情報おかしい
-apiRouter.put("/endpoint/:curPath", authToken, async (ctx) => {
-  const { appName, curPath } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
-  const { name, path, method, filename, value } = await ctx.request
-    .body({ type: "json" }).value;
+apiRouter.put("/endpoint/:curPath", authToken, async (c) => {
+  const { appName, curPath } = c.req.param();
+  if (!appName) return c.json({}, 400);
+  const { name, path, method, filename, value } = await c.req
+    .json<APIItemValuesV2>();
   if (!name || !path || !method || !value) {
-    return ctx.response.status = 400;
+    return c.json({}, 400);
   }
 
   const apis = getApp(appName)?.apis;
-  if (!apis) return ctx.response.status = 404;
+  if (!apis) return c.json({}, 404);
   const api: APIItemValuesV2 = { name, path, method, filename, value };
-  ctx.response.status = apis.updateAPI(curPath, api) ? 200 : 409;
+  return c.json({}, apis.updateAPI(curPath, api) ? 200 : 409);
 });
 
 // API削除
 // 200 OK
 // 400 情報おかしい
 // 404 パスない
-apiRouter.delete("/endpoint/:path", authToken, (ctx) => {
-  const { appName, path } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
+apiRouter.delete("/endpoint/:path", authToken, (c) => {
+  const { appName, path } = c.req.param();
+  if (!appName) return c.json({}, 400);
 
   const apis = getApp(appName)?.apis;
-  if (!apis) return ctx.response.status = 404;
-  ctx.response.status = apis.deleteAPI(path) ? 200 : 404;
+  if (!apis) return c.json({}, 404);
+  return c.json({}, apis.deleteAPI(path) ? 200 : 404);
 });
 
 export default apiRouter;

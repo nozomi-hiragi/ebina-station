@@ -1,11 +1,13 @@
-import { mongodb, Mutex, oak } from "../../deps.ts";
+import { Mutex } from "semaphore";
+import { ConnectOptions, Document, MongoClient } from "mongo";
+import { Hono } from "hono/mod.ts";
 import { Settings } from "../../project_data/settings/mod.ts";
 import { authToken } from "../../auth_manager/token.ts";
 import { logEbina } from "../../utils/log.ts";
 
-const databaseRouter = new oak.Router();
+const databaseRouter = new Hono();
 
-const client = new mongodb.MongoClient();
+const client = new MongoClient();
 const mutex = new Mutex();
 
 const initClient = async () => {
@@ -15,7 +17,7 @@ const initClient = async () => {
   await mutex.use(async () => {
     if (client.buildInfo) return;
     logEbina.info("start init db");
-    const op: mongodb.ConnectOptions = {
+    const op: ConnectOptions = {
       db: "admin",
       servers: [{ host: "localhost", port: mongodbSettings.getPortNumber() }],
       credential: {
@@ -29,47 +31,47 @@ const initClient = async () => {
   });
 };
 
-databaseRouter.get("/", authToken, async (ctx) => {
+databaseRouter.get("/", authToken, async (c) => {
   await initClient();
   const mongodbSettings = Settings.instance().Mongodb;
-  let filter: mongodb.Document | undefined = undefined;
+  let filter: Document | undefined = undefined;
   const names = mongodbSettings.getFilterEnabledDBNames();
   filter = { name: { "$nin": names } };
   const list = await client.listDatabases({ filter });
-  ctx.response.body = list;
+  return c.json(list);
 });
 
-databaseRouter.get("/:db", authToken, async (ctx) => {
-  const dbName = ctx.params.db;
+databaseRouter.get("/:db", authToken, async (c) => {
+  const dbName = c.req.param().db;
   const mongodbSettings = Settings.instance().Mongodb;
   const filter = mongodbSettings.getDBFilterByName(dbName);
-  if (filter && filter.enable) return ctx.response.status = 403;
+  if (filter && filter.enable) return c.json({}, 403);
 
   await initClient();
   const db = client.database(dbName);
-  ctx.response.body = await db.listCollectionNames();
+  return c.json(await db.listCollectionNames());
 });
 
-databaseRouter.get("/:db/:collection/find", authToken, async (ctx) => {
-  const dbName = ctx.params.db;
+databaseRouter.get("/:db/:collection/find", authToken, async (c) => {
+  const params = c.req.param();
+  const dbName = params.db;
   const mongodbSettings = Settings.instance().Mongodb;
   const filter = mongodbSettings.getDBFilterByName(dbName);
-  if (filter && filter.enable) return ctx.response.status = 403;
+  if (filter && filter.enable) return c.json({}, 403);
 
-  const collectionName = ctx.params.collection;
+  const collectionName = params.collection;
   await initClient();
   const db = client.database(dbName);
   const collection = db.collection(collectionName);
   try {
     const docs = await collection.find().toArray();
-    ctx.response.body = docs;
+    return c.json(docs);
   } catch (err) {
-    ctx.response.status = 500;
-    ctx.response.body = err;
+    return c.json(err, 500);
   }
 });
 
-databaseRouter.get("/user", authToken, async (ctx) => {
+databaseRouter.get("/user", authToken, async (c) => {
   await initClient();
   const db = client.database("admin");
   const collection = db.collection("system.users");
@@ -80,48 +82,45 @@ databaseRouter.get("/user", authToken, async (ctx) => {
         roles: doc.roles,
       };
     });
-    ctx.response.body = docs;
+    return c.json(docs);
   } catch (err) {
-    ctx.response.status = 500;
-    ctx.response.body = err;
+    return c.json(err, 500);
   }
 });
 
-databaseRouter.post("/user", authToken, async (ctx) => {
-  const body = await ctx.request.body({ type: "json" }).value;
-  const { username, password, roles }: {
+databaseRouter.post("/user", authToken, async (c) => {
+  const body = await c.req.json<{
     username?: string;
     password?: string;
     roles?: { role: string; db: string }[];
-  } = body;
+  }>();
+  const { username, password, roles } = body;
   if (!username || !password || !roles) {
-    return ctx.response.status = 400;
+    return c.json({}, 400);
   }
 
   await initClient();
   const db = client.database("admin");
   try {
     const user = await db.createUser(username, password, { roles });
-    ctx.response.body = user;
+    return c.json(user);
   } catch (err) {
-    ctx.response.status = 500;
-    ctx.response.body = err;
+    return c.json(err, 500);
   }
 });
 
-databaseRouter.delete("/user/:username", authToken, async (ctx) => {
-  const { username }: { username?: string } = ctx.params;
+databaseRouter.delete("/user/:username", authToken, async (c) => {
+  const { username }: { username?: string } = c.req.param();
   if (!username) {
-    return ctx.response.status = 400;
+    return c.json({}, 400);
   }
   await initClient();
   const db = client.database("admin");
   try {
     const res = await db.dropUser(username);
-    ctx.response.body = res;
+    return c.json(res);
   } catch (err) {
-    ctx.response.status = 500;
-    ctx.response.body = err;
+    return c.json(err, 500);
   }
 });
 

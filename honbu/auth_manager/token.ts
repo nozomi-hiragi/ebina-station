@@ -1,4 +1,5 @@
-import { djwt, oak } from "../deps.ts";
+import { Context, Next } from "hono/mod.ts";
+import * as djwt from "djwt";
 import { logEbina } from "../utils/log.ts";
 import { createKey } from "../utils/utils.ts";
 
@@ -35,26 +36,18 @@ const verifyToken = (token: string, key: CryptoKey) =>
 
 const verifyAuthToken = (token: string) => verifyToken(token, tokenKey);
 
-type States = {
-  token?: string;
-  payload?: JwtPayload;
-};
-
-export const authToken = async (
-  ctx: oak.Context<States>,
-  next: () => Promise<unknown>,
-) => {
-  const authHeader = ctx.request.headers.get("authorization");
-  if (!authHeader) return ctx.response.status = 401;
+export const authToken = async (c: Context, next: Next) => {
+  const authHeader = c.req.headers.get("authorization");
+  if (!authHeader) return c.json({}, 401);
   const tokenArray = authHeader.split(" ");
-  if (tokenArray[0] !== "Bearer") return ctx.response.status = 400;
+  if (tokenArray[0] !== "Bearer") return c.json({}, 400);
   const token = tokenArray[1];
   const payload = await verifyAuthToken(token);
   if (payload) {
-    ctx.state.token = token;
-    ctx.state.payload = payload;
+    c.set("token", token);
+    c.set("payload", payload);
     await next();
   } else {
-    ctx.response.status = 401;
+    return c.json({}, 401);
   }
 };

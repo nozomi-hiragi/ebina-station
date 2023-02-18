@@ -1,19 +1,20 @@
-import { oak, TypeUtils } from "../../deps.ts";
-import { authToken } from "../../auth_manager/token.ts";
+import { isBoolean, isString } from "std/encoding/_yaml/utils.ts";
+import { Hono } from "hono/mod.ts";
+import { authToken, JwtPayload } from "../../auth_manager/token.ts";
 import { Members } from "../../project_data/members/mod.ts";
 import webauthnRouter from "./webauthn/index.ts";
+import { AuthenticationResponseJSON } from "../../webauthn/fido2Wrap.ts";
 import { AuthManager, handleAMErrorToStatus } from "../../auth_manager/mod.ts";
 import webpushRouter from "./webpush.ts";
 
-const iRouter = new oak.Router();
+const iRouter = new Hono();
 
 // メンバー取得
-iRouter.get("/", authToken, (ctx) => {
-  const payload = ctx.state.payload;
-  if (!payload) return ctx.response.status = 500;
+iRouter.get("/", authToken, (c) => {
+  const payload = c.get<JwtPayload>("payload");
+  if (!payload) return c.json({}, 500);
   const member = Members.instance().getMember(payload.id);
-  ctx.response.body = member?.getValue();
-  ctx.response.status = 200;
+  return c.json(member?.getValue(), 200);
 });
 
 // ログインオプション
@@ -21,18 +22,19 @@ iRouter.get("/", authToken, (ctx) => {
 // :id
 // 202 オプション
 // 400 情報足りない
-iRouter.post("/login/option", async (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  const body = await ctx.request.body({ type: "json" }).value;
-  const id: string | undefined = body.id;
+iRouter.post("/login/option", async (c) => {
+  const origin = c.req.headers.get("origin");
+  if (!origin) return c.json({}, 400);
+  const body = await c.req.json<{ id: string | undefined }>();
+  const id = body.id;
   try {
-    ctx.response.body = await AuthManager.instance()
-      .loginWebAuthnOption(origin, id);
-    ctx.response.status = 202;
+    return c.json(
+      await AuthManager.instance().loginWebAuthnOption(origin, id),
+      202,
+    );
   } catch (err) {
     console.log(err);
-    return ctx.response.status = handleAMErrorToStatus(err);
+    return c.json({}, handleAMErrorToStatus(err));
   }
 });
 
@@ -43,45 +45,46 @@ iRouter.post("/login/option", async (ctx) => {
 // 404 メンバーない
 // 500 WebAuthn設定おかしい
 // 502 違うアクションを実行した？
-iRouter.post("/login/verify", async (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  const body = await ctx.request.body({ type: "json" }).value;
+iRouter.post("/login/verify", async (c) => {
+  const origin = c.req.headers.get("origin");
+  if (!origin) return c.json({}, 400);
+  const body = await c.req.json<{
+    sessionId: string | undefined;
+    result?: AuthenticationResponseJSON;
+  }>();
   const { sessionId, result } = body;
-  if (!sessionId || !TypeUtils.isString(sessionId) || !result) {
-    return ctx.response.status = 400;
+  if (!sessionId || !isString(sessionId) || !result) {
+    return c.json({}, 400);
   }
-  const id = result.response.userHandle ?? ctx.request.headers.get("id");
-  if (!id) return ctx.response.status = 400;
+  const id = result.response.userHandle ?? c.req.headers.get("id");
+  if (!id) return c.json({}, 400);
 
   try {
     const token = await AuthManager.instance()
       .verifyAuthResponse(origin, id, result, sessionId);
-    if (!TypeUtils.isString(token)) return ctx.response.status = 502;
+    if (!isString(token)) return c.json({}, 502);
 
-    ctx.response.body = token;
-    ctx.response.status = 200;
+    return c.text(token, 200); // @TODO no json
   } catch (err) {
-    return ctx.response.status = handleAMErrorToStatus(err);
+    return c.json({}, handleAMErrorToStatus(err));
   }
 });
 
 // ログアウト サーバー内のトークン消す
 // 200 消せた
-iRouter.post("/logout", authToken, (ctx) => {
-  const payload = ctx.state.payload;
-  if (!payload) return ctx.response.status = 401;
-  ctx.response.status = 200;
+iRouter.post("/logout", authToken, (c) => {
+  const payload = c.get<JwtPayload>("payload");
+  if (!payload) return c.json({}, 401);
+  return c.json({}, 200);
 });
 
 // トークン使えるか確認
 // 200 ペイロード
 // 500 authToken内でペイロードとれてない
-iRouter.post("/verify", authToken, (ctx) => {
-  const payload = ctx.state.payload;
-  if (!payload) return ctx.response.status = 500;
-  ctx.response.body = payload;
-  ctx.response.status = 200;
+iRouter.post("/verify", authToken, (c) => {
+  const payload = c.get<JwtPayload>("payload");
+  if (!payload) return c.json({}, 500);
+  return c.json(payload, 200);
 });
 
 // パスワード更新
@@ -92,30 +95,35 @@ iRouter.post("/verify", authToken, (ctx) => {
 // 403 許可されてない
 // 404 データない
 // 422 パスワードのデータおかしい
-iRouter.put("/password", authToken, async (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  const payload = ctx.state.payload;
-  if (!payload) return ctx.response.status = 401;
-  const body = await ctx.request.body({ type: "json" }).value;
+iRouter.put("/password", authToken, async (c) => {
+  const origin = c.req.headers.get("origin");
+  if (!origin) return c.json({}, 400);
+  const payload = c.get<JwtPayload>("payload");
+  if (!payload) return c.json({}, 401);
+  const body = await c.req.json<
+    AuthenticationResponseJSON & {
+      type: string;
+      current: string | undefined;
+      to: string | undefined;
+    }
+  >();
 
   try {
     const am = AuthManager.instance();
     if (body.type === "public-key") {
       const ret = await am.verifyAuthResponse(origin, payload.id, body);
-      return ctx.response.status = ret ? 200 : 422;
+      return c.json({}, ret ? 200 : 422);
     } else {
       const current: string | undefined = body.current;
-      const to: string | undefined = body.to;
-      if (!current || !to) return ctx.response.status = 400;
+      const to = body.to;
+      if (!current || !to) return c.json({}, 400);
 
       const option = await am
         .changePasswordOption(origin, payload.id, current, to);
-      ctx.response.body = option;
-      ctx.response.status = 202;
+      return c.json(option, 202);
     }
   } catch (err) {
-    return ctx.response.status = handleAMErrorToStatus(err);
+    return c.json({}, handleAMErrorToStatus(err));
   }
 });
 
@@ -127,74 +135,86 @@ iRouter.put("/password", authToken, async (ctx) => {
 // 403 許可されてない
 // 404 データない
 // 422 パスワードのデータおかしい
-iRouter.post("/password", authToken, async (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  const payload = ctx.state.payload;
-  if (!payload) return ctx.response.status = 401;
-  const body = await ctx.request.body({ type: "json" }).value;
+iRouter.post("/password", authToken, async (c) => {
+  const origin = c.req.headers.get("origin");
+  if (!origin) return c.json({}, 400);
+  const payload = c.get<JwtPayload>("payload");
+  if (!payload) return c.json({}, 401);
+  const body = await c.req.json<
+    AuthenticationResponseJSON & {
+      type: string;
+      code: string | undefined;
+      to: string | undefined;
+    }
+  >();
 
   try {
     const am = AuthManager.instance();
     if (body.type === "public-key") {
       const ret = await am.verifyAuthResponse(origin, payload.id, body);
-      return ctx.response.status = ret ? 200 : 422;
+      return c.json({}, ret ? 200 : 422);
     } else {
       const code: string | undefined = body.code;
       const to: string | undefined = body.to;
-      if (!code || !to) return ctx.response.status = 400;
+      if (!code || !to) return c.json({}, 400);
 
       const option = await am.resetPasswordOption(origin, payload.id, code, to);
-      ctx.response.body = option;
-      ctx.response.status = 202;
+      return c.json(option, 202);
     }
   } catch (err) {
-    return ctx.response.status = handleAMErrorToStatus(err);
+    return c.json({}, handleAMErrorToStatus(err));
   }
 });
 
 // TOTP生成
-iRouter.post("/totp/request", authToken, (ctx) => {
-  const payload = ctx.state.payload;
-  if (!payload) return ctx.response.status = 401;
+iRouter.post("/totp/request", authToken, (c) => {
+  const payload = c.get<JwtPayload>("payload");
+  if (!payload) return c.json({}, 401);
 
   const member = Members.instance().getMember(payload.id);
-  if (!member) return ctx.response.status = 404;
+  if (!member) return c.json({}, 404);
   const uri = member.generateTempTOTP();
 
-  ctx.response.status = 200;
-  ctx.response.body = uri;
+  return c.text(uri, 200); // @TODO no json
 });
 
 // TOTP登録
-iRouter.post("/totp/regist", authToken, async (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  const payload = ctx.state.payload;
-  if (!payload) return ctx.response.status = 401;
-  const body = await ctx.request.body({ type: "json" }).value;
+iRouter.post("/totp/regist", authToken, async (c) => {
+  const origin = c.req.headers.get("origin");
+  if (!origin) return c.json({}, 400);
+  const payload = c.get<JwtPayload>("payload");
+  if (!payload) return c.json({}, 401);
+  const body = await c.req.json<
+    AuthenticationResponseJSON & {
+      type: string;
+      pass: string | undefined;
+      code: string | undefined;
+    }
+  >();
 
   try {
     const am = AuthManager.instance();
     if (body.type === "public-key") {
       const ret = await am.verifyAuthResponse(origin, payload.id, body);
-      return ctx.response.status = ret ? 200 : 406;
+      return c.json({}, ret ? 200 : 406);
     } else {
-      const pass: string | undefined = body.pass;
-      const code: string | undefined = body.code;
-      if (!pass || !code) return ctx.response.status = 400;
+      const pass = body.pass;
+      const code = body.code;
+      if (!pass || !code) return c.json({}, 400);
 
       const option = await am.changeTOTP(origin, payload.id, pass, code);
-      const isOption = !TypeUtils.isBoolean(option);
-      ctx.response.body = isOption ? option : { result: option };
-      ctx.response.status = isOption ? 202 : 200;
+      const isOption = !isBoolean(option);
+      return c.json(
+        isOption ? option : { result: option },
+        isOption ? 202 : 200,
+      );
     }
   } catch (err) {
-    return ctx.response.status = handleAMErrorToStatus(err);
+    return c.json({}, handleAMErrorToStatus(err));
   }
 });
 
-iRouter.use("/webauthn", webauthnRouter.routes());
-iRouter.use("/webpush", webpushRouter.routes());
+iRouter.route("/webauthn", webauthnRouter);
+iRouter.route("/webpush", webpushRouter);
 
 export default iRouter;

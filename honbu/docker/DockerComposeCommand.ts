@@ -1,4 +1,4 @@
-import { TypeUtils } from "../deps.ts";
+import { isString } from "std/encoding/_yaml/utils.ts";
 import { runCommand } from "../utils/utils.ts";
 
 export const execDCCRun = (
@@ -6,17 +6,17 @@ export const execDCCRun = (
   command: string | string[],
   remove = true,
 ) => {
-  const cmd = ["docker-compose"];
+  const cmd = ["docker", "compose"];
   if (containerName === "") throw new Error("no container name");
   cmd.push("run");
   if (remove) cmd.push("--rm");
   cmd.push(containerName);
-  cmd.push(...(TypeUtils.isString(command) ? command.split(" ") : command));
+  cmd.push(...(isString(command) ? command.split(" ") : command));
   return runCommand(cmd);
 };
 
 export const execDCCUp = (containerName: string, detach = true) => {
-  const cmd = ["docker-compose"];
+  const cmd = ["docker", "compose"];
   if (containerName === "") throw new Error("no container name");
   cmd.push("up");
   if (detach) cmd.push("-d");
@@ -29,7 +29,7 @@ export const execDCCRm = (
   forceRemove = true,
   beforeStop = true,
 ) => {
-  const cmd = ["docker-compose"];
+  const cmd = ["docker", "compose"];
   if (containerName === "") throw new Error("no container name");
   cmd.push("rm");
   if (forceRemove) cmd.push("-f");
@@ -39,7 +39,7 @@ export const execDCCRm = (
 };
 
 export const execDCCRestart = (containerName: string, timeout?: number) => {
-  const cmd = ["docker-compose"];
+  const cmd = ["docker", "compose"];
   if (containerName === "") throw new Error("no container name");
   cmd.push("restart");
   if (timeout) {
@@ -51,7 +51,7 @@ export const execDCCRestart = (containerName: string, timeout?: number) => {
 };
 
 export const execDCCPs = (containerName: string, quiet?: boolean) => {
-  const cmd = ["docker-compose"];
+  const cmd = ["docker", "compose"];
   if (containerName === "") throw new Error("no container name");
   cmd.push("ps");
   if (quiet) cmd.push("-q");

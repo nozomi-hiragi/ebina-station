@@ -1,0 +1,19 @@
+{
+  "imports": {
+    "bcrypt": "https://deno.land/x/bcrypt@v0.4.1/mod.ts",
+    "croner": "https://deno.land/x/croner@5.6.4/src/croner.js",
+    "djwt": "https://deno.land/x/djwt@v2.8/mod.ts",
+    "fido2": "https://deno.land/x/fido2@3.3.5/dist/main.js",
+    "hkdf": "https://deno.land/x/hkdf@v1.0.4/index.ts",
+    "mongo": "https://deno.land/x/mongo@v0.31.1/mod.ts",
+    "otpauth": "https://deno.land/x/otpauth@v9.0.2/dist/otpauth.esm.js",
+    "qrcode": "https://deno.land/x/qrcode_terminal@v1.1.1/mod.js",
+    "semaphore": "https://deno.land/x/semaphore@v1.1.2/mod.ts",
+    "hono/": "https://deno.land/x/hono@v2.7.8/",
+    "std/": "https://deno.land/std@0.177.0/"
+  },
+  "tasks": {
+    "dev": "deno run --watch --allow-env --allow-run --allow-net --allow-read=./project,./logs,./sh,./.env,./.env.example,./.env.defaults,./nginx.conf.base,./entrance.ts,/etc/ssl/certs/dhparam.pem --allow-write=./project,./logs,./docker-compose.yml ./honbu/main.ts",
+    "honbu": "deno run --allow-env --allow-run --allow-net --allow-read=./project,./logs,./sh,./.env,./.env.example,./.env.defaults,./nginx.conf.base,./entrance.ts,/etc/ssl/certs/dhparam.pem --allow-write=./project,./logs,./docker-compose.yml ./honbu/main.ts"
+  }
+}

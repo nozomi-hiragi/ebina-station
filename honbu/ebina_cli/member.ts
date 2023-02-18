@@ -1,6 +1,6 @@
+import qrcode from "qrcode";
 import { AuthManager } from "../auth_manager/mod.ts";
 import { Command, CommandOption } from "../cli.ts";
-import { qrcode } from "../deps.ts";
 import { Members } from "../project_data/members/mod.ts";
 import { logConsole } from "../utils/log.ts";
 

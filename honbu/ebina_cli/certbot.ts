@@ -1,7 +1,7 @@
 import { certCertbot, renewCertbot } from "../action_delegate/certbot.ts";
 import { Command, CommandOption, OptionValue } from "../cli.ts";
 import { logConsole, logger } from "../utils/log.ts";
-import { RunCommandExeption } from "../utils/utils.ts";
+import { RunCommandException } from "../utils/utils.ts";
 
 const executeCertonly = (options: OptionValue[]) => {
   const args: { domain?: string; email?: string } = {};
@@ -16,7 +16,7 @@ const executeCertonly = (options: OptionValue[]) => {
     logConsole.info("...");
     certCertbot(args.domain, args.email).then((ret) => {
       logConsole.info(ret.output);
-    }).catch((err: RunCommandExeption) => {
+    }).catch((err: RunCommandException) => {
       logger.error("certbot error:", err);
     }).finally(() => {
       logConsole.info("finish.");
@@ -30,7 +30,7 @@ const executeRenew = () => {
   logConsole.info("...");
   renewCertbot().then((ret) => {
     logConsole.info(ret.output);
-  }).catch((err: RunCommandExeption) => {
+  }).catch((err: RunCommandException) => {
     logger.error("renew error:", err);
   }).finally(() => {
     logConsole.info("finish.");
