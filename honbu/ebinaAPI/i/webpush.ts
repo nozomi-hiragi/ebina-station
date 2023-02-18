@@ -1,34 +1,32 @@
 import { isString } from "std/encoding/_yaml/utils.ts";
-import { oak } from "../../deps.ts";
-import { authToken } from "../../auth_manager/token.ts";
+import { Hono } from "hono/mod.ts";
+import { StatusCode } from "hono/utils/http-status.ts";
+import { authToken, JwtPayload } from "../../auth_manager/token.ts";
 import { Members } from "../../project_data/members/mod.ts";
-import { isPushSubscriptionJSON } from "../../project_data/members/webpush.ts";
+import {
+  isPushSubscriptionJSON,
+  PushSubscriptionJSON,
+} from "../../project_data/members/webpush.ts";
 import { Settings } from "../../project_data/settings/mod.ts";
 import { send } from "../../webpush/mod.ts";
 
-const webpushRouter = new oak.Router();
+const webpushRouter = new Hono();
 
 // プッシュ登録状態確認
 // 200 結果
 // 401 ログインおかしい
 // 404 居ない
-webpushRouter.get("/subscribed/:name", authToken, (ctx) => {
-  const payload = ctx.state.payload;
-  if (!payload) return ctx.response.status = 401;
+webpushRouter.get("/subscribed/:name", authToken, (c) => {
+  const payload = c.get<JwtPayload>("payload");
+  if (!payload) return c.json({}, 401);
   const member = Members.instance().getMember(payload.id);
-  if (!member) return ctx.response.status = 404;
-  const subscription = member.getWebPushDevice(ctx.params.name);
-  ctx.response.status = 200;
-  if (subscription) {
-    ctx.response.body = {
-      subscribed: true,
-    };
-  } else {
-    ctx.response.body = {
-      subscribed: false,
-      applicationServerKey: Settings.instance().WebPush.values.publicKey,
-    };
-  }
+  if (!member) return c.json({}, 404);
+  const subscription = member.getWebPushDevice(c.req.param().name);
+  const body = subscription ? { subscribed: true } : {
+    subscribed: false,
+    applicationServerKey: Settings.instance().WebPush.values.publicKey,
+  };
+  return c.json(body, 200);
 });
 
 // プッシュ登録
@@ -36,47 +34,47 @@ webpushRouter.get("/subscribed/:name", authToken, (ctx) => {
 // 201 新規
 // 401 ログインおかしい
 // 404 居ない
-webpushRouter.post("/device", authToken, async (ctx) => {
-  const payload = ctx.state.payload;
-  if (!payload) return ctx.response.status = 401;
+webpushRouter.post("/device", authToken, async (c) => {
+  const payload = c.get<JwtPayload>("payload");
+  if (!payload) return c.json({}, 401);
   const members = Members.instance();
   const member = members.getMember(payload.id);
-  if (!member) return ctx.response.status = 404;
+  if (!member) return c.json({}, 404);
 
-  const { deviceName, subscription } = await ctx.request
-    .body({ type: "json" }).value;
-  if (
-    !isString(deviceName) || !isPushSubscriptionJSON(subscription)
-  ) {
-    return ctx.response.status = 400;
+  const { deviceName, subscription } = await c.req.json<
+    { deviceName: string; subscription: PushSubscriptionJSON }
+  >();
+  if (!isString(deviceName) || !isPushSubscriptionJSON(subscription)) {
+    return c.json({}, 400);
   }
 
   const isNew = member.setWPSubscription(deviceName, subscription);
   members.setMember(member);
-  ctx.response.status = isNew ? 201 : 200;
+  return c.json({}, isNew ? 201 : 200);
 });
 
 // 削除
 // 200 ok
 // 401 ログインおかしい
 // 404 居ない
-webpushRouter.delete("/device/:name", authToken, (ctx) => {
-  const payload = ctx.state.payload;
-  if (!payload) return ctx.response.status = 401;
+webpushRouter.delete("/device/:name", authToken, (c) => {
+  const payload = c.get<JwtPayload>("payload");
+  if (!payload) return c.json({}, 401);
   const members = Members.instance();
   const member = members.getMember(payload.id);
-  if (!member) return ctx.response.status = 404;
+  if (!member) return c.json({}, 404);
 
-  const deviceName = ctx.params.name;
-  if (!isString(deviceName)) return ctx.response.status = 400;
+  const deviceName = c.req.param().name;
+  if (!isString(deviceName)) return c.json({}, 400);
 
   const webpushSeettings = Settings.instance().WebPush.values;
   const serverProps = {
     ...webpushSeettings,
-    contactInfo: webpushSeettings.contactInfo ?? ctx.request.url.origin,
+    contactInfo: webpushSeettings.contactInfo ??
+      (c.req.headers.get("origin") ?? ""),
   };
   const subscription = member.getWebPushDevice(deviceName)?.subscription;
-  if (!subscription) return ctx.response.status = 406;
+  if (!subscription) return c.json({}, 406);
   const payloadBuffer = new TextEncoder()
     .encode(
       JSON.stringify({
@@ -91,22 +89,20 @@ webpushRouter.delete("/device/:name", authToken, (ctx) => {
   members.setMember(member);
   const deviceNames = member.getWebPushDeviceNames() ?? [];
 
-  ctx.response.status = 200;
-  ctx.response.body = deviceNames;
+  return c.json(deviceNames, 200);
 });
 
 // 全デバイス名取得
 // 200 結果
 // 401 ログインおかしい
 // 404 居ない
-webpushRouter.get("/devices", authToken, (ctx) => {
-  const payload = ctx.state.payload;
-  if (!payload) return ctx.response.status = 401;
+webpushRouter.get("/devices", authToken, (c) => {
+  const payload = c.get<JwtPayload>("payload");
+  if (!payload) return c.json({}, 401);
   const member = Members.instance().getMember(payload.id);
-  if (!member) return ctx.response.status = 404;
+  if (!member) return c.json({}, 404);
   const deviceNames = member.getWebPushDeviceNames() ?? [];
-  ctx.response.status = 200;
-  ctx.response.body = deviceNames;
+  return c.json(deviceNames, 200);
 });
 
 // プッシュ送るテスト
@@ -114,24 +110,25 @@ webpushRouter.get("/devices", authToken, (ctx) => {
 // 401 ログインおかしい
 // 404 居ない
 // 送信fetchの戻り
-webpushRouter.post("/test", authToken, async (ctx) => {
-  const jwtpayload = ctx.state.payload;
-  if (!jwtpayload) return ctx.response.status = 401;
+webpushRouter.post("/test", authToken, async (c) => {
+  const jwtpayload = c.get<JwtPayload>("payload");
+  if (!jwtpayload) return c.json({}, 401);
   const members = Members.instance();
   const member = members.getMember(jwtpayload.id);
-  if (!member) return ctx.response.status = 404;
-  const body = await ctx.request.body({ type: "json" }).value;
+  if (!member) return c.json({}, 404);
+  const body = await c.req.json<{ deviceName: string }>();
   const { deviceName } = body;
-  if (!isString(deviceName)) return ctx.response.status = 400;
+  if (!isString(deviceName)) return c.json({}, 400);
 
   const webpushSeettings = Settings.instance().WebPush.values;
   const serverProps = {
     ...webpushSeettings,
-    contactInfo: webpushSeettings.contactInfo ?? ctx.request.url.origin,
+    contactInfo: webpushSeettings.contactInfo ??
+      (c.req.headers.get("origin") ?? ""),
   };
 
   const subscription = member.getWebPushDevice(deviceName)?.subscription;
-  if (!subscription) return ctx.response.status = 406;
+  if (!subscription) return c.json({}, 406);
 
   const payloadBuffer = new TextEncoder()
     .encode(
@@ -142,8 +139,7 @@ webpushRouter.post("/test", authToken, async (ctx) => {
     );
 
   const ret = await send(serverProps, subscription, payloadBuffer);
-  ctx.response.status = ret.status;
-  ctx.response.body = await ret.text();
+  return c.json(await ret.text(), ret.status as StatusCode);
 });
 
 export default webpushRouter;

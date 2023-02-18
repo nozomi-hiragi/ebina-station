@@ -1,25 +1,24 @@
-import { oak } from "../../deps.ts";
+import { Hono } from "hono/mod.ts";
 import { getApp } from "../../project_data/apps/mod.ts";
 import { authToken } from "../../auth_manager/token.ts";
 
-const jsRouter = new oak.Router();
+const jsRouter = new Hono();
 
 // スクリプトファイル一覧取得
 // 200 一覧
 // 500 ファイル読めなかった
-jsRouter.get("/", authToken, (ctx) => {
-  const { appName } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
+jsRouter.get("/", authToken, (c) => {
+  const { appName } = c.req.param();
+  if (!appName) return c.json({}, 400);
 
   const scripts = getApp(appName)?.scripts;
-  if (!scripts) return ctx.response.status = 404;
+  if (!scripts) return c.json({}, 404);
 
   const fileList = scripts.getFileList();
   if (fileList) {
-    ctx.response.status = 200;
-    ctx.response.body = fileList;
+    return c.json(fileList, 200);
   } else {
-    ctx.response.status = 500;
+    return c.json({}, 500);
   }
 });
 
@@ -30,17 +29,17 @@ jsRouter.get("/", authToken, (ctx) => {
 // 400 情報おかしい
 // 409 もうある
 // 500 ファイル関係ミスった
-jsRouter.post("/:path", authToken, async (ctx) => {
-  const { appName, path } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
-  if (path.includes("..")) return ctx.response.status = 400;
+jsRouter.post("/:path", authToken, async (c) => {
+  const { appName, path } = c.req.param();
+  if (!appName) return c.json({}, 400);
+  if (path.includes("..")) return c.json({}, 400);
 
   const scripts = getApp(appName)?.scripts;
-  if (!scripts) return ctx.response.status = 404;
-  if (scripts.exist(path)) return ctx.response.status = 409;
+  if (!scripts) return c.json({}, 404);
+  if (scripts.exist(path)) return c.json({}, 409);
 
-  const body = await ctx.request.body({ type: "text" }).value;
-  ctx.response.status = scripts.writeText(path, body) ? 200 : 409;
+  const body = await c.req.text();
+  return c.json({}, scripts.writeText(path, body) ? 200 : 409);
 });
 
 // スクリプトファイル取得
@@ -50,21 +49,20 @@ jsRouter.post("/:path", authToken, async (ctx) => {
 // 404 ファイルない
 // 409 ディレクトリ
 // 500 ファイル関係ミスった
-jsRouter.get("/:path", authToken, (ctx) => {
-  const { appName, path } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
-  if (path.includes("..")) return ctx.response.status = 400;
+jsRouter.get("/:path", authToken, (c) => {
+  const { appName, path } = c.req.param();
+  if (!appName) return c.json({}, 400);
+  if (path.includes("..")) return c.json({}, 400);
 
   const scripts = getApp(appName)?.scripts;
-  if (!scripts) return ctx.response.status = 404;
-  if (!scripts.exist(path)) return ctx.response.status = 404;
+  if (!scripts) return c.json({}, 404);
+  if (!scripts.exist(path)) return c.json({}, 404);
 
   const content = scripts.getText(path);
   if (content) {
-    ctx.response.status = 200;
-    ctx.response.body = content;
+    return c.json(content, 200);
   } else {
-    ctx.response.status = 500;
+    return c.json({}, 500);
   }
 });
 
@@ -75,17 +73,17 @@ jsRouter.get("/:path", authToken, (ctx) => {
 // 404 ファイルない
 // 409 ディレクトリ
 // 500 ファイル関係ミスった
-jsRouter.patch("/:path", authToken, async (ctx) => {
-  const { appName, path } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
-  if (path.includes("..")) return ctx.response.status = 400;
+jsRouter.patch("/:path", authToken, async (c) => {
+  const { appName, path } = c.req.param();
+  if (!appName) return c.json({}, 400);
+  if (path.includes("..")) return c.json({}, 400);
 
   const scripts = getApp(appName)?.scripts;
-  if (!scripts) return ctx.response.status = 404;
-  if (!scripts.exist(path)) return ctx.response.status = 404;
+  if (!scripts) return c.json({}, 404);
+  if (!scripts.exist(path)) return c.json({}, 404);
 
-  const body = await ctx.request.body({ type: "text" }).value;
-  ctx.response.status = scripts.writeText(path, body) ? 200 : 409;
+  const body = await c.req.text();
+  return c.json({}, scripts.writeText(path, body) ? 200 : 409);
 });
 
 //スクリプトファイル削除
@@ -94,14 +92,14 @@ jsRouter.patch("/:path", authToken, async (ctx) => {
 // 404 ファイルない
 // 409 ディレクトリ
 // 500 ファイル関係ミスった
-jsRouter.delete("/:path", authToken, (ctx) => {
-  const { appName, path } = ctx.params;
-  if (!appName) return ctx.response.status = 400;
-  if (path.includes("..")) return ctx.response.status = 400;
+jsRouter.delete("/:path", authToken, (c) => {
+  const { appName, path } = c.req.param();
+  if (!appName) return c.json({}, 400);
+  if (path.includes("..")) return c.json({}, 400);
 
   const scripts = getApp(appName)?.scripts;
-  if (!scripts) return ctx.response.status = 404;
-  ctx.response.status = scripts.deleteFile(path) ? 200 : 409;
+  if (!scripts) return c.json({}, 404);
+  return c.json({}, scripts.deleteFile(path) ? 200 : 409);
 });
 
 export default jsRouter;

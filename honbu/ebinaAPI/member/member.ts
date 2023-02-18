@@ -1,10 +1,14 @@
 import { isString } from "std/encoding/_yaml/utils.ts";
-import { oak } from "../../deps.ts";
+import { Hono } from "hono/mod.ts";
 import { authToken, JwtPayload } from "../../auth_manager/token.ts";
 import { Members } from "../../project_data/members/mod.ts";
 import { AuthManager, handleAMErrorToStatus } from "../../auth_manager/mod.ts";
+import {
+  AttestationResponseJSON,
+  AuthenticationResponseJSON,
+} from "../../webauthn/fido2Wrap.ts";
 
-const memberRouter = new oak.Router();
+const memberRouter = new Hono();
 
 // ユーザー登録リクエスト
 // { front, server, id, name }
@@ -12,23 +16,25 @@ const memberRouter = new oak.Router();
 // 400 パラメ足らん
 // 409 メンバー上限
 // 500 URLエラー
-memberRouter.post("/regist/request", authToken, async (ctx) => {
-  const payload: JwtPayload = ctx.state.payload!;
-  let { front, server, id, name } = await ctx.request
-    .body({ type: "json" }).value;
+memberRouter.post("/regist/request", authToken, async (c) => {
+  const payload: JwtPayload = c.get<JwtPayload>("payload");
+  let { front, server, id, name } = await c.req.json<
+    { front: string; server: string; id: string; name: string }
+  >();
 
-  if (!server) server = `${ctx.request.url.protocol}//${ctx.request.url.host}`;
-  if (!isString(server)) return ctx.response.status = 400;
+  const reqURL = new URL(c.req.url);
+  if (!server) server = `${reqURL.protocol}//${reqURL.host}`;
+  if (!isString(server)) return c.json({}, 400);
 
   if (!front) {
-    const origin = ctx.request.headers.get("origin");
-    if (!origin) return ctx.response.status = 400;
+    const origin = c.req.headers.get("origin");
+    if (!origin) return c.json({}, 400);
     front = `${origin}/ebina-station`;
   }
-  if (!isString(front)) return ctx.response.status = 400;
+  if (!isString(front)) return c.json({}, 400);
 
   const token = AuthManager.instance().getRegistNewMemeberToken(payload.id);
-  if (!token) return ctx.response.status = 409;
+  if (!token) return c.json({}, 409);
 
   let url: string | undefined = undefined;
   try {
@@ -41,8 +47,7 @@ memberRouter.post("/regist/request", authToken, async (ctx) => {
   } catch (err) {
     if (!(err instanceof TypeError)) throw err;
   }
-  ctx.response.status = 201;
-  ctx.response.body = { token, url };
+  return c.json({ token, url }, 201);
 });
 
 // 仮登録
@@ -50,20 +55,20 @@ memberRouter.post("/regist/request", authToken, async (ctx) => {
 // 201 オプションあげる
 // 400 パラメ足らん
 // 409 メンバ競合
-memberRouter.post("/regist/option", async (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  const { id, name, pass, token } = await ctx.request
-    .body({ type: "json" }).value;
-  if (!id || !name || !pass || !token) return ctx.response.status = 400;
+memberRouter.post("/regist/option", async (c) => {
+  const origin = c.req.headers.get("origin");
+  if (!origin) return c.json({}, 400);
+  const { id, name, pass, token } = await c.req.json<
+    { id: string; name: string; pass: string; token: string }
+  >();
+  if (!id || !name || !pass || !token) return c.json({}, 400);
 
   try {
     const option = await AuthManager.instance()
       .registTempMemberOption(origin, token, id, name, pass);
-    ctx.response.body = option;
-    ctx.response.status = 201;
+    return c.json(option, 201);
   } catch (err) {
-    return ctx.response.status = handleAMErrorToStatus(err);
+    return c.json({}, handleAMErrorToStatus(err));
   }
 });
 
@@ -73,30 +78,32 @@ memberRouter.post("/regist/option", async (ctx) => {
 // 400 パラメ足らん
 // 401 トークン違う
 // 404 いない
-memberRouter.post("/regist/verify", async (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  const body = await ctx.request.body({ type: "json" }).value;
+memberRouter.post("/regist/verify", async (c) => {
+  const origin = c.req.headers.get("origin");
+  if (!origin) return c.json({}, 400);
+  const body = await c.req.json<
+    { id: string; result: AttestationResponseJSON }
+  >();
   const { id, result } = body;
   if (!id || !isString(id) || !result) {
-    return ctx.response.status = 400;
+    return c.json({}, 400);
   }
 
   try {
     await AuthManager.instance().registTempMemberVerify(origin, id, result);
-    ctx.response.status = 200;
+    return c.json({}, 200);
   } catch (err) {
-    return ctx.response.status = handleAMErrorToStatus(err);
+    return c.json({}, handleAMErrorToStatus(err));
   }
 });
 
 // メンバー配列取得 ID無いなら全部
 // ?ids
 // 200 空でも返す
-memberRouter.get("/", authToken, (ctx) => {
-  const ids = ctx.request.url.searchParams.get("ids")?.split(",") ?? [];
+memberRouter.get("/", authToken, (c) => {
+  const ids = c.req.query("ids")?.split(",") ?? [];
 
-  ctx.response.body = Members.instance().getMembersArray(ids);
+  return c.json(Members.instance().getMembersArray(ids));
 });
 
 // メンバー配列削除
@@ -104,9 +111,9 @@ memberRouter.get("/", authToken, (ctx) => {
 // 200 全部できた
 // 206 一部できた
 // 404 全部できない
-memberRouter.delete("/", authToken, (ctx) => {
-  const payload = ctx.state.payload;
-  const ids = ctx.request.url.searchParams.get("ids")?.split(",") ?? [];
+memberRouter.delete("/", authToken, (c) => {
+  const payload = c.get<JwtPayload>("payload");
+  const ids = c.req.query("ids")?.split(",") ?? [];
 
   const failedIds: string[] = [];
   ids.forEach((id) => {
@@ -114,12 +121,11 @@ memberRouter.delete("/", authToken, (ctx) => {
     if (!Members.instance().removeMember(id)) failedIds.push(id);
   });
   if (failedIds.length === ids.length) {
-    ctx.response.status = 404;
+    return c.json({}, 404);
   } else if (failedIds.length !== 0) {
-    ctx.response.status = 206;
-    ctx.response.body = { failedIDs: failedIds };
+    return c.json({ failedIDs: failedIds }, 206);
   } else {
-    ctx.response.status = 200;
+    return c.json({}, 200);
   }
 });
 
@@ -128,29 +134,28 @@ memberRouter.delete("/", authToken, (ctx) => {
 // 200 メンバー
 // 400 IDない
 // 404 みつからない
-memberRouter.get("/member/:id", authToken, (ctx) => {
-  const { id } = ctx.params;
-  if (!id) return ctx.response.status = 400;
+memberRouter.get("/member/:id", authToken, (c) => {
+  const { id } = c.req.param();
+  if (!id) return c.json({}, 400);
 
   const member = Members.instance().getMember(id);
   if (member) {
-    ctx.response.body = { ...member, auth: undefined };
+    return c.json({ ...member, auth: undefined });
   } else {
-    ctx.response.status = 404;
+    return c.json({}, 404);
   }
 });
 
 // 仮メンバーたち
 // 200 ok
-memberRouter.get("/temp", authToken, (ctx) => {
+memberRouter.get("/temp", authToken, (c) => {
   const members = Members.instance().getTempMembers();
   const arrangedMembers = Object.keys(members).map((id) => {
     const member = members[id]!;
     return { id, from: member.from, member: member.member.getValue() };
   });
 
-  ctx.response.status = 200;
-  ctx.response.body = arrangedMembers;
+  return c.json(arrangedMembers, 200);
 });
 
 // 仮メンバー承認
@@ -158,22 +163,23 @@ memberRouter.get("/temp", authToken, (ctx) => {
 // 202 認証して
 // 400 足らない
 // 401 認証できてない
-memberRouter.post("/temp/admit", authToken, async (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  const payload = ctx.state.payload;
-  if (!payload) return ctx.response.status = 401;
-  const body = await ctx.request.body({ type: "json" }).value;
+memberRouter.post("/temp/admit", authToken, async (c) => {
+  const origin = c.req.headers.get("origin");
+  if (!origin) return c.json({}, 400);
+  const payload = c.get<JwtPayload>("payload");
+  if (!payload) return c.json({}, 401);
+  const body = await c.req.json<
+    ({ type: "public-key" } & AuthenticationResponseJSON) | { ids: string[] }
+  >();
 
   try {
     const am = AuthManager.instance();
-    if (body.type === "public-key") {
+    if ("type" in body && body.type === "public-key") {
       const successIds = await am.verifyAuthResponse(origin, payload.id, body);
-      ctx.response.body = successIds;
-      ctx.response.status = 200;
+      return c.json(successIds, 200);
     } else {
-      const ids = body.ids;
-      if (!ids || !Array.isArray(ids)) return ctx.response.status = 400;
+      const ids = "ids" in body ? body.ids : undefined;
+      if (!ids || !Array.isArray(ids)) return c.json({}, 400);
 
       const option = await am.createAuthOption(origin, payload.id, {
         id: payload.id,
@@ -183,11 +189,10 @@ memberRouter.post("/temp/admit", authToken, async (ctx) => {
           return Promise.resolve(successIds);
         },
       });
-      ctx.response.body = option;
-      ctx.response.status = 202;
+      return c.json(option, 202);
     }
   } catch (err) {
-    return ctx.response.status = handleAMErrorToStatus(err);
+    return c.json({}, handleAMErrorToStatus(err));
   }
 });
 
@@ -196,22 +201,23 @@ memberRouter.post("/temp/admit", authToken, async (ctx) => {
 // 202 認証して
 // 400 足らない
 // 401 認証できてない
-memberRouter.post("/temp/deny", authToken, async (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  const payload = ctx.state.payload;
-  if (!payload) return ctx.response.status = 401;
-  const body = await ctx.request.body({ type: "json" }).value;
+memberRouter.post("/temp/deny", authToken, async (c) => {
+  const origin = c.req.headers.get("origin");
+  if (!origin) return c.json({}, 400);
+  const payload = c.get<JwtPayload>("payload");
+  if (!payload) return c.json({}, 401);
+  const body = await c.req.json<
+    ({ type: "public-key" } & AuthenticationResponseJSON) | { ids: string[] }
+  >();
 
   try {
     const am = AuthManager.instance();
-    if (body.type === "public-key") {
+    if ("type" in body && body.type === "public-key") {
       const failedIds = await am.verifyAuthResponse(origin, payload.id, body);
-      ctx.response.body = failedIds;
-      ctx.response.status = 200;
+      return c.json(failedIds, 200);
     } else {
-      const ids = body.ids;
-      if (!ids || !Array.isArray(ids)) return ctx.response.status = 400;
+      const ids = "ids" in body ? body.ids : undefined;
+      if (!ids || !Array.isArray(ids)) return c.json({}, 400);
 
       const option = await am.createAuthOption(origin, payload.id, {
         id: payload.id,
@@ -221,11 +227,10 @@ memberRouter.post("/temp/deny", authToken, async (ctx) => {
           return Promise.resolve(successIds);
         },
       });
-      ctx.response.body = option;
-      ctx.response.status = 202;
+      return c.json(option, 202);
     }
   } catch (err) {
-    return ctx.response.status = handleAMErrorToStatus(err);
+    return c.json({}, handleAMErrorToStatus(err));
   }
 });
 

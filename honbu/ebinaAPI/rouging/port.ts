@@ -1,5 +1,5 @@
 import { isNumber } from "std/encoding/_yaml/utils.ts";
-import { oak } from "../../deps.ts";
+import { Hono } from "hono/mod.ts";
 import { authToken } from "../../auth_manager/token.ts";
 import {
   getPort,
@@ -8,25 +8,23 @@ import {
   setPort,
 } from "../../project_data/apps/ports.ts";
 
-const portRouter = new oak.Router();
+const portRouter = new Hono();
 
-portRouter.get("/numbers", authToken, (ctx) => {
-  ctx.response.status = 200;
-  ctx.response.body = { start: PORT_START, ports: getPorts() };
+portRouter.get("/numbers", authToken, (c) => {
+  return c.json({ start: PORT_START, ports: getPorts() }, 200);
 });
 
-portRouter.get("/number/:name", authToken, (ctx) => {
-  const { name } = ctx.params;
+portRouter.get("/number/:name", authToken, (c) => {
+  const { name } = c.req.param();
   const port = getPort(name);
-  ctx.response.status = port === undefined ? 404 : 200;
-  ctx.response.body = { port };
+  return c.json({ port }, port === undefined ? 404 : 200);
 });
 
-portRouter.put("/number/:name", authToken, async (ctx) => {
-  const { name } = ctx.params;
-  const { port } = await ctx.request.body({ type: "json" }).value;
-  if (!port || !isNumber(port)) return ctx.response.status = 400;
-  ctx.response.status = setPort(name, port) ? 200 : 409;
+portRouter.put("/number/:name", authToken, async (c) => {
+  const { name } = c.req.param();
+  const { port } = await c.req.json<{ port: number }>();
+  if (!port || !isNumber(port)) return c.json({}, 400);
+  return c.json({}, setPort(name, port) ? 200 : 409);
 });
 
 export default portRouter;

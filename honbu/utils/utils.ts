@@ -1,4 +1,5 @@
 import * as base64url from "std/encoding/base64url.ts";
+import { StatusCode } from "hono/utils/http-status.ts";
 import { logger } from "./log.ts";
 
 export const mkdirIfNotExist = (path: string) => {
@@ -18,8 +19,8 @@ export const isExist = (path: string) => {
 };
 
 export class HttpException extends Error {
-  status: number;
-  constructor(status: number, message: string) {
+  status: StatusCode;
+  constructor(status: StatusCode, message: string) {
     super(message);
     this.status = status;
   }

@@ -1,23 +1,22 @@
-import { oak } from "../../deps.ts";
+import { Hono } from "hono/mod.ts";
 import { Settings } from "../../project_data/settings/mod.ts";
 import { SettingWebAuthnValues } from "../../project_data/settings/webauthn.ts";
 import { authToken } from "../../auth_manager/token.ts";
 
-const projectRouter = new oak.Router();
+const projectRouter = new Hono();
 
-projectRouter.get("/webauthn", authToken, (ctx) => {
+projectRouter.get("/webauthn", authToken, (c) => {
   const settings = Settings.instance();
   const webauthnSettings = settings.WebAuthn;
   if (!webauthnSettings) {
-    return ctx.response.status = 503;
+    return c.json({}, 503);
   }
-  ctx.response.body = webauthnSettings.getRawValue();
+  return c.json(webauthnSettings.getRawValue());
 });
 
-projectRouter.post("/webauthn", authToken, async (ctx) => {
+projectRouter.post("/webauthn", authToken, async (c) => {
   const settings = Settings.instance();
-  const webauthnSettings: SettingWebAuthnValues = await ctx.request
-    .body({ type: "json" }).value;
+  const webauthnSettings: SettingWebAuthnValues = await c.req.json();
   if (webauthnSettings.rpName) {
     settings.WebAuthn.setRpName(webauthnSettings.rpName);
   }
@@ -30,20 +29,20 @@ projectRouter.post("/webauthn", authToken, async (ctx) => {
   if (webauthnSettings.attestationType) {
     settings.WebAuthn.setAttestationType(webauthnSettings.attestationType);
   }
-  ctx.response.status = settings.save() ? 200 : 500;
+  return c.json({}, settings.save() ? 200 : 500);
 });
 
-projectRouter.get("/mongodb", authToken, (ctx) => {
+projectRouter.get("/mongodb", authToken, (c) => {
   const settings = Settings.instance();
   const mongodbSettings = settings.Mongodb;
   if (!mongodbSettings) {
-    return ctx.response.status = 503;
+    return c.json({}, 503);
   }
-  ctx.response.body = {
+  return c.json({
     port: mongodbSettings.getPortNumber(),
     username: mongodbSettings.getMongodbUsername() === "env" ? "env" : "*****",
     password: mongodbSettings.getMongodbPassword() === "env" ? "env" : "*****",
-  };
+  });
 });
 
 // 不完全 再起動対応とか必要

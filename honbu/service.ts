@@ -1,6 +1,7 @@
+import { serve } from "std/http/server.ts";
 import Cron from "croner";
-import { oak } from "./deps.ts";
-import { oakCors } from "./deps.ts";
+import { Hono } from "hono/mod.ts";
+import { cors } from "hono/middleware.ts";
 import ebinaRouter from "./ebinaAPI/ebina.ts";
 import {
   initDockerComposeFile,
@@ -27,13 +28,10 @@ export class Service {
 
   private startListen() {
     const projectSettings = Settings.instance();
-    const app = new oak.Application();
-    const router = new oak.Router().use("/ebina", ebinaRouter.routes());
-    app.use(
-      oakCors({ origin: projectSettings.origins, credentials: true }),
-      router.routes(),
-      router.allowedMethods(),
-    ).listen({ port: projectSettings.getPortNumber() });
+    const app = new Hono();
+    app.use("*", cors({ origin: projectSettings.origins, credentials: true }));
+    app.route("/ebina", ebinaRouter);
+    serve(app.fetch, { port: projectSettings.getPortNumber() });
     logger.info("start listeing");
   }
 

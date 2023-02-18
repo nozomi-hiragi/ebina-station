@@ -4,7 +4,7 @@ import { APPS_DIR } from "../mod.ts";
 
 const CRON_JSON_FILE_NAME = "cron.json";
 
-interface CronItemVales {
+export interface CronItemVales {
   enable: boolean;
   pattern: string;
   function: string;
@@ -177,8 +177,8 @@ export class CronItems {
   }
 
   setCron(cronName: string, cronItem: CronItem | undefined) {
-    const currenItem = this.getItem(cronName);
-    if (currenItem) currenItem.stop();
+    const currentItem = this.getItem(cronName);
+    if (currentItem) currentItem.stop();
 
     this.setItem(cronName, cronItem);
     if (cronItem && cronItem.getEnable()) {

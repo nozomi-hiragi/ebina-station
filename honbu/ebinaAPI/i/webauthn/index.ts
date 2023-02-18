@@ -1,5 +1,5 @@
-import { oak } from "../../../deps.ts";
-import { authToken } from "../../../auth_manager/token.ts";
+import { Hono } from "hono/mod.ts";
+import { authToken, JwtPayload } from "../../../auth_manager/token.ts";
 import { getRPID } from "../../../auth_manager/webauthn.ts";
 import deviceRouter from "./device.ts";
 import {
@@ -7,8 +7,12 @@ import {
   handleAMErrorToStatus,
 } from "../../../auth_manager/mod.ts";
 import { randomBase64url } from "../../../utils/utils.ts";
+import {
+  AttestationResponseJSON,
+  AuthenticationResponseJSON,
+} from "../../../webauthn/fido2Wrap.ts";
 
-const webauthnRouter = new oak.Router();
+const webauthnRouter = new Hono();
 
 // 登録
 // origin:
@@ -20,14 +24,21 @@ const webauthnRouter = new oak.Router();
 // 409 チャレンジ控えがない
 // 410 チャレンジ古い
 // 500 WebAuthnの設定おかしい
-webauthnRouter.post("/regist", async (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  await authToken(ctx, async () => {});
-  const payload = ctx.state.payload;
-  const body = await ctx.request.body({ type: "json" }).value;
-  const id = payload ? payload.id : ctx.request.headers.get("id");
-  if (!id) return ctx.response.status = 400;
+webauthnRouter.post("/regist", async (c) => {
+  const origin = c.req.headers.get("origin");
+  if (!origin) return c.json({}, 400);
+  await authToken(c, async () => {});
+  const payload = c.get<JwtPayload>("payload");
+  const body = await c.req.json<
+    AttestationResponseJSON & {
+      type: string;
+      deviceName?: string;
+      pass: string;
+      code: string;
+    }
+  >();
+  const id = payload ? payload.id : c.req.headers.get("id");
+  if (!id) return c.json({}, 400);
 
   try {
     const am = AuthManager.instance();
@@ -36,18 +47,16 @@ webauthnRouter.post("/regist", async (ctx) => {
         .registWebAuthnVerify(origin, id, body).then((member) =>
           member.getWebAuthnItem(getRPID(origin))?.getEnableDeviceNames() ?? []
         );
-      ctx.response.body = enabledDeviceNames;
-      ctx.response.status = 200;
+      return c.json(enabledDeviceNames, 200);
     } else {
       const option = await am.registWebAuthnOption(origin, id, {
         ...body,
         deviceName: body.deviceName ?? randomBase64url(8),
       });
-      ctx.response.body = option;
-      ctx.response.status = 202;
+      return c.json(option, 202);
     }
   } catch (err) {
-    return ctx.response.status = handleAMErrorToStatus(err);
+    return c.json({}, handleAMErrorToStatus(err));
   }
 });
 
@@ -62,32 +71,33 @@ webauthnRouter.post("/regist", async (ctx) => {
 // 409 チャレンジ控えがない
 // 410 チャレンジ古い
 // 500 WebAuthnの設定おかしい
-webauthnRouter.post("/verify", authToken, async (ctx) => {
-  const origin = ctx.request.headers.get("origin");
-  if (!origin) return ctx.response.status = 400;
-  const payload = ctx.state.payload;
-  if (!payload) return ctx.response.status = 401;
-  const body = await ctx.request.body({ type: "json" }).value.catch(() => ({}));
+webauthnRouter.post("/verify", authToken, async (c) => {
+  const origin = c.req.headers.get("origin");
+  if (!origin) return c.json({}, 400);
+  const payload = c.get<JwtPayload>("payload");
+  if (!payload) return c.json({}, 401);
+  const body = await c.req.json<
+    | ({ type: "public-key" } & AuthenticationResponseJSON)
+    | { deviceNames?: string[] }
+  >().catch(() => ({}));
 
   try {
-    if (body.type === "public-key") {
+    if ("type" in body && body.type === "public-key") {
       await AuthManager.instance().verifyAuthResponse(origin, payload.id, body);
-      ctx.response.status = 200;
-    } else {
-      const deviceNames = body.deviceNames;
-      if (!deviceNames || !Array.isArray(deviceNames)) {
-        return ctx.response.status = 400;
-      }
-      const options = await AuthManager.instance()
-        .checkDevicesOption(origin, payload.id, deviceNames);
-      ctx.response.body = options;
-      ctx.response.status = 202;
+      return c.json({}, 200);
     }
+    const deviceNames = "deviceNames" in body ? body.deviceNames : undefined;
+    if (!deviceNames || !Array.isArray(deviceNames)) {
+      return c.json({}, 400);
+    }
+    const options = await AuthManager.instance()
+      .checkDevicesOption(origin, payload.id, deviceNames);
+    return c.json(options, 202);
   } catch (err) {
-    return ctx.response.status = handleAMErrorToStatus(err);
+    return c.json({}, handleAMErrorToStatus(err));
   }
 });
 
-webauthnRouter.use("/device", deviceRouter.routes());
+webauthnRouter.route("/device", deviceRouter);
 
 export default webauthnRouter;

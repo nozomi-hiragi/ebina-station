@@ -1,3 +1,4 @@
+import { StatusCode } from "hono/utils/http-status.ts";
 import { createPasswordAuth } from "../project_data/members/auth/password.ts";
 import { Member } from "../project_data/members/member.ts";
 import { Members } from "../project_data/members/mod.ts";
@@ -40,7 +41,10 @@ export class AuthManagerError extends Error {
   }
 }
 
-const convertAMErrorToStatus = (error: AuthManagerError) => {
+const convertAMErrorToStatus = (error: AuthManagerError): {
+  status: StatusCode;
+  message: AuthManagerErrorType;
+} => {
   switch (error.type) {
     case "No member":
       return { status: 404, message: error.type };
@@ -69,7 +73,7 @@ const convertAMErrorToStatus = (error: AuthManagerError) => {
   }
 };
 
-export const handleAMErrorToStatus = (err: Error) => {
+export const handleAMErrorToStatus = (err: Error): StatusCode => {
   if (err instanceof AuthManagerError) {
     const ret = convertAMErrorToStatus(err);
     if (ret.status !== 500) {
