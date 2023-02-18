@@ -1,10 +1,11 @@
-import * as oak from "https://deno.land/x/oak@v11.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.173.0/http/mod.ts";
+import { Hono } from "https://deno.land/x/hono@v2.7.5/mod.ts";
+import { Handler } from "https://deno.land/x/hono@v2.7.5/types.ts";
 
 Deno.addSignalListener("SIGINT", () => Deno.exit(0));
 const FILE_APIS = "apis.json";
 
 interface EntranceArgs {
-  appDirPath: string;
   port: number;
   init?: {
     filename: string;
@@ -15,7 +16,7 @@ interface EntranceArgs {
     function: string;
   };
 }
-type RouterFunc = oak.RouterMiddleware<string>;
+
 interface APIItem {
   name: string;
   path: string;
@@ -24,45 +25,42 @@ interface APIItem {
   value: string;
 }
 
-let appDirPath: string;
+export const appDir = new URL("../", import.meta.url).pathname;
 // deno-lint-ignore no-explicit-any
 const moduleCache: { [filename: string]: any } = {};
 
 const getModule = async (filename: string) => {
   const module = moduleCache[filename];
   if (module) return module;
-  const scriptPaht = `./${filename}`;
-  return moduleCache[filename] = await import(scriptPaht);
+  const scriptPath = `./${filename}`;
+  return moduleCache[filename] = await import(scriptPath);
 };
 
 const readAPIsJson = (): APIItem[] =>
-  JSON.parse(Deno.readTextFileSync(`${appDirPath}/${FILE_APIS}`)).apis;
+  JSON.parse(Deno.readTextFileSync(`${appDir}/${FILE_APIS}`)).apis;
 
-const apiToFunction = async (api: APIItem): Promise<RouterFunc> => {
+const apiToFunction = async (api: APIItem): Promise<Handler> => {
   if (api.filename) {
     try {
       const module = await getModule(api.filename);
       return module[api.value];
     } catch (err) {
-      return (ctx) => {
-        ctx.response.body = err;
-        ctx.response.status = 502;
-      };
+      return (c) => c.text(err.toString(), 502);
     }
   }
-  return (ctx) => ctx.response.body = api.value;
+  return (c) => c.text(api.value);
 };
 
 const createRouter = async () => {
-  const router = new oak.Router();
-  const methods: { [m: string]: (p: string, f: RouterFunc) => void } = {
-    "get": (p, f) => router.get(p, f),
-    "put": (p, f) => router.put(p, f),
-    "head": (p, f) => router.head(p, f),
-    "post": (p, f) => router.post(p, f),
-    "patch": (p, f) => router.patch(p, f),
-    "delete": (p, f) => router.delete(p, f),
-    "options": (p, f) => router.options(p, f),
+  const router = new Hono();
+  const methods: { [m: string]: (p: string, h: Handler) => void } = {
+    "get": (p, h) => router.get(p, h),
+    "put": (p, h) => router.put(p, h),
+    "head": (p, h) => router.head(p, h),
+    "post": (p, h) => router.post(p, h),
+    "patch": (p, h) => router.patch(p, h),
+    "delete": (p, h) => router.delete(p, h),
+    "options": (p, h) => router.options(p, h),
   };
   await Promise.all(
     readAPIsJson().map(async (api) =>
@@ -74,25 +72,24 @@ const createRouter = async () => {
 
 const main = () => {
   if (!Deno.args.length) throw new Error("no args");
-  const { port, init, final, ...args } = JSON.parse(
+  const { port, init, final } = JSON.parse(
     Deno.args[0],
   ) as EntranceArgs;
-  appDirPath = args.appDirPath;
   createRouter().then(async (router) => {
-    const app = new oak.Application();
-    app.use(router.routes(), router.allowedMethods());
+    const app = new Hono();
     if (init) {
       const module = await getModule(init.filename);
       const func = module[init.function];
       if (func) func(app, router, port);
-      else console.log("init finction load failed");
+      else console.log("init function load failed");
     }
-    app.listen({ port });
+    app.route("/", router);
+    serve(app.fetch, { port });
     if (final) {
       const module = await getModule(final.filename);
       const func = module[final.function];
       if (func) globalThis.addEventListener("unload", () => func(app));
-      else console.log("final finction load failed");
+      else console.log("final function load failed");
     }
   });
 };
