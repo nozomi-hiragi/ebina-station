@@ -16,7 +16,7 @@ jsRouter.get("/", authToken, (c) => {
 
   const fileList = scripts.getFileList();
   if (fileList) {
-    return c.json(fileList, 200);
+    return c.json(fileList.sort(), 200);
   } else {
     return c.json({}, 500);
   }
