@@ -1,6 +1,6 @@
-import { serve } from "https://deno.land/std@0.173.0/http/mod.ts";
-import { Hono } from "https://deno.land/x/hono@v2.7.5/mod.ts";
-import { Handler } from "https://deno.land/x/hono@v2.7.5/types.ts";
+import { serve } from "https://deno.land/std@0.177.0/http/mod.ts";
+import { Hono } from "https://deno.land/x/hono@v3.0.1/mod.ts";
+import { Handler } from "https://deno.land/x/hono@v3.0.1/types.ts";
 
 Deno.addSignalListener("SIGINT", () => Deno.exit(0));
 const FILE_APIS = "apis.json";

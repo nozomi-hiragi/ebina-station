@@ -1,13 +1,13 @@
-import { Hono } from "hono/mod.ts";
+import { Context, Hono } from "hono/mod.ts";
 import { getApp } from "../../project_data/apps/mod.ts";
-import { authToken } from "../../auth_manager/token.ts";
+import { authToken, AuthTokenVariables } from "../../auth_manager/token.ts";
 
-const jsRouter = new Hono();
+const jsRouter = new Hono<{ Variables: AuthTokenVariables }>();
 
 // スクリプトファイル一覧取得
 // 200 一覧
 // 500 ファイル読めなかった
-jsRouter.get("/", authToken, (c) => {
+jsRouter.get("/", authToken, (c: Context) => {
   const { appName } = c.req.param();
   if (!appName) return c.json({}, 400);
 
@@ -29,7 +29,7 @@ jsRouter.get("/", authToken, (c) => {
 // 400 情報おかしい
 // 409 もうある
 // 500 ファイル関係ミスった
-jsRouter.post("/:path", authToken, async (c) => {
+jsRouter.post("/:path", authToken, async (c: Context) => {
   const { appName, path } = c.req.param();
   if (!appName) return c.json({}, 400);
   if (path.includes("..")) return c.json({}, 400);
@@ -49,7 +49,7 @@ jsRouter.post("/:path", authToken, async (c) => {
 // 404 ファイルない
 // 409 ディレクトリ
 // 500 ファイル関係ミスった
-jsRouter.get("/:path", authToken, (c) => {
+jsRouter.get("/:path", authToken, (c: Context) => {
   const { appName, path } = c.req.param();
   if (!appName) return c.json({}, 400);
   if (path.includes("..")) return c.json({}, 400);
@@ -73,7 +73,7 @@ jsRouter.get("/:path", authToken, (c) => {
 // 404 ファイルない
 // 409 ディレクトリ
 // 500 ファイル関係ミスった
-jsRouter.patch("/:path", authToken, async (c) => {
+jsRouter.patch("/:path", authToken, async (c: Context) => {
   const { appName, path } = c.req.param();
   if (!appName) return c.json({}, 400);
   if (path.includes("..")) return c.json({}, 400);
@@ -92,7 +92,7 @@ jsRouter.patch("/:path", authToken, async (c) => {
 // 404 ファイルない
 // 409 ディレクトリ
 // 500 ファイル関係ミスった
-jsRouter.delete("/:path", authToken, (c) => {
+jsRouter.delete("/:path", authToken, (c: Context) => {
   const { appName, path } = c.req.param();
   if (!appName) return c.json({}, 400);
   if (path.includes("..")) return c.json({}, 400);

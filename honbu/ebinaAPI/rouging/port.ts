@@ -1,6 +1,6 @@
 import { isNumber } from "std/encoding/_yaml/utils.ts";
 import { Hono } from "hono/mod.ts";
-import { authToken } from "../../auth_manager/token.ts";
+import { authToken, AuthTokenVariables } from "../../auth_manager/token.ts";
 import {
   getPort,
   getPorts,
@@ -8,7 +8,7 @@ import {
   setPort,
 } from "../../project_data/apps/ports.ts";
 
-const portRouter = new Hono();
+const portRouter = new Hono<{ Variables: AuthTokenVariables }>();
 
 portRouter.get("/numbers", authToken, (c) => {
   return c.json({ start: PORT_START, ports: getPorts() }, 200);

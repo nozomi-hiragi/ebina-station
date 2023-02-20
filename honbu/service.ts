@@ -13,6 +13,7 @@ import { Settings } from "./project_data/settings/mod.ts";
 import { startEbinaCLI } from "./ebina_cli/mod.ts";
 import { renewCertbot } from "./action_delegate/certbot.ts";
 import { logEbina, logger } from "./utils/log.ts";
+import { AuthTokenVariables } from "./auth_manager/token.ts";
 
 const CERTBOT_RENEW_SCHEDULE = "0 0 22-28 * 1";
 
@@ -28,11 +29,11 @@ export class Service {
 
   private startListen() {
     const projectSettings = Settings.instance();
-    const app = new Hono();
+    const app = new Hono<{ Variables: AuthTokenVariables }>();
     app.use("*", cors({ origin: projectSettings.origins, credentials: true }));
     app.route("/ebina", ebinaRouter);
     serve(app.fetch, { port: projectSettings.getPortNumber() });
-    logger.info("start listeing");
+    logger.info("start listening");
   }
 
   async start() {

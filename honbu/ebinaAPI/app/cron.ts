@@ -1,11 +1,11 @@
-import { Hono } from "hono/mod.ts";
+import { Context, Hono } from "hono/mod.ts";
 import { CronItem, CronItemVales } from "../../project_data/apps/cron.ts";
 import { getApp } from "../../project_data/apps/mod.ts";
-import { authToken } from "../../auth_manager/token.ts";
+import { authToken, AuthTokenVariables } from "../../auth_manager/token.ts";
 
-const cronRouter = new Hono();
+const cronRouter = new Hono<{ Variables: AuthTokenVariables }>();
 
-cronRouter.get("/", authToken, (c) => {
+cronRouter.get("/", authToken, (c: Context) => {
   const { appName } = c.req.param();
   if (!appName) return c.json({}, 400);
 
@@ -14,7 +14,7 @@ cronRouter.get("/", authToken, (c) => {
   return c.json(cronNames, 200);
 });
 
-cronRouter.post("/:cronName", authToken, async (c) => {
+cronRouter.post("/:cronName", authToken, async (c: Context) => {
   const { appName, cronName } = c.req.param();
   if (!appName) return c.json({}, 400);
 
@@ -43,7 +43,7 @@ cronRouter.post("/:cronName", authToken, async (c) => {
   return c.json({}, 200);
 });
 
-cronRouter.get("/:cronName", authToken, (c) => {
+cronRouter.get("/:cronName", authToken, (c: Context) => {
   const { appName, cronName } = c.req.param();
   if (!appName) return c.json({}, 400);
 
@@ -56,7 +56,7 @@ cronRouter.get("/:cronName", authToken, (c) => {
   }
 });
 
-cronRouter.patch("/:cronName", authToken, async (c) => {
+cronRouter.patch("/:cronName", authToken, async (c: Context) => {
   const { appName, cronName } = c.req.param();
   if (!appName) return c.json({}, 400);
 
@@ -82,7 +82,7 @@ cronRouter.patch("/:cronName", authToken, async (c) => {
   return c.json({}, 200);
 });
 
-cronRouter.delete("/:cronName", authToken, (c) => {
+cronRouter.delete("/:cronName", authToken, (c: Context) => {
   const { appName, cronName } = c.req.param();
   if (!appName) return c.json({}, 400);
 

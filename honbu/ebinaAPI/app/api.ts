@@ -1,5 +1,5 @@
-import { Hono } from "hono/mod.ts";
-import { authToken } from "../../auth_manager/token.ts";
+import { Context, Hono } from "hono/mod.ts";
+import { authToken, AuthTokenVariables } from "../../auth_manager/token.ts";
 import { APIItemValuesV2 } from "../../project_data/apps/apis.ts";
 import { APPS_DIR } from "../../project_data/mod.ts";
 import { getApp } from "../../project_data/apps/mod.ts";
@@ -23,7 +23,7 @@ interface EntranceArgs {
   };
 }
 
-const apiRouter = new Hono();
+const apiRouter = new Hono<{ Variables: AuthTokenVariables }>();
 
 const entrances: {
   [name: string]: {
@@ -34,7 +34,7 @@ const entrances: {
 
 // API起動状態取得
 // 200 { status: 'started' | 'stop', started_at: number }
-apiRouter.get("/status", authToken, (c) => {
+apiRouter.get("/status", authToken, (c: Context) => {
   const { appName } = c.req.param();
   if (!appName) return c.json({}, 400);
   const entrance = entrances[appName];
@@ -50,7 +50,7 @@ apiRouter.get("/status", authToken, (c) => {
 // 200 できた
 // 400 情報おかしい
 // 500 起動できなかった
-apiRouter.put("/status", authToken, async (c) => {
+apiRouter.put("/status", authToken, async (c: Context) => {
   const { appName } = c.req.param();
   if (!appName) return c.json({}, 400);
   const { status } = await c.req.json<{ status: string }>();
@@ -97,7 +97,7 @@ apiRouter.put("/status", authToken, async (c) => {
 });
 
 // ポート取得互換 @TODO 消す
-apiRouter.get("/port", authToken, (c) => {
+apiRouter.get("/port", authToken, (c: Context) => {
   const { appName } = c.req.param();
   if (!appName) return c.json({}, 400);
   const url = new URL(c.req.url);
@@ -110,7 +110,7 @@ apiRouter.get("/port", authToken, (c) => {
 });
 
 // ポート設定互換 @TODO 消す
-apiRouter.put("/port", authToken, (c) => {
+apiRouter.put("/port", authToken, (c: Context) => {
   const { appName } = c.req.param();
   if (!appName) return c.json({}, 400);
   const url = new URL(c.req.url);
@@ -124,7 +124,7 @@ apiRouter.put("/port", authToken, (c) => {
 
 // API一覧取得
 // 200 { path, api }
-apiRouter.get("/endpoint", authToken, (c) => {
+apiRouter.get("/endpoint", authToken, (c: Context) => {
   const { appName } = c.req.param();
   if (!appName) return c.json({}, 400);
   const apis = getApp(appName)?.apis;
@@ -139,7 +139,7 @@ apiRouter.get("/endpoint", authToken, (c) => {
 // 200 API
 // 400 情報おかしい
 // 404 ない
-apiRouter.get("/endpoint/:path", authToken, (c) => {
+apiRouter.get("/endpoint/:path", authToken, (c: Context) => {
   const { appName, path } = c.req.param();
   if (!appName) return c.json({}, 400);
 
@@ -157,7 +157,7 @@ apiRouter.get("/endpoint/:path", authToken, (c) => {
 // :path
 // 200 OK
 // 400 情報おかしい
-apiRouter.put("/endpoint/:curPath", authToken, async (c) => {
+apiRouter.put("/endpoint/:curPath", authToken, async (c: Context) => {
   const { appName, curPath } = c.req.param();
   if (!appName) return c.json({}, 400);
   const { name, path, method, filename, value } = await c.req
@@ -176,7 +176,7 @@ apiRouter.put("/endpoint/:curPath", authToken, async (c) => {
 // 200 OK
 // 400 情報おかしい
 // 404 パスない
-apiRouter.delete("/endpoint/:path", authToken, (c) => {
+apiRouter.delete("/endpoint/:path", authToken, (c: Context) => {
   const { appName, path } = c.req.param();
   if (!appName) return c.json({}, 400);
 

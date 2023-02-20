@@ -1,6 +1,6 @@
 import { isString } from "std/encoding/_yaml/utils.ts";
 import { Hono } from "hono/mod.ts";
-import { authToken, JwtPayload } from "../../auth_manager/token.ts";
+import { authToken, AuthTokenVariables } from "../../auth_manager/token.ts";
 import { Members } from "../../project_data/members/mod.ts";
 import { AuthManager, handleAMErrorToStatus } from "../../auth_manager/mod.ts";
 import {
@@ -8,7 +8,7 @@ import {
   AuthenticationResponseJSON,
 } from "../../webauthn/fido2Wrap.ts";
 
-const memberRouter = new Hono();
+const memberRouter = new Hono<{ Variables: AuthTokenVariables }>();
 
 // ユーザー登録リクエスト
 // { front, server, id, name }
@@ -17,7 +17,7 @@ const memberRouter = new Hono();
 // 409 メンバー上限
 // 500 URLエラー
 memberRouter.post("/regist/request", authToken, async (c) => {
-  const payload: JwtPayload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   let { front, server, id, name } = await c.req.json<
     { front: string; server: string; id: string; name: string }
   >();
@@ -112,7 +112,7 @@ memberRouter.get("/", authToken, (c) => {
 // 206 一部できた
 // 404 全部できない
 memberRouter.delete("/", authToken, (c) => {
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   const ids = c.req.query("ids")?.split(",") ?? [];
 
   const failedIds: string[] = [];
@@ -166,7 +166,7 @@ memberRouter.get("/temp", authToken, (c) => {
 memberRouter.post("/temp/admit", authToken, async (c) => {
   const origin = c.req.headers.get("origin");
   if (!origin) return c.json({}, 400);
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   if (!payload) return c.json({}, 401);
   const body = await c.req.json<
     ({ type: "public-key" } & AuthenticationResponseJSON) | { ids: string[] }
@@ -204,7 +204,7 @@ memberRouter.post("/temp/admit", authToken, async (c) => {
 memberRouter.post("/temp/deny", authToken, async (c) => {
   const origin = c.req.headers.get("origin");
   if (!origin) return c.json({}, 400);
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   if (!payload) return c.json({}, 401);
   const body = await c.req.json<
     ({ type: "public-key" } & AuthenticationResponseJSON) | { ids: string[] }

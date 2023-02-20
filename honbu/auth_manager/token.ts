@@ -36,7 +36,15 @@ const verifyToken = (token: string, key: CryptoKey) =>
 
 const verifyAuthToken = (token: string) => verifyToken(token, tokenKey);
 
-export const authToken = async (c: Context, next: Next) => {
+export type AuthTokenVariables = {
+  token: string;
+  payload: JwtPayload;
+};
+
+export const authToken = async (
+  c: Context<{ Variables: AuthTokenVariables }>,
+  next: Next,
+) => {
   const authHeader = c.req.headers.get("authorization");
   if (!authHeader) return c.json({}, 401);
   const tokenArray = authHeader.split(" ");

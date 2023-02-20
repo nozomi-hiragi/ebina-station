@@ -2,10 +2,10 @@ import { Mutex } from "semaphore";
 import { ConnectOptions, Document, MongoClient } from "mongo";
 import { Hono } from "hono/mod.ts";
 import { Settings } from "../../project_data/settings/mod.ts";
-import { authToken } from "../../auth_manager/token.ts";
+import { authToken, AuthTokenVariables } from "../../auth_manager/token.ts";
 import { logEbina } from "../../utils/log.ts";
 
-const databaseRouter = new Hono();
+const databaseRouter = new Hono<{ Variables: AuthTokenVariables }>();
 
 const client = new MongoClient();
 const mutex = new Mutex();

@@ -1,17 +1,17 @@
 import { isBoolean, isString } from "std/encoding/_yaml/utils.ts";
 import { Hono } from "hono/mod.ts";
-import { authToken, JwtPayload } from "../../auth_manager/token.ts";
+import { authToken, AuthTokenVariables } from "../../auth_manager/token.ts";
 import { Members } from "../../project_data/members/mod.ts";
 import webauthnRouter from "./webauthn/index.ts";
 import { AuthenticationResponseJSON } from "../../webauthn/fido2Wrap.ts";
 import { AuthManager, handleAMErrorToStatus } from "../../auth_manager/mod.ts";
 import webpushRouter from "./webpush.ts";
 
-const iRouter = new Hono();
+const iRouter = new Hono<{ Variables: AuthTokenVariables }>();
 
 // メンバー取得
 iRouter.get("/", authToken, (c) => {
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   if (!payload) return c.json({}, 500);
   const member = Members.instance().getMember(payload.id);
   return c.json(member?.getValue(), 200);
@@ -73,7 +73,7 @@ iRouter.post("/login/verify", async (c) => {
 // ログアウト サーバー内のトークン消す
 // 200 消せた
 iRouter.post("/logout", authToken, (c) => {
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   if (!payload) return c.json({}, 401);
   return c.json({}, 200);
 });
@@ -82,7 +82,7 @@ iRouter.post("/logout", authToken, (c) => {
 // 200 ペイロード
 // 500 authToken内でペイロードとれてない
 iRouter.post("/verify", authToken, (c) => {
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   if (!payload) return c.json({}, 500);
   return c.json(payload, 200);
 });
@@ -98,7 +98,7 @@ iRouter.post("/verify", authToken, (c) => {
 iRouter.put("/password", authToken, async (c) => {
   const origin = c.req.headers.get("origin");
   if (!origin) return c.json({}, 400);
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   if (!payload) return c.json({}, 401);
   const body = await c.req.json<
     AuthenticationResponseJSON & {
@@ -138,7 +138,7 @@ iRouter.put("/password", authToken, async (c) => {
 iRouter.post("/password", authToken, async (c) => {
   const origin = c.req.headers.get("origin");
   if (!origin) return c.json({}, 400);
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   if (!payload) return c.json({}, 401);
   const body = await c.req.json<
     AuthenticationResponseJSON & {
@@ -168,7 +168,7 @@ iRouter.post("/password", authToken, async (c) => {
 
 // TOTP生成
 iRouter.post("/totp/request", authToken, (c) => {
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   if (!payload) return c.json({}, 401);
 
   const member = Members.instance().getMember(payload.id);
@@ -182,7 +182,7 @@ iRouter.post("/totp/request", authToken, (c) => {
 iRouter.post("/totp/regist", authToken, async (c) => {
   const origin = c.req.headers.get("origin");
   if (!origin) return c.json({}, 400);
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   if (!payload) return c.json({}, 401);
   const body = await c.req.json<
     AuthenticationResponseJSON & {

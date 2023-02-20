@@ -1,5 +1,5 @@
 import { AuthManager, handleAMErrorToStatus } from "../auth_manager/mod.ts";
-import { authToken, JwtPayload } from "../auth_manager/token.ts";
+import { authToken, AuthTokenVariables } from "../auth_manager/token.ts";
 import { Hono } from "hono/mod.ts";
 import { SH_DIR } from "../project_data/mod.ts";
 import appRouter from "./app/app.ts";
@@ -10,7 +10,7 @@ import routingRouter from "./rouging/routing.ts";
 import settingsRouter from "./settings/settings.ts";
 import { AuthenticationResponseJSON } from "../webauthn/fido2Wrap.ts";
 
-const ebinaRouter = new Hono();
+const ebinaRouter = new Hono<{ Variables: AuthTokenVariables }>();
 
 ebinaRouter.route("/i", iRouter);
 ebinaRouter.route("/member", memberRouter);
@@ -22,7 +22,7 @@ ebinaRouter.route("/routing", routingRouter);
 ebinaRouter.post("/ex", authToken, async (c) => {
   const origin = c.req.headers.get("origin");
   if (!origin) return c.json({}, 400);
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   if (!payload) return c.json({}, 401);
   const body = await c.req.json<
     & AuthenticationResponseJSON

@@ -1,7 +1,7 @@
 import { isString } from "std/encoding/_yaml/utils.ts";
 import { Hono } from "hono/mod.ts";
 import { StatusCode } from "hono/utils/http-status.ts";
-import { authToken, JwtPayload } from "../../auth_manager/token.ts";
+import { authToken, AuthTokenVariables } from "../../auth_manager/token.ts";
 import { Members } from "../../project_data/members/mod.ts";
 import {
   isPushSubscriptionJSON,
@@ -10,14 +10,14 @@ import {
 import { Settings } from "../../project_data/settings/mod.ts";
 import { send } from "../../webpush/mod.ts";
 
-const webpushRouter = new Hono();
+const webpushRouter = new Hono<{ Variables: AuthTokenVariables }>();
 
 // プッシュ登録状態確認
 // 200 結果
 // 401 ログインおかしい
 // 404 居ない
 webpushRouter.get("/subscribed/:name", authToken, (c) => {
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   if (!payload) return c.json({}, 401);
   const member = Members.instance().getMember(payload.id);
   if (!member) return c.json({}, 404);
@@ -35,7 +35,7 @@ webpushRouter.get("/subscribed/:name", authToken, (c) => {
 // 401 ログインおかしい
 // 404 居ない
 webpushRouter.post("/device", authToken, async (c) => {
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   if (!payload) return c.json({}, 401);
   const members = Members.instance();
   const member = members.getMember(payload.id);
@@ -58,7 +58,7 @@ webpushRouter.post("/device", authToken, async (c) => {
 // 401 ログインおかしい
 // 404 居ない
 webpushRouter.delete("/device/:name", authToken, (c) => {
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   if (!payload) return c.json({}, 401);
   const members = Members.instance();
   const member = members.getMember(payload.id);
@@ -97,7 +97,7 @@ webpushRouter.delete("/device/:name", authToken, (c) => {
 // 401 ログインおかしい
 // 404 居ない
 webpushRouter.get("/devices", authToken, (c) => {
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   if (!payload) return c.json({}, 401);
   const member = Members.instance().getMember(payload.id);
   if (!member) return c.json({}, 404);
@@ -111,7 +111,7 @@ webpushRouter.get("/devices", authToken, (c) => {
 // 404 居ない
 // 送信fetchの戻り
 webpushRouter.post("/test", authToken, async (c) => {
-  const jwtpayload = c.get<JwtPayload>("payload");
+  const jwtpayload = c.get("payload");
   if (!jwtpayload) return c.json({}, 401);
   const members = Members.instance();
   const member = members.getMember(jwtpayload.id);

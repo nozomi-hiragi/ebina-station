@@ -3,7 +3,7 @@ import { Hono } from "hono/mod.ts";
 import apiRouter from "./api.ts";
 import jsRouter from "./scripts.ts";
 import cronRouter from "./cron.ts";
-import { authToken } from "../../auth_manager/token.ts";
+import { authToken, AuthTokenVariables } from "../../auth_manager/token.ts";
 import {
   changeAppName,
   createApp,
@@ -12,7 +12,7 @@ import {
   getAppNameList,
 } from "../../project_data/apps/mod.ts";
 
-const appRouter = new Hono();
+const appRouter = new Hono<{ Variables: AuthTokenVariables }>();
 
 // アプリ配列取得
 // 200 名前ら

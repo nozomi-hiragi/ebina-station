@@ -1,5 +1,5 @@
 import { Hono } from "hono/mod.ts";
-import { authToken, JwtPayload } from "../../../auth_manager/token.ts";
+import { authToken, AuthTokenVariables } from "../../../auth_manager/token.ts";
 import { getRPID } from "../../../auth_manager/webauthn.ts";
 import deviceRouter from "./device.ts";
 import {
@@ -12,7 +12,7 @@ import {
   AuthenticationResponseJSON,
 } from "../../../webauthn/fido2Wrap.ts";
 
-const webauthnRouter = new Hono();
+const webauthnRouter = new Hono<{ Variables: AuthTokenVariables }>();
 
 // 登録
 // origin:
@@ -28,7 +28,7 @@ webauthnRouter.post("/regist", async (c) => {
   const origin = c.req.headers.get("origin");
   if (!origin) return c.json({}, 400);
   await authToken(c, async () => {});
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   const body = await c.req.json<
     AttestationResponseJSON & {
       type: string;
@@ -74,7 +74,7 @@ webauthnRouter.post("/regist", async (c) => {
 webauthnRouter.post("/verify", authToken, async (c) => {
   const origin = c.req.headers.get("origin");
   if (!origin) return c.json({}, 400);
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   if (!payload) return c.json({}, 401);
   const body = await c.req.json<
     | ({ type: "public-key" } & AuthenticationResponseJSON)

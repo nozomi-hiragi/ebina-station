@@ -1,7 +1,7 @@
 import { Hono } from "hono/mod.ts";
 import { StatusCode } from "hono/utils/http-status.ts";
 import { NginxConf, NginxConfs } from "../../project_data/nginx.ts";
-import { authToken } from "../../auth_manager/token.ts";
+import { authToken, AuthTokenVariables } from "../../auth_manager/token.ts";
 import { generateNginxConfsFromJson } from "../../project_data/nginx.ts";
 import {
   execDCCPs,
@@ -13,7 +13,7 @@ import { ServiceName } from "../../ebina_docker_compose.ts";
 import { logEbina } from "../../utils/log.ts";
 import portRouter from "./port.ts";
 
-const routingRouter = new Hono();
+const routingRouter = new Hono<{ Variables: AuthTokenVariables }>();
 
 // ルート一覧
 routingRouter.get("/", authToken, (c) => {

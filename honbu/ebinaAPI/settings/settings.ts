@@ -1,9 +1,9 @@
 import { Hono } from "hono/mod.ts";
 import { Settings } from "../../project_data/settings/mod.ts";
 import { SettingWebAuthnValues } from "../../project_data/settings/webauthn.ts";
-import { authToken } from "../../auth_manager/token.ts";
+import { authToken, AuthTokenVariables } from "../../auth_manager/token.ts";
 
-const projectRouter = new Hono();
+const projectRouter = new Hono<{ Variables: AuthTokenVariables }>();
 
 projectRouter.get("/webauthn", authToken, (c) => {
   const settings = Settings.instance();

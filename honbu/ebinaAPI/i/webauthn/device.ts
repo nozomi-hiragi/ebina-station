@@ -1,7 +1,7 @@
 import { isString } from "std/encoding/_yaml/utils.ts";
 import { Hono } from "hono/mod.ts";
 import { Members } from "../../../project_data/members/mod.ts";
-import { authToken, JwtPayload } from "../../../auth_manager/token.ts";
+import { authToken, AuthTokenVariables } from "../../../auth_manager/token.ts";
 import { HttpException } from "../../../utils/utils.ts";
 import { getRPID } from "../../../auth_manager/webauthn.ts";
 import {
@@ -12,7 +12,7 @@ import {
 import { Member } from "../../../project_data/members/member.ts";
 import { AuthenticationResponseJSON } from "../../../webauthn/fido2Wrap.ts";
 
-const deviceRouter = new Hono();
+const deviceRouter = new Hono<{ Variables: AuthTokenVariables }>();
 
 // デバイスら情報取得
 // origin:
@@ -23,7 +23,7 @@ const deviceRouter = new Hono();
 deviceRouter.get("/", authToken, (c) => {
   const origin = c.req.headers.get("origin");
   if (!origin) return c.json({}, 400);
-  const payload: JwtPayload = c.get<JwtPayload>("payload")!;
+  const payload = c.get("payload")!;
   const memberId = payload.id;
   const member = Members.instance().getMember(memberId);
   if (!member) return c.json({}, 404);
@@ -59,7 +59,7 @@ deviceRouter.get("/", authToken, (c) => {
 deviceRouter.get("/:deviceName", authToken, (c) => {
   const origin = c.req.headers.get("origin");
   if (!origin) return c.json({}, 400);
-  const payload = c.get<JwtPayload>("payload")!;
+  const payload = c.get("payload")!;
   const memberId = payload.id;
   const member = Members.instance().getMember(memberId);
   if (!member) return c.json({}, 404);
@@ -95,7 +95,7 @@ deviceRouter.get("/:deviceName", authToken, (c) => {
 deviceRouter.post("/:deviceName/delete", authToken, async (c) => {
   const origin = c.req.headers.get("origin");
   if (!origin) return c.json({}, 400);
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   const body = await c.req.json<
     | ({ type: "public-key" } & AuthenticationResponseJSON)
     | { type: "password"; pass: string; code: string }
@@ -162,7 +162,7 @@ deviceRouter.post("/:deviceName/delete", authToken, async (c) => {
 deviceRouter.get("/:deviceName/enable", authToken, (c) => {
   const origin = c.req.headers.get("origin");
   if (!origin) return c.json({}, 400);
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   const memberId = payload.id;
   const member = Members.instance().getMember(memberId);
   if (!member) return c.json({}, 404);
@@ -195,7 +195,7 @@ deviceRouter.get("/:deviceName/enable", authToken, (c) => {
 deviceRouter.post("/:deviceName/enable", authToken, (c) => {
   const origin = c.req.headers.get("origin");
   if (!origin) return c.json({}, 400);
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   const memberId = payload.id;
   const member = Members.instance().getMember(memberId);
   if (!member) return c.json({}, 404);
@@ -232,7 +232,7 @@ deviceRouter.post("/:deviceName/enable", authToken, (c) => {
 deviceRouter.post("/:deviceName/disable", authToken, (c) => {
   const origin = c.req.headers.get("origin");
   if (!origin) return c.json({}, 400);
-  const payload = c.get<JwtPayload>("payload");
+  const payload = c.get("payload");
   const memberId = payload.id;
   const member = Members.instance().getMember(memberId);
   if (!member) return c.json({}, 404);
