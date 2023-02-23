@@ -60,7 +60,7 @@ jsRouter.get("/:path", authToken, (c: Context) => {
 
   const content = scripts.getText(path);
   if (content) {
-    return c.json(content, 200);
+    return c.text(content, 200);
   } else {
     return c.json({}, 500);
   }
