@@ -24,6 +24,8 @@ data/apps/binette-editor/
 ```json
 {
   "label": "Binette エディタ",
+  "version": "0.1.0",
+  "description": "ビネットを作り、編集し、プレビューする",
   "icon": "📝",
   "entry": "main.ts"
 }
