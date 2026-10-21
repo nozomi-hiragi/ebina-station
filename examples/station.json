@@ -1,0 +1,8 @@
+{
+  "port": 8787,
+  "origins": ["http://localhost:5173"],
+  "rpId": "localhost",
+  "rpName": "EbinaStation",
+  "frontURL": "http://localhost:5173/ebina-station",
+  "serverURL": "http://localhost:8787"
+}

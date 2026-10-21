@@ -4,7 +4,7 @@ AI エージェント向けの作業ルール。人間向けの説明は [README
 
 ## プロジェクト概要
 
-- EbinaStation のサーバー。v2 として作り直し中で、今は仕様（`docs/`）だけがある。v1 のコードは消した。参照するときは `v1.1.0` のタグを見る
+- EbinaStation のサーバー。v2 として作り直し中。第 1 段（土台）まで実装した: `station.json`、SQLite、パスキーの登録 API、WAKE、ET の振り分け、埋め込みアプリの子プロセスと中継、CLI。アプリ管理の画面と API、Binette エディタ、外部アプリはまだ無い。v1 のコードは消した。参照するときは `v1.1.0` のタグを見る
 - Station はクライアント（ebina-front）とアプリのあいだに立つ中継役。WAKE（KX / SM / ET）でログインとセッションを受け持ち、ET で受けたリクエストをパスの先頭のアプリ名で振り分けてアプリへ渡す。画面はアプリが Binette で返す
 - 仕様は `docs/` にある。作業の前に該当する文書を読む
 
@@ -69,24 +69,76 @@ AI エージェント向けの作業ルール。人間向けの説明は [README
 
 ## 開発コマンド
 
-まだコードが無い。実装を始めるときに `deno.json` の `tasks` を作り、ここに書く。予定は次のとおり。
+前提: Deno 2（2.9 で確かめている）。初めて動かすときは設定の例をコピーする。
 
 ```sh
-deno task dev     # 開発用に起動（--watch）
-deno task check   # deno fmt --check、deno lint、deno check
-deno task test    # deno test
+mkdir -p project && cp examples/station.json project/station.json
+deno task dev     # 開発用に起動（--watch=src/,runner/）。ebina-front の npm run dev と組む例の設定
+deno task start   # 起動
+deno task user    # ユーザー管理の CLI（add / token / list / remove）
+deno task check   # deno fmt --check、deno lint、deno check（src/ runner/ tests/）
+deno task test    # deno test（tests/）
 ```
 
-- 作業の完了前に必ず `deno task check` と `deno task test` を通す（作ったら）
+- 作業の完了前に必ず `deno task check` と `deno task test` を通す
+- タスクの権限は最小にしてある（すべて `--no-prompt`）。権限を足すときは、なぜ要るかを確かめてから足す
 
-## 技術スタックと構成
+| タスク | 権限 |
+| --- | --- |
+| `dev`、`start` | `--allow-net --allow-read --allow-write=./project --allow-env --allow-run`（`--allow-run` は子プロセス用） |
+| `user` | `--allow-read --allow-write=./project --allow-env`（ネットワークとサブプロセスは無し） |
+| `test` | `--allow-read --allow-write --allow-env --allow-net=127.0.0.1,localhost --allow-run` |
 
-- Deno 2 + TypeScript
-- Hono、`@wake-protocol/server`、`@binette/core`、`@binette/coulisses`
-- 保存は SQLite（`project/data/station/station.db`）。形はまだ決めていない
+- タスクが書き込めるのは `./project` だけ（`deno task` は `${VAR:-既定}` を展開できないため固定）。`EBINA_PROJECT_DIR` で別の場所を使うときは、`deno run --allow-write=<場所> …` で直接起動する。足りないときは、案内つきのエラーで終わる
+- `deno.lock` は deno が更新する。依存を足したら、更新後のものも含める
+- `deno.json` の `minimumDependencyAge` で、公開から 1 日たっていない版は使えない。`@binette/*` だけは同じ作者のため除外している
+
+## 技術スタック
+
+- Deno 2 + TypeScript。Windows は対象外（子プロセスの停止にシグナルを使う）
+- Hono、`@wake-protocol/server`、`@binette/core`、`@binette/coulisses`、`@simplewebauthn/server`、`qrcode`
+- 保存は SQLite（`project/data/station/station.db`、Deno 組み込みの `node:sqlite`）。スキーマは `src/db/schema.ts` の `MIGRATIONS` に足す（過去のものは書き換えない）。WAKE のセッションはメモリ（`MemoryWakeStore`）
 - 依存は `deno.json` の `imports` に `npm:` か `jsr:` で書き、版を固定する。`deno.land/x` や URL の直書きの import は使わない
+- Node の API は `node:` を付けて使ってよい（`node:sqlite`、`node:crypto`、`node:util`）
 
-構成はまだ決めていない。決めたらここに書く。
+## 構成
+
+```
+deno.json              # imports、tasks、fmt / lint の対象
+examples/station.json  # 開発用の station.json の例
+runner/runner.ts       # 埋め込みアプリの子プロセスで動く。entry を読み込んで待ち受ける
+src/
+├── main.ts            # 起動（設定 → DB → アプリ → WAKE → HTTP）と、シグナルでの終了
+├── config.ts          # station.json の読み込みと検査
+├── paths.ts           # project フォルダの中のパス（EBINA_PROJECT_DIR）
+├── log.ts             # ログ関数（setLogSink でテストでは黙らせる）
+├── wake.ts            # WAKE サーバーの組み立て
+├── db/                # SQLite: mod（開く・移行）、schema、row、meta、users、credentials、registrations、app_states
+├── http/              # Hono: app（CORS・ログ・WAKE へ渡す）、register（登録 API）
+├── et/                # ET: handler（認証の確認と URL の振り分け）、entrance（入口のビネット）、respond（応答の小物）
+├── apps/              # 埋め込みアプリ: names、manifest、links（シンボリックリンクの検査）、registry、supervisor、relay、static、hub、types
+└── cli/               # deno task user: main、qr
+tests/
+├── helpers/           # authenticator（ソフトウェアのパスキー）、station（一時 project に Station を組み立てる）
+├── fixtures/          # apps/（echo、notes、broken）と、一時 project に写す補助 mod.ts
+└── *.test.ts
+docs/                  # 仕様
+```
+
+- ET と中継の境界は `src/apps/types.ts` の `AppHub`。`et/handler.ts` は `AppHub` だけを知り、`apps/hub.ts`（`createAppHub`）が実装する
+- 起動の組み立ては `src/main.ts` の `startStation`。`tests/helpers/station.ts` の `createTestStation` も同じ順で組み立てる。組み立てを変えたら両方を直す
+
+## テストの書き方
+
+- `deno test` で動かし、ネットワークは `127.0.0.1` / `localhost` だけを使う（`Deno.serve` や `Deno.listen` は `hostname: "127.0.0.1"` を明示する。既定の `0.0.0.0` は権限に入っていない）
+- 一時フォルダは `Deno.makeTempDir` で作り、終わったら消す。DB やアプリを置く project は `createTestStation` か `makeProject`（`tests/fixtures/mod.ts`）で作る
+- フィクスチャのアプリ（`tests/fixtures/apps`）は、そのまま使わず一時 project に写して使う（データフォルダが fixtures に書き込まれないように）。`createTestStation({ apps: ["echo"] })` は写して本物の `AppHub` を起動する
+- **子プロセスを使うテストは、終わったら必ず止める。** `createTestStation` は `await using` で止まる。`createAppHub` や `startStation` を直接使うときは `try / finally` で `hub.stop()` / `station.stop()` を呼ぶ。止め忘れると Deno のリソース検査で失敗するか、子プロセスが残る
+- Deno のリソース検査に引っかからないよう、タイマー・接続・`fetch` の応答本文（読むか `body?.cancel()`）も閉じる
+- 止まらなくなったテストを止めるときは、`pkill -f "deno test"` のように広く止めず、pid を指定する（ほかの実行も止まる）
+- ログは `tests/helpers/station.ts` を import すると黙る。ログの中身を調べるときは `captureLogs()` を使う（トークンなどの秘密が出ていないことの確認に使う）
+- 登録からログインまでを通すときは、ソフトウェアのパスキー（`SoftAuthenticator`）と `createLoggedInUser`、`@wake-protocol/client` の `WakeClient` を使う。`app.fetch` を `fetch` に渡せば、ネットワークを使わずに通せる
+- 実際のコマンドとして起動して確かめるテストは `tests/process.test.ts`（終了コード、案内、シグナル）
 
 ## 仕様と契約のルール
 
