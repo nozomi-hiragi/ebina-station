@@ -8,7 +8,7 @@ import { createAppHub } from "./apps/hub.ts";
 import { createEtHandler } from "./et/handler.ts";
 import { createHttpApp } from "./http/app.ts";
 import { log } from "./log.ts";
-import { type ProjectPaths, projectPaths } from "./paths.ts";
+import { BUNDLED_APPS_DIR, type ProjectPaths, projectPaths } from "./paths.ts";
 import { createStationWake } from "./wake.ts";
 
 /** 終了のとき、処理中のリクエストを待つ時間。過ぎたら待たずに片付ける */
@@ -56,6 +56,8 @@ export interface StartOptions {
   hostname?: string;
   /** abort すると、起動の途中でもやめる（アプリの起動待ちも打ち切る）。片付けてから StartAborted を投げる */
   signal?: AbortSignal;
+  /** 同梱のアプリの置き場所。省略するとリポジトリの apps/。null なら同梱のアプリを使わない（テスト用） */
+  bundledAppsDir?: string | null;
 }
 
 /**
@@ -65,7 +67,12 @@ export interface StartOptions {
 export async function startStation(paths: ProjectPaths, options: StartOptions = {}): Promise<RunningStation> {
   const config = await loadStationConfig(paths.config);
   const db = openDatabase(paths.db, { root: paths.root });
-  const hub = createAppHub({ paths, states: new AppStateRepo(db) });
+  const bundledAppsDir = options.bundledAppsDir === undefined ? BUNDLED_APPS_DIR : options.bundledAppsDir;
+  const hub = createAppHub({
+    paths,
+    states: new AppStateRepo(db),
+    ...(bundledAppsDir === null ? {} : { bundledAppsDir }),
+  });
   const killChildren = () => hub.killAllSync();
   killers.add(killChildren);
   let server: Deno.HttpServer<Deno.NetAddr> | undefined;

@@ -600,3 +600,54 @@ Deno.test("hub: project/apps が外を指すリンクなら、静的なアプリ
     }
   });
 });
+
+const MINIMAL = JSON.stringify({ binette: "0.1", redirect: "/" });
+
+Deno.test("hub: 同梱のアプリと project のアプリを合わせて配り、同名は project が勝つ。同梱にも安全策を掛ける", async () => {
+  const bundled = await makeProject(["notes"]);
+  const own = await makeProject();
+  setLogSink(() => {});
+  const hub = createAppHub({
+    paths: own.paths,
+    bundledAppsDir: bundled.paths.appsDir,
+    states: { isEnabled: () => true },
+    supervisor: FAST,
+  });
+  try {
+    await writeApp(bundled.paths, "linked", {
+      "app.json": JSON.stringify({ label: "リンク入り" }),
+      "panoplie/index.bina": MINIMAL,
+    });
+    await Deno.symlink("/etc/passwd", join(bundled.paths.appsDir, "linked", "panoplie", "passwd"));
+    await writeApp(own.paths, "mine", {
+      "app.json": JSON.stringify({ label: "自分の" }),
+      "panoplie/index.bina": MINIMAL,
+    });
+    await hub.start();
+    assertEquals(hub.list().map((app) => [app.name, app.status]), [
+      ["linked", "error"],
+      ["mine", "running"],
+      ["notes", "running"],
+    ]);
+    assertStringIncludes(hub.get("linked")?.error ?? "", "シンボリックリンク");
+    const notes = await hub.relay("notes", "/files/hello.txt", etRequest("GET"), "alice");
+    assertEquals(notes.status, 200);
+
+    // project に同じ名前を置いて読み直すと、project のアプリが使われる（データフォルダはどちらも project の data/apps/）
+    await writeApp(own.paths, "notes", {
+      "app.json": JSON.stringify({ label: "上書き" }),
+      "panoplie/files/hello.txt": "上書きしたメモ\n",
+      "panoplie/index.bina": MINIMAL,
+    });
+    await hub.reload();
+    assertEquals(hub.get("notes")?.label, "上書き");
+    const overridden = await hub.relay("notes", "/files/hello.txt", etRequest("GET"), "alice");
+    assertEquals(bodyText(overridden), "上書きしたメモ\n");
+    assertEquals(own.paths.appDataDir("notes"), join(own.paths.root, "data", "apps", "notes"));
+  } finally {
+    await hub.stop();
+    setLogSink(undefined);
+    await bundled.dispose();
+    await own.dispose();
+  }
+});

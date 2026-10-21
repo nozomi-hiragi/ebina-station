@@ -3,7 +3,7 @@
 EbinaStation は、クライアント（[ebina-front](https://github.com/nozomi-hiragi/ebina-front)）とアプリのあいだに立つサーバーです。パスキーでのログインとセッション（[WAKE](https://github.com/nozomi-hiragi/wake-protocol)）を受け持ち、クライアントからのリクエストをアプリへ中継します。画面はアプリが [Binette](https://github.com/nozomi-hiragi/binette) で返します。
 
 > [!WARNING]
-> v2 として作り直し中です。今動くのは、パスキーの登録とログイン、アプリの中継（子プロセスで動く埋め込みアプリと、静的な `panoplie/`）、ユーザーを作る CLI までです。アプリ管理の画面と Binette エディタはまだありません。v1 は [`v1.1.0` のタグ](https://github.com/nozomi-hiragi/ebina-station/tree/v1.1.0) を参照してください。
+> v2 として作り直し中です。今動くのは、パスキーの登録とログイン、アプリの中継（子プロセスで動く埋め込みアプリと、静的な `panoplie/`）、ユーザーを作る CLI までです。同梱のアプリとして Binette エディタがあります。アプリ管理の画面はまだありません。v1 は [`v1.1.0` のタグ](https://github.com/nozomi-hiragi/ebina-station/tree/v1.1.0) を参照してください。
 
 ## 開発の始め方
 
@@ -21,6 +21,8 @@ cp examples/station.json project/station.json
 例は、ebina-front の `npm run dev`（`http://localhost:5173/ebina-station/`）と組む設定で、Station は `http://localhost:8787` で待ち受けます。欄の説明は [docs/station-json.md](docs/station-json.md) を参照してください。
 
 ### 2. アプリを置く（任意）
+
+Station には [Binette エディタ](docs/apps/binette-editor.md)（リポジトリの `apps/binette-editor/`）が同梱されていて、何も置かなくても入口の一覧に出ます。ビネットは `project/data/apps/binette-editor/binette/` に保存されます。自分のアプリは次のように置きます（同梱と同じ名前のフォルダを置くと、そちらが使われます）。
 
 `project/apps/<アプリ名>/` にフォルダを作り、`app.json` を置くとアプリになります。たとえば、静的な画面を返すだけのアプリです。
 
@@ -82,7 +84,7 @@ npm run dev       # http://localhost:5173/ebina-station/
 1. 手順 4 で出た登録 URL をブラウザで開きます
 2. 確認コードを入力し、画面の指示に従ってパスキーを登録します
 3. 「ログインへ」を押して、パスキーでログインします
-4. ログインすると、有効なアプリの一覧が出ます
+4. ログインすると、有効なアプリの一覧が出ます（Binette エディタで、ビネットを作って試せます）
 
 ### project の場所を変える
 
@@ -97,7 +99,7 @@ deno run --allow-read --allow-write=$EBINA_PROJECT_DIR --allow-env src/cli/main.
 ## 検査とテスト
 
 ```sh
-deno task check   # deno fmt --check、deno lint、deno check
+deno task check   # deno fmt --check、deno lint、deno check（src/ runner/ apps/ tests/）
 deno task test    # deno test
 ```
 

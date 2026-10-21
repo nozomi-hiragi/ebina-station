@@ -1,7 +1,8 @@
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import { join } from "@std/path";
 import { setLogSink } from "../src/log.ts";
-import { scanApps } from "../src/apps/registry.ts";
+import { scanAllApps, scanApps } from "../src/apps/registry.ts";
+import { BUNDLED_APPS_DIR } from "../src/paths.ts";
 import { makeProject, writeApp } from "./fixtures/mod.ts";
 
 function captureLogs(): { lines: string[]; restore(): void } {
@@ -86,4 +87,60 @@ Deno.test("registry: 同梱の fixtures（echo・notes・broken）", async () =>
   } finally {
     await project.dispose();
   }
+});
+
+Deno.test("registry: 同梱と project の両方を走査し、同じ名前は project を使ってログに残す", async () => {
+  const bundled = await makeProject();
+  const own = await makeProject();
+  const logs = captureLogs();
+  try {
+    const entryApp = { "app.json": JSON.stringify({ label: "同梱", entry: "main.ts" }), "main.ts": "" };
+    await writeApp(bundled.paths, "alpha", entryApp);
+    await writeApp(bundled.paths, "shared", entryApp);
+    await writeApp(own.paths, "shared", {
+      "app.json": JSON.stringify({ label: "自分の" }),
+      "panoplie/index.bina": "{}",
+    });
+    await writeApp(own.paths, "beta", entryApp);
+    // project 側の異常なアプリも、同名の同梱を隠す（使う側が決める）
+    await writeApp(bundled.paths, "gamma", entryApp);
+    await writeApp(own.paths, "gamma", { "app.json": "{ 壊れた" });
+
+    const apps = await scanAllApps(bundled.paths.appsDir, own.paths.appsDir);
+    assertEquals(apps.map((app) => app.name), ["alpha", "beta", "gamma", "shared"]);
+    const byName = Object.fromEntries(apps.map((app) => [app.name, app]));
+    assertEquals(byName.alpha.dir, join(bundled.paths.appsDir, "alpha"));
+    assertEquals(byName.beta.dir, join(own.paths.appsDir, "beta"));
+    assertEquals(byName.shared.dir, join(own.paths.appsDir, "shared"));
+    assertEquals(byName.shared.loaded?.manifest.label, "自分の");
+    assert(byName.gamma.error !== undefined);
+
+    const overrides = logs.lines.filter((line) => line.includes("同梱のアプリ"));
+    assertEquals(overrides.length, 2);
+    assertStringIncludes(overrides.join("\n"), "shared");
+  } finally {
+    logs.restore();
+    await bundled.dispose();
+    await own.dispose();
+  }
+});
+
+Deno.test("registry: 同梱の置き場所が無い・指定しないときは project だけ", async () => {
+  const own = await makeProject();
+  try {
+    await writeApp(own.paths, "only", { "app.json": JSON.stringify({ label: "唯一" }), "panoplie/index.bina": "{}" });
+    assertEquals((await scanAllApps(undefined, own.paths.appsDir)).map((app) => app.name), ["only"]);
+    const missing = join(own.paths.root, "no-such-dir");
+    assertEquals((await scanAllApps(missing, own.paths.appsDir)).map((app) => app.name), ["only"]);
+  } finally {
+    await own.dispose();
+  }
+});
+
+Deno.test("registry: リポジトリの apps/ に Binette エディタが同梱されている", async () => {
+  const apps = await scanAllApps(BUNDLED_APPS_DIR, join(BUNDLED_APPS_DIR, "..", "no-such-project-apps"));
+  const editor = apps.find((app) => app.name === "binette-editor");
+  assertEquals(editor?.error, undefined);
+  assertEquals(editor?.loaded?.manifest.entry, "main.ts");
+  assert(editor?.loaded?.panoplieDir !== undefined);
 });

@@ -4,7 +4,7 @@ AI エージェント向けの作業ルール。人間向けの説明は [README
 
 ## プロジェクト概要
 
-- EbinaStation のサーバー。v2 として作り直し中。第 1 段（土台）まで実装した: `station.json`、SQLite、パスキーの登録 API、WAKE、ET の振り分け、埋め込みアプリの子プロセスと中継、CLI。アプリ管理の画面と API、Binette エディタ、外部アプリはまだ無い。v1 のコードは消した。参照するときは `v1.1.0` のタグを見る
+- EbinaStation のサーバー。v2 として作り直し中。第 2 段まで実装した: `station.json`、SQLite、パスキーの登録 API、WAKE、ET の振り分け、埋め込みアプリの子プロセスと中継、CLI（第 1 段）、同梱アプリ `apps/` の走査と Binette エディタ（第 2 段）。アプリ管理の画面と API、外部アプリはまだ無い。v1 のコードは消した。参照するときは `v1.1.0` のタグを見る
 - Station はクライアント（ebina-front）とアプリのあいだに立つ中継役。WAKE（KX / SM / ET）でログインとセッションを受け持ち、ET で受けたリクエストをパスの先頭のアプリ名で振り分けてアプリへ渡す。画面はアプリが Binette で返す
 - 仕様は `docs/` にある。作業の前に該当する文書を読む
 
@@ -13,7 +13,7 @@ AI エージェント向けの作業ルール。人間向けの説明は [README
 | `docs/spec.md` | v2 の全体の仕様 |
 | `docs/station-json.md` | Station の設定ファイル |
 | `docs/app-json.md` | 埋め込みアプリの設定ファイル |
-| `docs/apps/<アプリ名>.md` | アプリごとの仕様 |
+| `docs/apps/<アプリ名>.md` | アプリごとの仕様（Binette エディタなど） |
 | `docs/v1/` | v1 の仕様の記録（API、WebAuthn、保存データ）。v2 では使わない |
 
 - 関連する仕様:
@@ -76,7 +76,7 @@ mkdir -p project && cp examples/station.json project/station.json
 deno task dev     # 開発用に起動（--watch=src/,runner/）。ebina-front の npm run dev と組む例の設定
 deno task start   # 起動
 deno task user    # ユーザー管理の CLI（add / token / list / remove）
-deno task check   # deno fmt --check、deno lint、deno check（src/ runner/ tests/）
+deno task check   # deno fmt --check、deno lint、deno check（src/ runner/ apps/ tests/）
 deno task test    # deno test（tests/）
 ```
 
@@ -107,25 +107,29 @@ deno task test    # deno test（tests/）
 deno.json              # imports、tasks、fmt / lint の対象
 examples/station.json  # 開発用の station.json の例
 runner/runner.ts       # 埋め込みアプリの子プロセスで動く。entry を読み込んで待ち受ける
+apps/                  # Station に同梱するアプリ（読むだけ）。binette-editor（app.json、main.ts、names.ts、store.ts、panoplie/）
 src/
 ├── main.ts            # 起動（設定 → DB → アプリ → WAKE → HTTP）と、シグナルでの終了
 ├── config.ts          # station.json の読み込みと検査
-├── paths.ts           # project フォルダの中のパス（EBINA_PROJECT_DIR）
+├── paths.ts           # project フォルダの中のパス（EBINA_PROJECT_DIR）と、同梱アプリの置き場所 BUNDLED_APPS_DIR
 ├── log.ts             # ログ関数（setLogSink でテストでは黙らせる）
 ├── wake.ts            # WAKE サーバーの組み立て
 ├── db/                # SQLite: mod（開く・移行）、schema、row、meta、users、credentials、registrations、app_states
 ├── http/              # Hono: app（CORS・ログ・WAKE へ渡す）、register（登録 API）
 ├── et/                # ET: handler（認証の確認と URL の振り分け）、entrance（入口のビネット）、respond（応答の小物）
-├── apps/              # 埋め込みアプリ: names、manifest、links（シンボリックリンクの検査）、registry、supervisor、relay、static、hub、types
+├── apps/              # 埋め込みアプリ: names、manifest、links（シンボリックリンクの検査）、registry（同梱と project の走査）、supervisor、relay、static、hub、types
 └── cli/               # deno task user: main、qr
 tests/
 ├── helpers/           # authenticator（ソフトウェアのパスキー）、station（一時 project に Station を組み立てる）
 ├── fixtures/          # apps/（echo、notes、broken）と、一時 project に写す補助 mod.ts
+├── binette_editor.test.ts / e2e_binette_editor.test.ts  # Binette エディタ（main.ts を直接呼ぶ単体と、同梱を子プロセスで動かす e2e）
 └── *.test.ts
 docs/                  # 仕様
 ```
 
 - ET と中継の境界は `src/apps/types.ts` の `AppHub`。`et/handler.ts` は `AppHub` だけを知り、`apps/hub.ts`（`createAppHub`）が実装する
+- 同梱アプリ（リポジトリの `apps/`）は、同名なら `project/apps/` が勝つ。同梱のアプリにも、シンボリックリンクの検査と子プロセスの権限を同じく掛ける。`createAppHub` は `bundledAppsDir` を渡したときだけ同梱を走査する（`startStation` は既定で `BUNDLED_APPS_DIR`、`bundledAppsDir: null` で無効）。テストでは `createTestStation({ bundled: true })` で同梱を使い、省略すれば使わない
+- 同梱アプリの画面（`panoplie/`）の js は 1 画面 1 ファイルで、DOM API だけで作る。`innerHTML` にユーザーの値を入れない
 - 起動の組み立ては `src/main.ts` の `startStation`。`tests/helpers/station.ts` の `createTestStation` も同じ順で組み立てる。組み立てを変えたら両方を直す
 
 ## テストの書き方

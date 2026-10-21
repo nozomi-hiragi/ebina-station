@@ -5,7 +5,7 @@ import type { ProjectPaths } from "../paths.ts";
 import type { LoadedApp } from "./manifest.ts";
 import { symlinkInChain } from "./links.ts";
 import { isValidAppName } from "./names.ts";
-import { scanApps } from "./registry.ts";
+import { scanAllApps } from "./registry.ts";
 import { appUnavailable, isRelayPath, notFound, type RelayOptions, relayToChild } from "./relay.ts";
 import { createStaticSite, type StaticSite } from "./static.ts";
 import { type AppLogLine, AppSupervisor, type SupervisorOptions } from "./supervisor.ts";
@@ -13,6 +13,8 @@ import type { AppHub, AppInfo, AppStatus } from "./types.ts";
 
 export interface AppHubDeps {
   paths: ProjectPaths;
+  /** 同梱のアプリの置き場所（リポジトリの `apps/`、`BUNDLED_APPS_DIR`）。省略すると同梱のアプリは使わない */
+  bundledAppsDir?: string;
   /** アプリの有効・無効。AppStateRepo をそのまま渡せる */
   states: { isEnabled(name: string): boolean };
   /** 子プロセスの設定の上書き（猶予や再起動の間隔。テスト用） */
@@ -111,13 +113,13 @@ export function createAppHub(deps: AppHubDeps): EmbeddedAppHub {
     return supervisor;
   }
 
-  /** apps/ を読み直して、起動・停止を今の状態に合わせる */
+  /** 同梱の apps/ と project/apps/ を読み直して、起動・停止を今の状態に合わせる */
   async function sync(): Promise<void> {
     if (stopping) return;
-    // project から apps/ までの途中がリンクなら、リンク先を走査・配信しないよう、アプリ 0 件として扱う
+    // project から apps/ までの途中がリンクなら、リンク先を走査・配信しないよう、project のアプリは 0 件として扱う
     const chainProblem = await symlinkInChain(paths.root, paths.appsDir, "apps/");
-    if (chainProblem !== null) log.warn(`${chainProblem}。アプリを読み込みません`);
-    const scanned = chainProblem === null ? await scanApps(paths.appsDir) : [];
+    if (chainProblem !== null) log.warn(`${chainProblem}。project/apps のアプリを読み込みません`);
+    const scanned = await scanAllApps(deps.bundledAppsDir, chainProblem === null ? paths.appsDir : undefined);
     const next = new Map<string, AppRecord>();
     const retiring: AppSupervisor[] = [];
     const starting: AppSupervisor[] = [];
