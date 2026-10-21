@@ -1,6 +1,0 @@
-# dotenv environment variables file
-.env
-.env.test
-
-# mongodb
-mongo_db
