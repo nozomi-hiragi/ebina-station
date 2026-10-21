@@ -89,7 +89,7 @@ apps/<アプリ名>/
 | `EBINA_DATA_DIR` | データフォルダ `data/apps/<アプリ名>/` の絶対パス。起動前に Station が作る |
 
 - Station の環境変数は引き継ぎません。上の 3 つのほかに、Deno が動くのに要る `HOME`、`DENO_DIR`、`XDG_CACHE_HOME`、`PATH`（Station にあれば）だけを渡します。ただし、アプリが読める環境変数は上の 3 つだけです。
-- 標準出力と標準エラーは Station が行ごとに受け取り、Station のログにも出します（標準エラーは警告）。`EBINA_APP_TOKEN` と同じ文字列が出力に入っていたら、記録にもログにも `(token)` に置き換えて残します。待ち受けの開始を知らせる `EBINA_READY` の行は、Station の runner が出します。アプリは出さないでください。
+- 標準出力と標準エラーは Station が行ごとに受け取り、Station のログにも出します（標準エラーは警告）。`EBINA_APP_TOKEN` と同じ文字列が出力に入っていたら、記録にもログにも `(token)` に置き換えて残します。待ち受けの開始を知らせる `EBINA_READY` の行は、Station の runner が出します。アプリが同じ行を出しても、Station は runner への確認（`Ebina-Runner-Probe` ヘッダー付きのリクエスト。runner が答え、アプリには渡さない）が通るまで起動済みにしません。
 
 ## アプリが実装するものと、運び方
 

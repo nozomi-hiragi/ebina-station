@@ -11,6 +11,8 @@ import { timingSafeEqual } from "node:crypto";
 
 const READY_LINE = "EBINA_READY";
 const TOKEN_HEADER = "ebina-app-token";
+/** Station が待ち受けを確かめるときのヘッダー。runner が答え、アプリには渡さない */
+const PROBE_HEADER = "ebina-runner-probe";
 
 type Handler = (req: Request) => Response | Promise<Response>;
 
@@ -75,6 +77,8 @@ try {
     onListen: () => console.log(READY_LINE),
   }, async (req) => {
     if (!await tokenMatches(req.headers.get(TOKEN_HEADER))) return jsonResponse(403, "forbidden");
+    // 標準出力の EBINA_READY はアプリも書けるので、Station はこの応答で待ち受けを確かめる
+    if (req.headers.has(PROBE_HEADER)) return new Response(null, { status: 204, headers: { [PROBE_HEADER]: "ready" } });
     try {
       const response = await handler(req);
       if (!(response instanceof Response)) throw new TypeError("fetch が Response を返しませんでした");

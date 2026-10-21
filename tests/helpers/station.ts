@@ -149,7 +149,7 @@ export async function createTestStation(options: TestStationOptions = {}): Promi
   await Deno.writeTextFile(paths.config, JSON.stringify(configJson));
   const config = parseStationConfig(configJson);
 
-  const db = openDatabase(paths.db);
+  const db = openDatabase(paths.db, { root: paths.root });
   const users = new UserRepo(db);
   const credentials = new SqliteCredentialStore(db);
   const registrations = new RegistrationRepo(db, options.now);

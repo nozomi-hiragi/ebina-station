@@ -194,7 +194,7 @@ async function printIssued(env: CliEnv, issued: IssuedRegistration): Promise<voi
 async function withContext<T>(env: CliEnv, fn: (ctx: CliContext) => Promise<T>): Promise<T> {
   const paths = projectPaths(env.projectRoot);
   const config = await loadStationConfig(paths.config);
-  const db = openDatabase(paths.db);
+  const db = openDatabase(paths.db, { root: paths.root });
   try {
     return await fn({ config, db, now: env.now });
   } finally {
@@ -203,7 +203,7 @@ async function withContext<T>(env: CliEnv, fn: (ctx: CliContext) => Promise<T>):
 }
 
 async function withDatabase<T>(env: CliEnv, fn: (db: DatabaseSync) => Promise<T>): Promise<T> {
-  const db = openDatabase(projectPaths(env.projectRoot).db);
+  const db = openDatabase(projectPaths(env.projectRoot).db, { root: projectPaths(env.projectRoot).root });
   try {
     return await fn(db);
   } finally {

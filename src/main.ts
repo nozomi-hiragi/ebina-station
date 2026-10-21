@@ -37,7 +37,7 @@ export interface StartOptions {
  */
 export async function startStation(paths: ProjectPaths, options: StartOptions = {}): Promise<RunningStation> {
   const config = await loadStationConfig(paths.config);
-  const db = openDatabase(paths.db);
+  const db = openDatabase(paths.db, { root: paths.root });
   const hub = createAppHub({ paths, states: new AppStateRepo(db) });
   let server: Deno.HttpServer<Deno.NetAddr> | undefined;
   try {

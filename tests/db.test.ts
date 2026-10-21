@@ -250,3 +250,45 @@ Deno.test("db: アプリの無効は開き直しても残る", async () => {
     }
   });
 });
+
+Deno.test("db: project の中の DB までの道にシンボリックリンクがあれば開かず、リンク先も触らない", async () => {
+  const root = await Deno.makeTempDir({ prefix: "ebina-db-link-" });
+  const outside = await Deno.makeTempDir({ prefix: "ebina-db-outside-" });
+  try {
+    const target = join(outside, "victim.db");
+    await Deno.writeTextFile(target, "victim", { mode: 0o644 });
+    const dbPath = join(root, "data", "station", "station.db");
+
+    // DB ファイルがリンク
+    await Deno.mkdir(join(root, "data", "station"), { recursive: true });
+    await Deno.symlink(target, dbPath);
+    assertThrows(() => openDatabase(dbPath, { root }), Error, "シンボリックリンク");
+    assertEquals(await Deno.readTextFile(target), "victim");
+    assertEquals((await Deno.stat(target)).mode! & 0o777, 0o644);
+    await Deno.remove(dbPath);
+
+    // WAL の補助ファイルがリンク
+    await Deno.symlink(target, `${dbPath}-wal`);
+    assertThrows(() => openDatabase(dbPath, { root }), Error, "シンボリックリンク");
+    await Deno.remove(`${dbPath}-wal`);
+
+    // 途中のフォルダがリンク
+    await Deno.remove(join(root, "data"), { recursive: true });
+    await Deno.symlink(outside, join(root, "data"));
+    assertThrows(() => openDatabase(join(root, "data", "station.db"), { root }), Error, "シンボリックリンク");
+    assertEquals((await Array.fromAsync(Deno.readDir(outside))).map((e) => e.name), ["victim.db"]);
+
+    // project フォルダ自体がリンクなのは許す
+    await Deno.remove(join(root, "data"));
+    const linkedRoot = `${root}-link`;
+    await Deno.symlink(root, linkedRoot);
+    try {
+      openDatabase(join(linkedRoot, "data", "station", "station.db"), { root: linkedRoot }).close();
+    } finally {
+      await Deno.remove(linkedRoot);
+    }
+  } finally {
+    await Deno.remove(root, { recursive: true });
+    await Deno.remove(outside, { recursive: true });
+  }
+});

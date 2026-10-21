@@ -5,6 +5,8 @@ import type { AppStatus } from "./types.ts";
 
 /** runner/runner.ts が待ち受けを始めたときに標準出力へ出す 1 行 */
 export const READY_LINE = "EBINA_READY";
+/** 待ち受けの確認に使うヘッダー（runner/runner.ts と同じ） */
+export const PROBE_HEADER = "ebina-runner-probe";
 
 const DEFAULT_RUNNER_PATH = fromFileUrl(new URL("../../runner/runner.ts", import.meta.url));
 const DEFAULT_CONFIG_PATH = fromFileUrl(new URL("../../deno.json", import.meta.url));
@@ -348,10 +350,8 @@ export class AppSupervisor {
       const text = rawText.replaceAll(token, "(token)");
       this.#push(stream, text);
       if (stream === "stdout" && text === READY_LINE) {
-        if (this.#child === child && this.#status === "starting") {
-          this.#status = "running";
-          this.#settleFirstAttempt();
-        }
+        // アプリが同じ行を出力することもあるので、行だけでは running にしない。runner に確かめてから
+        if (this.#child === child && this.#status === "starting") void this.#confirmReady(child, port, token);
         return;
       }
       // 起動に失敗した理由やアプリの例外は標準エラーに出る。画面ができるまで、Station のログでも見られるようにする
@@ -390,6 +390,33 @@ export class AppSupervisor {
     if (this.#stopRequested) return { kind: "stopped" };
     this.#status = "starting";
     return timedOut ? { kind: "start-timeout" } : { kind: "exited", description };
+  }
+
+  /** runner が待ち受けていることを、トークン付きの確認で確かめてから running にする。確かめられなければ starting のまま */
+  async #confirmReady(child: Deno.ChildProcess, port: number, token: string): Promise<void> {
+    const client = this.#client;
+    if (client === undefined) return;
+    for (let i = 0; i < 20; i++) {
+      if (this.#child !== child || this.#status !== "starting") return;
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/`, {
+          headers: { "ebina-app-token": token, [PROBE_HEADER]: "1" },
+          client,
+          signal: AbortSignal.timeout(2_000),
+        });
+        await res.body?.cancel();
+        if (res.status === 204 && res.headers.get(PROBE_HEADER) === "ready") {
+          if (this.#child === child && this.#status === "starting") {
+            this.#status = "running";
+            this.#settleFirstAttempt();
+          }
+          return;
+        }
+      } catch {
+        // まだ待ち受けていない。少し待ってやり直す
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
   }
 
   #refused(message: string): LaunchResult {

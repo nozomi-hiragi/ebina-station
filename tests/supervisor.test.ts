@@ -211,6 +211,49 @@ Deno.test("supervisor: EBINA_READY が来なければ止めて error にする�
   });
 });
 
+Deno.test("supervisor: アプリが EBINA_READY を出力しても、待ち受けを確かめられなければ running にしない", async () => {
+  await withProject(async (paths) => {
+    const supervisor = await supervisorFor(
+      paths,
+      "spoof",
+      `console.log("EBINA_READY");\nawait new Promise((resolve) => setTimeout(resolve, 60_000));`,
+      { startTimeoutMs: 1_500, restartBaseMs: 10 },
+    );
+    try {
+      await supervisor.start();
+      assertEquals(supervisor.status, "error");
+      assertStringIncludes(supervisor.error ?? "", "準備ができなかった");
+      assertEquals(supervisor.target(), undefined);
+    } finally {
+      await supervisor.stop();
+    }
+  });
+});
+
+Deno.test("supervisor: 確認のヘッダーは runner が答え、アプリには届かない", async () => {
+  await withProject(async (paths) => {
+    const supervisor = await supervisorFor(
+      paths,
+      "probe",
+      `export default { fetch: (req) => new Response(req.headers.has("ebina-runner-probe") ? "leaked" : "ok") };`,
+    );
+    try {
+      await supervisor.start();
+      assertEquals(supervisor.status, "running");
+      const target = supervisor.target()!;
+      const res = await fetch(`http://127.0.0.1:${target.port}/`, {
+        headers: { "Ebina-App-Token": target.token, "Ebina-Runner-Probe": "1" },
+      });
+      assertEquals(res.status, 204);
+      await res.body?.cancel();
+      const normal = await authorized(supervisor, "/");
+      assertEquals(await normal.text(), "ok");
+    } finally {
+      await supervisor.stop();
+    }
+  });
+});
+
 Deno.test("supervisor: stop() は SIGTERM に応じない子を SIGKILL で止める", async () => {
   await withProject(async (paths) => {
     const source = `

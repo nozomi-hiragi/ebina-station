@@ -1,4 +1,4 @@
-import { dirname } from "@std/path";
+import { dirname, relative, resolve, SEPARATOR } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
 import { LATEST_SCHEMA_VERSION, MIGRATIONS } from "./schema.ts";
 import { rowNumber } from "./row.ts";
@@ -9,10 +9,15 @@ const BUSY_TIMEOUT_MS = 5000;
 /**
  * SQLite を開いて PRAGMA を設定し、移行を済ませて返す。
  * path は ":memory:" でもよい（テスト用）。ファイルのときはフォルダが無ければ作り、権限を 0600 にする。
+ * root（project フォルダ）を渡すと、root から DB ファイル（と WAL の補助ファイル）までにシンボリックリンクがあれば開かない。
+ * リンクをたどると、project の外のファイルの権限を変えたり書き換えたりしてしまうため。
  */
-export function openDatabase(path: string): DatabaseSync {
+export function openDatabase(path: string, options: { root?: string } = {}): DatabaseSync {
   const inMemory = path === ":memory:";
-  if (!inMemory) prepareFile(path);
+  if (!inMemory) {
+    if (options.root !== undefined) rejectSymlinks(options.root, path);
+    prepareFile(path);
+  }
 
   const db = new DatabaseSync(path);
   try {
@@ -26,6 +31,36 @@ export function openDatabase(path: string): DatabaseSync {
     throw e;
   }
   return db;
+}
+
+function isSymlink(path: string): boolean {
+  try {
+    return Deno.lstatSync(path).isSymlink;
+  } catch (e) {
+    if (e instanceof Deno.errors.NotFound) return false;
+    throw e;
+  }
+}
+
+/** root の中の、path までのフォルダ、path 自体、WAL の補助ファイルのどれかがシンボリックリンクなら投げる */
+function rejectSymlinks(root: string, path: string): void {
+  const absRoot = resolve(root);
+  const absPath = resolve(path);
+  const rel = relative(absRoot, absPath);
+  if (rel.startsWith("..")) throw new Error(`DB ファイル ${absPath} が project フォルダ ${absRoot} の外にあります`);
+  // project フォルダ自体がリンクなのは使う人の選んだことなので見ない。中だけを見る
+  const targets: string[] = [];
+  let current = absRoot;
+  for (const part of rel.split(SEPARATOR)) {
+    current = `${current}${SEPARATOR}${part}`;
+    targets.push(current);
+  }
+  for (const suffix of ["-wal", "-shm", "-journal"]) targets.push(absPath + suffix);
+  for (const target of targets) {
+    if (isSymlink(target)) {
+      throw new Error(`${target} がシンボリックリンクのため、DB を開きません（project の外を書き換えないため）`);
+    }
+  }
 }
 
 /** フォルダを作り、DB ファイルを 0600 で用意する。WAL の補助ファイルも同じ権限で作られる */
