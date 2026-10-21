@@ -348,6 +348,8 @@ Deno.test("e2e 7: ユーザーを DB から消したあとの ET は 401", async
   for (const url of ["wake://station/me", "wake://station/index.bina", "wake://station/echo", "wake://station/zzz"]) {
     const res = await client.wakeFetch(url);
     assertEquals(res.status, 401, url);
+    // ebina-front はこの印で Station のセッション切れを見分ける
+    assertEquals(res.headers.get("ebina-station-error"), "unauthorized", url);
     assertEquals(await res.json(), { error: { code: "unauthorized" } }, url);
   }
   assertEquals(hub.calls.length, 0);

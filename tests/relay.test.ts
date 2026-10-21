@@ -167,50 +167,38 @@ Deno.test("relay: ヘッダーが規則に合わない応答は 502", async () =
   assertEquals((await toEtResponse(response)).status, 502);
 });
 
-Deno.test("relay: アプリの 401 は Station の unauthorized と区別できないので 502 にする", async () => {
-  const lines = await collectLogs(async () => {
-    // Station 自身の 401 と同じ形でも、ほかの形でも、アプリの 401 はそのまま通さない
-    for (
-      const body of [JSON.stringify({ error: { code: "unauthorized" } }), "要ログイン", ""]
-    ) {
-      const result = await toEtResponse(
-        new Response(body, { status: 401, headers: { "X-Secret": "HEADER-VALUE" } }),
-        100,
-        "foo",
-      );
-      assertEquals(result.status, 502);
-      assertEquals(text(result.body), '{"error":{"code":"bad_gateway"}}');
-    }
-    // 403 など、401 以外はそのまま
-    assertEquals((await toEtResponse(new Response("", { status: 403 }))).status, 403);
-    assertEquals((await toEtResponse(new Response("", { status: 407 }))).status, 407);
-  });
-  assertEquals(lines.length, 3, lines.join("\n"));
-  for (const line of lines) {
-    assertStringIncludes(line, "WARN");
-    assertStringIncludes(line, "アプリ foo");
-    assertStringIncludes(line, "401");
-    assertFalse(line.includes("HEADER-VALUE"), line);
-  }
+Deno.test("relay: アプリの 401 はそのまま返し、Station の印（ebina-station-error）は偽れない", async () => {
+  const result = await toEtResponse(
+    Response.json({ error: { code: "unauthorized" } }, {
+      status: 401,
+      headers: { "Ebina-Station-Error": "unauthorized", "WWW-Authenticate": "Bearer" },
+    }),
+    100,
+    "foo",
+  );
+  assertEquals(result.status, 401);
+  assertEquals(text(result.body), '{"error":{"code":"unauthorized"}}');
+  const names = (result.headers ?? []).map(([name]) => name);
+  assertFalse(names.includes("ebina-station-error"), names.join(","));
+  assert(names.includes("www-authenticate"), names.join(","));
 });
 
-Deno.test("relay: アプリの 401 は子プロセスからの中継でも 502 で、ログに秘密を出さない", async () => {
-  const respond = () => Response.json({ error: { code: "unauthorized" } }, { status: 401 });
-  const lines = await collectLogs(() =>
-    withServer(respond, async (port) => {
-      const result = await relayToChild(
-        { name: "guard", port, token: "TOKEN-VALUE" },
-        "/api?secret=QUERY-VALUE",
-        etRequest("GET", [["X-Secret", "HEADER-VALUE"]]),
-        "alice",
-      );
-      assertEquals(result.status, 502);
-      assertEquals(text(result.body), '{"error":{"code":"bad_gateway"}}');
-    })
-  );
-  assertEquals(lines.length, 1, lines.join("\n"));
-  assertStringIncludes(lines[0], "アプリ guard");
-  for (const secret of ["TOKEN-VALUE", "QUERY-VALUE", "HEADER-VALUE"]) assertFalse(lines[0].includes(secret), secret);
+Deno.test("relay: 子プロセスからの中継でもアプリの 401 はそのまま返し、印は除く", async () => {
+  const respond = () =>
+    Response.json({ error: { code: "unauthorized" } }, {
+      status: 401,
+      headers: { "Ebina-Station-Error": "unauthorized" },
+    });
+  await withServer(respond, async (port) => {
+    const result = await relayToChild(
+      { name: "guard", port, token: "TOKEN-VALUE" },
+      "/api",
+      etRequest("GET", []),
+      "alice",
+    );
+    assertEquals(result.status, 401);
+    assertFalse((result.headers ?? []).some(([name]) => name === "ebina-station-error"));
+  });
 });
 
 Deno.test("relay: 502 にした理由をログに出す（ステータス・ヘッダー・本文）", async () => {

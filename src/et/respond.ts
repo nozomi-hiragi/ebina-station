@@ -15,3 +15,12 @@ export function etJson(status: number, value: unknown): EtHandlerResponse {
 export function etError(status: number, code: string): EtHandlerResponse {
   return etJson(status, { error: { code } });
 }
+
+/** Station がセッションを拒んだ 401 に付けるヘッダー。アプリの応答の `ebina-` ヘッダーは中継で除くので、アプリは偽れない */
+export const STATION_ERROR_HEADER = "ebina-station-error";
+
+/** Station がセッションを拒んだときの 401。ebina-front はこのヘッダーを見てログイン画面へ戻る */
+export function etUnauthorized(): EtHandlerResponse {
+  const res = etError(401, "unauthorized");
+  return { ...res, headers: [...(res.headers ?? []), [STATION_ERROR_HEADER, "unauthorized"]] };
+}

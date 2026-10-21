@@ -177,6 +177,7 @@ Deno.test("handler: ユーザーかパスキーが無い、active でない、�
       const res = await handler(request(url), auth);
       assertEquals(res.status, 401, `${JSON.stringify(auth)} ${url}`);
       assertEquals(bodyOf(res), { error: { code: "unauthorized" } });
+      assert((res.headers ?? []).some(([name, value]) => name === "ebina-station-error" && value === "unauthorized"));
     }
   }
   // 401 のときは URL の検査より先に決まり、アプリにも届かない

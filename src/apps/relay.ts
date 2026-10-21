@@ -113,8 +113,7 @@ async function readLimited(body: ReadableStream<Uint8Array> | null, max: number)
 
 /**
  * Response を ET の応答にする。次のときは 502（bad_gateway）にして、理由を警告に残す（ヘッダーの値やクエリは出さない）。
- * - ステータスが 200〜599 でない。401 も同じ（ebina-front は 401 を Station のセッション切れとして扱うため、
- *   アプリの 401 を通すと利用者がログアウトされる）
+ * - ステータスが 200〜599 でない
  * - ヘッダーが規則に合わない
  * - 本文が max を超える
  *
@@ -135,9 +134,6 @@ export async function toEtResponse(
     return badGateway();
   };
 
-  if (response.status === 401) {
-    return await reject("401 は Station のセッション切れに使うため、アプリは返せません");
-  }
   if (response.status < 200 || response.status > 599) return await reject(`ステータス ${response.status} は使えません`);
   const headers = filterResponseHeaders(response.headers);
   if (headers === null) return await reject("ヘッダーが ET の規則に合わないか、合計が 8 KiB を超えています");

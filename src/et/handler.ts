@@ -6,7 +6,7 @@ import type { SqliteCredentialStore } from "../db/credentials.ts";
 import type { UserRepo } from "../db/users.ts";
 import { log } from "../log.ts";
 import { buildEntrance } from "./entrance.ts";
-import { etError, etJson } from "./respond.ts";
+import { etError, etJson, etUnauthorized } from "./respond.ts";
 
 /** ET で運ぶ Station の URL の先頭 */
 const ET_ORIGIN = "wake://station";
@@ -89,7 +89,7 @@ export function createEtHandler(deps: EtHandlerDeps): EtHandler {
     // CLI で消されたユーザー・パスキーのセッションは Station のメモリに残るため、ここで止める
     const user = users.get(auth.userId);
     if (!user || !credentials.isActive(auth.credentialId, auth.userId)) {
-      return etError(401, "unauthorized");
+      return etUnauthorized();
     }
 
     const target = resolveEtTarget(req.url);

@@ -116,22 +116,23 @@ Deno.test("e2e 4: 無効にしたアプリは 404、有効に戻して reload �
   assertEquals((await client.wakeFetch("wake://station/echo")).status, 200);
 });
 
-Deno.test("e2e 4: アプリが 401 を返しても 502 になる（ebina-front は 401 でログアウトするため）", async () => {
+Deno.test("e2e 4: アプリの 401 はそのまま届き、Station の印は付かない。セッションは有効なまま", async () => {
   await using station = await createTestStation({ apps: ["echo"] });
   const { client } = await createLoggedInUser(station, "alice", "Alice");
-  // Station 自身の 401 と同じ形の本文を返すアプリ
+  // Station 自身の 401 と同じ本文と印のヘッダーを返すアプリ
   await writeApp(station.paths, "guard", {
     "app.json": JSON.stringify({ label: "ガード", entry: "main.ts" }),
-    "main.ts": `export default { fetch: () => Response.json({ error: { code: "unauthorized" } }, { status: 401 }) };`,
+    "main.ts":
+      `export default { fetch: () => Response.json({ error: { code: "unauthorized" } }, { status: 401, headers: { "Ebina-Station-Error": "unauthorized" } }) };`,
   });
   await station.hub.reload();
 
   for (const url of ["wake://station/guard", "wake://station/guard.bina", "wake://station/guard/api/x"]) {
     const res = await client.wakeFetch(url);
-    assertEquals(res.status, 502, url);
-    assertEquals(await res.json(), { error: { code: "bad_gateway" } }, url);
+    assertEquals(res.status, 401, url);
+    assertEquals(res.headers.get("ebina-station-error"), null, url);
+    await res.body?.cancel();
   }
-  // セッションは有効なまま
   assertEquals((await client.wakeFetch("wake://station/me")).status, 200);
 });
 
