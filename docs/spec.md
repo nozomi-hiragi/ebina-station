@@ -173,10 +173,13 @@ deno run \
 
 ## v1 から引き継がないもの
 
+v1 の仕様は [v1.md](v1.md) に記録してあります。
+
 - パスワード、TOTP、JWT のログイン
 - REST の `/ebina/*` の管理 API
 - MongoDB
-- v1 のアプリの仕組み（`entrance.ts` と docker-compose）。考え方は埋め込みアプリに引き継ぐ
+- v1 のアプリの仕組み（`apis.json` と `entrance.ts` の API サーバー、honbu の中で動く cron）。子プロセスで動かす考え方は埋め込みアプリに引き継ぐ
+- docker-compose（nginx、MongoDB、certbot のコンテナ）
 
 nginx、certbot、systemd の起動スクリプトをどうするかは未決です。
 
