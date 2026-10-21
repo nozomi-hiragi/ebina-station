@@ -157,33 +157,13 @@ deno run \
 - Station は登録のときに `Ebina-App-Token` を発行して表示します。アプリはそれを設定して、一致しないリクエストを拒否します。
 - 起動と停止は Station の管理の外です。状態は、中継したときに応答があったかどうかで表示します。
 
-## 第一弾のアプリ: Binette エディタ
+## アプリ
 
-アプリ名 `binette-editor`。クライアントからビネットを作り、編集し、消せるアプリです。
+アプリごとの仕様は `docs/apps/<アプリ名>.md` に書きます。
 
-- 保存先はデータフォルダの `binette/`（`data/apps/binette-editor/binette/<名前>.bina`）です。v2.0.0 ではこの中だけを扱います。
-- 名前は `/` で区切れます。空の区切り、`.`、`..`、`\` は使えません（パノプリの名前と同じ）。
-- 保存するときに `@binette/core` で形式を検査し、正しくなければ保存しません。
-
-### 画面
-
-| パス | 内容 |
-| --- | --- |
-| `/binette-editor` | 一覧。新規作成、編集、削除、プレビューへのボタン |
-| `/binette-editor/edit?name=<名前>` | JSON の編集と保存。検査のエラーを表示する。プレビューボタン |
-| `/binette-editor/preview/<名前>` | 保存したビネットをそのまま再生する |
-
-### API
-
-| メソッドとパス | 内容 |
-| --- | --- |
-| `GET /api/binettes` | 名前の一覧 |
-| `GET /api/binettes/<名前>` | 中身 |
-| `PUT /api/binettes/<名前>` | 作成・上書き。検査に通らなければ 400 と理由 |
-| `DELETE /api/binettes/<名前>` | 削除 |
-| `GET /preview/<名前>.bina` | 保存したビネットを返す（プレビュー用） |
-
-クライアントからは `/binette-editor/api/…` で呼びます。
+| アプリ名 | 内容 | 仕様 |
+| --- | --- | --- |
+| `binette-editor` | ビネットの作成・編集・削除・プレビュー（第一弾の埋め込みアプリ） | [apps/binette-editor.md](apps/binette-editor.md) |
 
 ## ユーザー
 
