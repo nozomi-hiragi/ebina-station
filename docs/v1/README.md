@@ -45,132 +45,13 @@ v1.1.0（`main`）のコードから起こした、v1 の仕様の記録です�
 
 ログは `logs/ebina.log`（INFO 以上）と標準出力に出します。nginx のログは `logs/nginx/` です。
 
-## project フォルダ
+## project フォルダと保存データ
 
-```
-project/
-├── settings.json        # 設定
-├── members.json         # メンバーと仮メンバー
-├── apps/
-│   ├── ports.json       # アプリ名 → ポート
-│   └── <アプリ名>/
-│       ├── apis.json    # API の定義
-│       ├── cron.json    # cron の定義
-│       └── scripts/     # スクリプト（entrance.ts をコピーして置く）
-├── gomi/                # 消したアプリの移動先（<アプリ名>_<日時>）
-├── nginx/
-│   ├── nginx.conf
-│   ├── confs.json       # ルートの定義
-│   ├── generate/        # confs.json から作る .conf
-│   └── sites-enabled/   # 手で置く設定
-└── letsencrypt/         # certbot の証明書と webroot
-```
+フォルダの構成と、保存しているファイル（`settings.json`、`members.json`、アプリ、nginx）の形は [data.md](data.md) にまとめてあります。
 
-### settings.json
+## WebAuthn
 
-| 欄 | 型 | 既定値 | 説明 |
-| --- | --- | --- | --- |
-| `port` | 数値か `"env"` | `3456` | 待ち受けるポート。`"env"` なら環境変数 `PORT` |
-| `origins` | 文字列の配列 | `["https://nozomi-hiragi.github.io", "http://localhost:3000"]` | CORS で許す origin |
-| `Member.allowRegist` | 真偽値 | `true` | 新しいメンバーの登録を許すか |
-| `Member.maxMembers` | 数値 | `1` | メンバーと仮メンバーを合わせた上限 |
-| `WebAuthn.rpName` | 文字列 | `"EbinaStation"` | RP 名 |
-| `WebAuthn.rpIDType` | `"variable"` か `"static"` | `"variable"` | `variable` はリクエストの origin のホスト名を RP ID にする。`static` は `rpID` を使う |
-| `WebAuthn.rpID` | 文字列 | | `static` のときの RP ID |
-| `WebAuthn.attestationType` | 文字列 | | attestation の指定 |
-| `Mongodb.port` | 数値 | `27017` | MongoDB のポート |
-| `Mongodb.username` / `password` | 文字列か `"env"` | `"env"` | `"env"` なら `.env` の値 |
-| `Mongodb.databaseFilter` | オブジェクト | `admin`・`config`・`local` を隠す | `{ <DB 名>: { enable } }`。`enable: true` の DB は一覧から隠し、中も見せない |
-| `WebPush.publicKey` / `privateKey` | 文字列 | 初回に作る | VAPID の鍵 |
-| `WebPush.contactInfo` | 文字列 | | VAPID の `sub`。無ければリクエストの origin |
-
-初回の対話では、次の順に聞きます。
-
-1. Let's Encrypt の利用規約に同意するか。同意しなければ止まる
-2. origin を足すか
-3. `rpName`
-
-### members.json
-
-```json
-{
-  "members": { "<ID>": { "name": "…", "auth": { … }, "webpush": { … }, "flags": { "admin": true } } },
-  "temp": { "<ID>": { "from": "<発行したメンバーの ID か console>", "member": { … } } }
-}
-```
-
-- `auth.password.hash`: bcrypt のハッシュ
-- `auth.totpAuth.secret`: TOTP の秘密（base32）。発行者は `EbinaStation`
-- `auth.webAuthn.<RP ID>`:
-  - `authenticators`: デバイス名ごとの認証器の情報（`credentialID`、PEM の公開鍵、`counter`、`transports` など）
-  - `enableDevices`: ログインに使うデバイス名の一覧。空なら最初のデバイスを使う
-- `webpush.devices.<デバイス名>.subscription`: PushSubscription の JSON
-- `flags.admin`: 管理者の印。保存はするが、権限の判定には使っていない
-
-### アプリ（apps/<アプリ名>/）
-
-v1 のアプリは「API をまとめた HTTP サーバー」と「cron」の組です。
-
-**apis.json**（バージョン 2。バージョン 1 は読むときに移行）
-
-```json
-{
-  "version": 2,
-  "init": { "filename": "init.ts", "function": "init" },
-  "final": { "filename": "final.ts", "function": "final" },
-  "apis": [
-    { "name": "hello", "path": "hello", "method": "get", "value": "こんにちは" },
-    { "name": "users", "path": "users/:id", "method": "get", "filename": "users.ts", "value": "getUser" }
-  ]
-}
-```
-
-- `filename` が無い API は `value` の文字列をそのまま返します。
-- `filename` があれば、`scripts/<filename>` の export `value` を oak のハンドラーとして使います。
-- `init(app, router, port)` は待ち受けの前に、`final(app)` は終わるときに呼ばれます。
-
-**API の起動**: アプリ管理の画面から起動すると、honbu が次のコマンドを実行します。
-
-```
-deno run --allow-net --allow-read=project/apps/<アプリ名> project/apps/<アプリ名>/scripts/entrance.ts <引数の JSON>
-```
-
-- `entrance.ts` が `apis.json` を読み、ルーターを作り、`ports.json` のポートで待ち受けます。
-- 起動の状態は honbu のメモリだけにあり、honbu を再起動すると止まったままになります。
-- クライアントからアプリの API へは、nginx のルートで届けます。Station は中継しません。
-
-**ports.json**: アプリ名 → ポート。`15346` より上の空いている番号を割り当てます。
-
-**cron.json**
-
-```json
-{ "<cron 名>": { "enable": true, "pattern": "0 * * * *", "function": "job.ts>run" } }
-```
-
-- `function` は `<ファイル名>><関数名>` です。
-- honbu の中で `scripts/<ファイル名>` を import して、croner で実行します。子プロセスではありません。
-- 戻り値をログに出します。
-
-**作成と削除**:
-- 作成はフォルダを作るだけです。アプリが 1 つも無いときは `FirstApp` を作ります。
-- 削除は `gomi/` への移動です。
-- 名前の変更はフォルダの名前を変えます。大文字・小文字の違いだけの名前は重複として扱います。
-
-### nginx（Jinji）
-
-**confs.json**: ルート名 → 次の形の値です。
-
-| 欄 | 説明 |
-| --- | --- |
-| `hostname` | `server_name` |
-| `port` | 転送先のポート。`"koujou"` なら honbu のポート |
-| `ssl` | 証明書のパス（`certificate`、`certificateKey`、`trustedCertificate`、`dhparam`） |
-| `certbot` | `true` なら Let's Encrypt の証明書のパスを使う |
-| `certWebRoot` | `/.well-known/` を `/var/www/html` から返す（certbot の webroot 用） |
-| `resolver` | Cloudflare の DNS を `resolver` に入れる |
-
-- `generate/<ルート名>.conf` を作ります。80 番で受けて `proxy_pass http://localhost:<port>/` します。`ssl` があれば 443 番も受けます。
-- コンテナは Docker Desktop ならポートの公開（80・443）で、それ以外は `network_mode: host` で動かします。
+登録・認証の流れ、オプションの値、保存する認証器の形、エンコードの決まりは [webauthn.md](webauthn.md) にまとめてあります。
 
 ## API（`/ebina/*`）
 
@@ -182,12 +63,7 @@ deno run --allow-net --allow-read=project/apps/<アプリ名> project/apps/<ア�
 
 ### WebAuthn を挟む操作
 
-大事な操作は 2 段階で行います。
-
-1. 操作の内容を送ると、`202` と WebAuthn の assertion のオプションが返る。サーバーは操作をチャレンジと一緒にメモリに控える
-2. `{ "type": "public-key", ... }`（assertion の結果）を同じパスに送ると、検証してから控えた操作を実行する
-
-チャレンジは、メンバー ID か、ログインならセッション ID をキーに 1 つだけ持ちます。
+大事な操作は、内容を送ると `202` と assertion のオプションが返り、assertion の結果を同じパスに送ると実行される 2 段階です。対象の操作とチャレンジの控え方は [webauthn.md](webauthn.md#webauthn-を挟む操作) を参照してください。
 
 ### エラーの対応（AuthManager）
 
@@ -350,3 +226,4 @@ API のパスと動きは v1.1.0 と同じです。
 - cron のスクリプトが honbu の中で動き、権限が honbu と同じになる
 - アプリの API の起動には `--allow-net` が全部付く
 - 管理者の印（`flags.admin`）があるのに、権限の判定に使われていない
+- `GET /member/member/:id` がパスワードのハッシュや TOTP の秘密まで返す（[data.md](data.md#membersjson)）

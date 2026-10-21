@@ -173,7 +173,7 @@ deno run \
 
 ## v1 から引き継がないもの
 
-v1 の仕様は [v1.md](v1.md) に記録してあります。
+v1 の仕様は [v1/README.md](v1/README.md) に記録してあります。
 
 - パスワード、TOTP、JWT のログイン
 - REST の `/ebina/*` の管理 API
