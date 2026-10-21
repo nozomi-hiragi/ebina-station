@@ -53,7 +53,7 @@ ebina-front v2.0.0 の `src/api/station.ts` と `dev-server/app.ts` が今の契
 ### WAKE
 
 - `/ebina/auth/*` と `/ebina/wake/*` は、`/ebina` を取り除いて WAKE サーバーの `handle()` に渡します。
-- CORS は `station.json` の `origins` だけを許します。
+- CORS は `station.json` の `origins` だけを許します（[station-json.md](station-json.md)）。
 
 ### ET の URL
 
@@ -77,7 +77,7 @@ Scene はパス `/<アプリ名>/a/b` から `wake://station/<アプリ名>/a/b.
 Station が作ります。
 
 - `settings` に、有効なアプリの一覧（`type: "list"`、行を押すとそのアプリの `/` へ）、「アプリ管理」の行、ログアウト（`component: "logout"`）を並べます。
-- 入口の行き先（`redirect`）は `station.json` で指定できます。指定が無ければ `/settings` へ転送します。
+- 入口の行き先は `station.json` の `entrance.redirect` で指定できます。指定が無ければ `/settings` へ転送します。
 
 ### アプリ管理（`/station/apps`）
 
@@ -131,18 +131,8 @@ project/
     └── panoplie/              # 任意。静的な .bina とファイル
 ```
 
-`app.json`:
-
-```json
-{
-  "label": "Binette エディタ",
-  "entry": "main.ts"
-}
-```
-
-- `entry` があれば、その module の default export を `fetch(req: Request) => Response | Promise<Response>` として動かします。
-- `entry` が無く `panoplie/` だけなら、Station が子プロセスを起動せず、`@binette/coulisses` で直接配ります。
-- 両方あるときは、まず `entry` に渡します。`entry` が 404 を返したら `panoplie/` から探します。
+- `station.json` の欄は [station-json.md](station-json.md) を参照
+- `app.json` の欄と、`entry`・`panoplie/` の動きは [app-json.md](app-json.md) を参照
 
 ### 起動
 
@@ -156,8 +146,7 @@ deno run \
   runner.ts
 ```
 
-- `runner.ts` は Station が用意します。`entry` を読み込み、`127.0.0.1:<ポート>` で待ち受け、`Ebina-App-Token` を確かめてからアプリに渡します。
-- 環境変数で `EBINA_PORT`、`EBINA_APP_TOKEN`、`EBINA_DATA_DIR`（データフォルダの絶対パス）を渡します。
+- `runner.ts` は Station が用意します。`entry` を読み込み、`127.0.0.1:<ポート>` で待ち受け、`Ebina-App-Token` を確かめてからアプリに渡します。渡す環境変数は [app-json.md](app-json.md) を参照。
 - 標準出力と標準エラーは Station が受け取り、アプリ管理の画面で見られるようにします。
 - 落ちたら、間隔を延ばしながら再起動します。続けて失敗したら「異常」にして止めます。
 - Station が止まるときは、子プロセスもすべて止めます。
