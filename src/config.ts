@@ -64,7 +64,22 @@ function parseOrigin(value: unknown, field: string): string {
   if (url.href !== `${url.origin}/`) {
     throw fieldError(field, `は origin（${url.origin} の形）だけを書いてください。パスなどは付けません`);
   }
+  // ブラウザは安全な文脈でしか WebAuthn を使わせない。http はローカル（localhost、ループバック）だけ許す
+  if (url.protocol === "http:" && !isLocalHost(url.hostname)) {
+    throw fieldError(
+      field,
+      `は https:// にしてください。http:// で WebAuthn が使えるのは localhost などのローカルだけです: ${url.origin}`,
+    );
+  }
   return url.origin;
+}
+
+/** ブラウザが http でも安全な文脈として扱うホスト（localhost、*.localhost、127.0.0.0/8、[::1]） */
+function isLocalHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  if (host === "[::1]") return true;
+  return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
 }
 
 function parseOrigins(value: unknown): string[] {

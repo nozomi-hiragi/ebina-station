@@ -109,6 +109,22 @@ Deno.test("config: origins の不正", () => {
   assertConfigError(withFields({ origins: ["http://user:pw@localhost:5173"] }), "origins[0]");
 });
 
+Deno.test("config: http の origin はローカルだけ（WebAuthn は安全な文脈でしか使えない）", () => {
+  for (const origin of ["http://example.com", "http://192.168.1.10:5173", "http://station.local"]) {
+    assertConfigError(withFields({ origins: [origin] }), "origins[0]", "https://");
+  }
+  for (
+    const [origin, rpId] of [
+      ["http://localhost:5173", "localhost"],
+      ["http://app.localhost:5173", "app.localhost"],
+      ["http://127.0.0.1:5173", "127.0.0.1"],
+      ["https://example.com", "example.com"],
+    ]
+  ) {
+    assertEquals(parseStationConfig(withFields({ origins: [origin], rpId })).origins, [origin]);
+  }
+});
+
 Deno.test("config: rpId は origin のホスト名と合う必要がある", () => {
   assertEquals(
     parseStationConfig(withFields({ origins: ["https://app.example.com"], rpId: "example.com" })).rpId,
