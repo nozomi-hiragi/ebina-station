@@ -151,10 +151,43 @@ Deno.test("process: CLI は書き込み権限が無いと、権限の案内を�
   const project = await makeProject([]);
   try {
     await Deno.writeTextFile(project.paths.config, JSON.stringify(testConfigJson()));
-    const result = await runDeno(["--allow-read", "--allow-env"], USER_CLI, ["list"], project);
+    const result = await runDeno(["--allow-read", "--allow-env"], USER_CLI, ["add", "alice", "Alice"], project);
     assertEquals(result.code, 1);
     assertStringIncludes(result.stderr, "権限が足りません");
     assertStringIncludes(result.stderr, "--allow-write=<場所>");
+  } finally {
+    await project.dispose();
+  }
+});
+
+Deno.test("process: ポートが使用中なら、アプリを起動せずに案内を出して終了コード 1", async () => {
+  const project = await makeProject(["echo"]);
+  const occupied = Deno.listen({ hostname: "127.0.0.1", port: 0 });
+  try {
+    const { port } = occupied.addr as Deno.NetAddr;
+    await Deno.writeTextFile(project.paths.config, JSON.stringify(testConfigJson({ port })));
+    const result = await runDeno(STATION_PERMISSIONS(project), MAIN, [], project);
+    assertEquals(result.code, 1, result.stderr);
+    assertStringIncludes(result.stderr, `ポート ${port} は使用中です`);
+    assertStringIncludes(result.stderr, "station.json の port を変えるか、使っているプロセスを止めてください");
+    // アプリを読み込む前に失敗する（子プロセスを起動しない）
+    assert(!result.stdout.includes("アプリを"), result.stdout);
+    assert(!result.stdout.includes("Station を起動しました"), result.stdout);
+  } finally {
+    occupied.close();
+    await project.dispose();
+  }
+});
+
+Deno.test("process: CLI の list は DB が無いとき、作らずに案内して終了コード 1", async () => {
+  const project = await makeProject([]);
+  try {
+    const permissions = ["--allow-read", `--allow-write=${project.paths.root}`, "--allow-env"];
+    const result = await runDeno(permissions, USER_CLI, ["list"], project);
+    assertEquals(result.code, 1, result.stderr);
+    assertStringIncludes(result.stderr, project.paths.db);
+    assertStringIncludes(result.stderr, "EBINA_PROJECT_DIR");
+    await Deno.stat(project.paths.db).then(() => assert(false, "DB が作られている"), () => {});
   } finally {
     await project.dispose();
   }

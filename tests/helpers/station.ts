@@ -155,6 +155,11 @@ export async function createTestStation(options: TestStationOptions = {}): Promi
   const registrations = new RegistrationRepo(db, options.now);
   const embedded = options.apps === undefined ? undefined : createAppHub({ paths, states: new AppStateRepo(db) });
   const hub = options.hub ?? embedded ?? createFakeHub();
+  const etHandler = createEtHandler({ config, users, credentials, hub });
+  const wake = createStationWake({ config, db, credentials, etHandler });
+  const app = createHttpApp({ config, wake, credentials, registrations });
+
+  // main.ts の startStation と同じ順（WAKE と HTTP の組み立てのあとにアプリを起動する）
   if (options.apps !== undefined) {
     // 起動に失敗したときも、作った子プロセスと一時フォルダを残さない
     try {
@@ -167,9 +172,6 @@ export async function createTestStation(options: TestStationOptions = {}): Promi
       throw e;
     }
   }
-  const etHandler = createEtHandler({ config, users, credentials, hub });
-  const wake = createStationWake({ config, db, credentials, etHandler });
-  const app = createHttpApp({ config, wake, credentials, registrations });
 
   const stationFetch: typeof fetch = async (input, init) => await app.fetch(new Request(input, init));
   let closed = false;

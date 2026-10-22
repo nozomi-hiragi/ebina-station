@@ -11,12 +11,14 @@ const BUSY_TIMEOUT_MS = 5000;
  * path は ":memory:" でもよい（テスト用）。ファイルのときはフォルダが無ければ作り、権限を 0600 にする。
  * root（project フォルダ）を渡すと、root から DB ファイル（と WAL の補助ファイル）までにシンボリックリンクがあれば開かない。
  * リンクをたどると、project の外のファイルの権限を変えたり書き換えたりしてしまうため。
+ * create: false を渡すと、DB ファイルが無いときは作らず DatabaseNotFoundError を投げる（読むだけの CLI 用）。
  */
-export function openDatabase(path: string, options: { root?: string } = {}): DatabaseSync {
+export function openDatabase(path: string, options: { root?: string; create?: boolean } = {}): DatabaseSync {
   const inMemory = path === ":memory:";
   if (!inMemory) {
     if (options.root !== undefined) rejectSymlinks(options.root, path);
-    prepareFile(path);
+    if (options.create === false) requireFile(path);
+    else prepareFile(path);
   }
 
   const db = new DatabaseSync(path);
@@ -31,6 +33,27 @@ export function openDatabase(path: string, options: { root?: string } = {}): Dat
     throw e;
   }
   return db;
+}
+
+/** DB ファイルが無いことを表す。project の場所を間違えたときに、空の DB を作ってしまわないために使う */
+export class DatabaseNotFoundError extends Error {
+  readonly path: string;
+
+  constructor(path: string, options?: ErrorOptions) {
+    super(`DB ファイルが見つかりません: ${path}`, options);
+    this.name = "DatabaseNotFoundError";
+    this.path = path;
+  }
+}
+
+function requireFile(path: string): void {
+  try {
+    if (Deno.statSync(path).isFile) return;
+  } catch (e) {
+    if (e instanceof Deno.errors.NotFound) throw new DatabaseNotFoundError(path, { cause: e });
+    throw e;
+  }
+  throw new DatabaseNotFoundError(path);
 }
 
 function isSymlink(path: string): boolean {

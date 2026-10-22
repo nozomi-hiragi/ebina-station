@@ -110,28 +110,93 @@ Deno.test("config: origins の不正", () => {
 });
 
 Deno.test("config: http の origin はローカルだけ（WebAuthn は安全な文脈でしか使えない）", () => {
-  for (const origin of ["http://example.com", "http://192.168.1.10:5173", "http://station.local"]) {
+  for (const origin of ["http://example.com", "http://station.local"]) {
     assertConfigError(withFields({ origins: [origin] }), "origins[0]", "https://");
   }
   for (
     const [origin, rpId] of [
       ["http://localhost:5173", "localhost"],
       ["http://app.localhost:5173", "app.localhost"],
-      ["http://127.0.0.1:5173", "127.0.0.1"],
       ["https://example.com", "example.com"],
     ]
   ) {
-    assertEquals(parseStationConfig(withFields({ origins: [origin], rpId })).origins, [origin]);
+    assertEquals(parseStationConfig(withFields({ origins: [origin], rpId, frontURL: origin })).origins, [origin]);
   }
+});
+
+Deno.test("config: IP アドレスの origin は http でも https でも不可（RP ID は IP にできない）", () => {
+  for (
+    const origin of [
+      "http://127.0.0.1:5173",
+      "https://127.0.0.1",
+      "http://[::1]:5173",
+      "https://[::1]",
+      "http://192.168.1.10:5173",
+      "https://203.0.113.5",
+    ]
+  ) {
+    assertConfigError(withFields({ origins: [origin] }), "origins[0]", "IP アドレス");
+  }
+});
+
+Deno.test("config: rpId が IPv4 の形なら不可", () => {
+  assertConfigError(withFields({ rpId: "127.0.0.1" }), "rpId", "IP アドレス");
+  assertConfigError(withFields({ rpId: "192.168.1.10" }), "rpId", "IP アドレス");
+});
+
+Deno.test("config: rpId は localhost 以外ならドットを含む（公開サフィックスの一覧は持たない）", () => {
+  assertConfigError(
+    withFields({ origins: ["https://com"], rpId: "com", frontURL: "https://com", serverURL: "https://com" }),
+    "rpId",
+    "ドット",
+  );
+  assertConfigError(
+    withFields({ origins: ["https://intranet"], rpId: "intranet", frontURL: "https://intranet" }),
+    "rpId",
+    "ドット",
+  );
+  // 公開サフィックス（2 ラベルのもの）は、ここでは通る。ブラウザが登録のときに拒む
+  const config = parseStationConfig(
+    withFields({ origins: ["https://github.io"], rpId: "github.io", frontURL: "https://github.io" }),
+  );
+  assertEquals(config.rpId, "github.io");
+  assertEquals(parseStationConfig(withFields({ rpId: "localhost" })).rpId, "localhost");
+});
+
+Deno.test("config: frontURL の origin は origins に含まれる必要がある", () => {
+  assertConfigError(withFields({ frontURL: "http://localhost:5174/ebina-station" }), "frontURL", "origins");
+  assertConfigError(withFields({ frontURL: "https://localhost:5173/ebina-station" }), "frontURL", "origins");
+  assertEquals(
+    parseStationConfig(withFields({ origins: ["http://localhost:5174", "http://localhost:5173"] })).frontURL,
+    "http://localhost:5173/ebina-station",
+  );
+});
+
+Deno.test("config: frontURL が https のとき、serverURL の http は localhost 系だけ（混在コンテンツ）", () => {
+  const https = {
+    origins: ["https://example.com"],
+    rpId: "example.com",
+    frontURL: "https://example.com/ebina-station",
+  };
+  assertConfigError(withFields({ ...https, serverURL: "http://station.example.com" }), "serverURL", "https://");
+  for (const serverURL of ["http://localhost:8787", "http://station.localhost:8787", "https://station.example.com"]) {
+    assertEquals(parseStationConfig(withFields({ ...https, serverURL })).serverURL, serverURL);
+  }
+  // frontURL が http（localhost）なら serverURL の http は構わない
+  assertEquals(parseStationConfig(withFields({ serverURL: "http://station.test" })).serverURL, "http://station.test");
 });
 
 Deno.test("config: rpId は origin のホスト名と合う必要がある", () => {
   assertEquals(
-    parseStationConfig(withFields({ origins: ["https://app.example.com"], rpId: "example.com" })).rpId,
+    parseStationConfig(
+      withFields({ origins: ["https://app.example.com"], rpId: "example.com", frontURL: "https://app.example.com" }),
+    ).rpId,
     "example.com",
   );
   assertEquals(
-    parseStationConfig(withFields({ origins: ["https://example.com"], rpId: "example.com" })).rpId,
+    parseStationConfig(
+      withFields({ origins: ["https://example.com"], rpId: "example.com", frontURL: "https://example.com" }),
+    ).rpId,
     "example.com",
   );
   assertConfigError(withFields({ origins: ["https://example.org"], rpId: "example.com" }), "rpId", "合いません");
@@ -162,7 +227,12 @@ Deno.test("config: rpName", () => {
 
 Deno.test("config: frontURL と serverURL は末尾の / を除く", () => {
   const config = parseStationConfig(
-    withFields({ frontURL: "https://example.com/ebina-station/", serverURL: "https://station.example.com/" }),
+    withFields({
+      origins: ["https://example.com"],
+      rpId: "example.com",
+      frontURL: "https://example.com/ebina-station/",
+      serverURL: "https://station.example.com/",
+    }),
   );
   assertEquals(config.frontURL, "https://example.com/ebina-station");
   assertEquals(config.serverURL, "https://station.example.com");

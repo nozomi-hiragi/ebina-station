@@ -19,6 +19,20 @@ const REPEATED_SIGNAL_MS = 1000;
 /** 動いている Station の子プロセスを同期で SIGKILL する関数（強制終了の直前に使う） */
 const killers = new Set<() => void>();
 
+/** HTTP のポートが使用中で待ち受けられないとき */
+export class PortInUseError extends Error {
+  readonly port: number;
+
+  constructor(port: number, cause?: unknown) {
+    super(
+      `ポート ${port} は使用中です。station.json の port を変えるか、使っているプロセスを止めてください`,
+      { cause },
+    );
+    this.name = "PortInUseError";
+    this.port = port;
+  }
+}
+
 /** 起動した Station */
 export interface RunningStation {
   /** 待ち受けているポート */
@@ -35,8 +49,8 @@ export interface StartOptions {
 }
 
 /**
- * Station を起動する。設定 → DB → アプリ → WAKE → HTTP の順に組み立てて、待ち受けを始めてから返す。
- * 設定が正しくなければ ConfigError。途中で失敗したら、ここまでに作ったものを片付けてから投げる
+ * Station を起動する。設定 → DB → WAKE → HTTP の待ち受け → アプリの起動の順に組み立てて、アプリが起動してから返す。
+ * 設定が正しくなければ ConfigError、ポートが使用中なら PortInUseError（アプリを起動する前に失敗する）。途中で失敗したら、ここまでに作ったものを片付けてから投げる
  */
 export async function startStation(paths: ProjectPaths, options: StartOptions = {}): Promise<RunningStation> {
   const config = await loadStationConfig(paths.config);
@@ -53,14 +67,23 @@ export async function startStation(paths: ProjectPaths, options: StartOptions = 
     const wake = createStationWake({ config, db, credentials, etHandler });
     const app = createHttpApp({ config, wake, credentials, registrations });
 
-    // アプリの子プロセスが動いてから受け付ける。READY が来ない子がいても、待つのは最長 30 秒
+    // 先に待ち受ける。ポートが使用中なら、アプリの子プロセスを起動する前に失敗させる。
+    // 起動しきっていないアプリへのリクエストは、アプリが見つかるまでは 404、子が起動中の間は 503 になる
+    const port = options.port ?? config.port;
+    try {
+      server = Deno.serve({
+        ...(options.hostname === undefined ? {} : { hostname: options.hostname }),
+        port,
+        onListen: () => {},
+      }, app.fetch);
+    } catch (e) {
+      if (e instanceof Deno.errors.AddrInUse) throw new PortInUseError(port, e);
+      throw e;
+    }
+    // READY が来ない子がいても、待つのは最長 30 秒
     await hub.start();
-    server = Deno.serve({
-      ...(options.hostname === undefined ? {} : { hostname: options.hostname }),
-      port: options.port ?? config.port,
-      onListen: () => {},
-    }, app.fetch);
   } catch (e) {
+    if (server !== undefined) await server.shutdown();
     await hub.stop();
     killers.delete(killChildren);
     db.close();
@@ -129,7 +152,7 @@ async function main(): Promise<number> {
   try {
     station = await startStation(paths);
   } catch (e) {
-    if (e instanceof ConfigError) {
+    if (e instanceof ConfigError || e instanceof PortInUseError) {
       log.error(e.message);
     } else if (isPermissionError(e)) {
       log.error(permissionHint(paths), e instanceof Error ? e.message : String(e));

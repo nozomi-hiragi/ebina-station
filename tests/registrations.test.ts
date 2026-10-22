@@ -22,6 +22,25 @@ function wrongCode(code: string): string {
   return code === "0000" ? "0001" : "0000";
 }
 
+Deno.test("registrations: 発行し直すと、同じユーザーの前の未使用トークンは無効になる", () => {
+  const { db, users, registrations } = setup();
+  try {
+    users.create("bob", "Bob");
+    const first = registrations.issue("alice");
+    const other = registrations.issue("bob");
+    const second = registrations.issue("alice");
+    assertEquals(registrations.get(first.token), undefined);
+    assertEquals(registrations.checkCode(first.token, first.code), { status: "invalid" });
+    assertEquals(registrations.markUsed(first.token), false);
+    assertEquals(registrations.get(second.token)?.user.id, "alice");
+    assertEquals(registrations.checkCode(second.token, second.code), { status: "ok" });
+    // 別のユーザーのトークンは影響を受けない
+    assertEquals(registrations.get(other.token)?.user.id, "bob");
+  } finally {
+    db.close();
+  }
+});
+
 Deno.test("registrations: 発行したトークンと確認コードの形", () => {
   const { db, registrations, clock } = setup();
   try {

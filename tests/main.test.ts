@@ -4,7 +4,7 @@ import { WakeClient } from "@wake-protocol/client";
 import { addUser, removeUser } from "../src/cli/main.ts";
 import { ConfigError, parseStationConfig } from "../src/config.ts";
 import { openDatabase } from "../src/db/mod.ts";
-import { startStation } from "../src/main.ts";
+import { PortInUseError, startStation } from "../src/main.ts";
 import { SoftAuthenticator } from "./helpers/authenticator.ts";
 import { jsonRequester, registerPasskey, TEST_ORIGIN, testConfigJson } from "./helpers/station.ts";
 import { isProcessAlive, makeProject, type TestProject } from "./fixtures/mod.ts";
@@ -143,7 +143,7 @@ Deno.test("main: ポートが使われていて待ち受けられないときは
   const occupied = Deno.listen({ hostname: "127.0.0.1", port: 0 });
   try {
     const { port } = occupied.addr as Deno.NetAddr;
-    await assertRejects(() => startStation(project.paths, { ...LOCAL, port }), Deno.errors.AddrInUse);
+    await assertRejects(() => startStation(project.paths, { ...LOCAL, port }), PortInUseError);
   } finally {
     occupied.close();
     await project.dispose();

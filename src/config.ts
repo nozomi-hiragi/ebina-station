@@ -64,22 +64,32 @@ function parseOrigin(value: unknown, field: string): string {
   if (url.href !== `${url.origin}/`) {
     throw fieldError(field, `は origin（${url.origin} の形）だけを書いてください。パスなどは付けません`);
   }
-  // ブラウザは安全な文脈でしか WebAuthn を使わせない。http はローカル（localhost、ループバック）だけ許す
+  // WebAuthn の RP ID は IP アドレスにできないので、IP のホストの origin は使えない
+  if (isIpHost(url.hostname)) {
+    throw fieldError(
+      field,
+      `のホストに IP アドレスは使えません（WebAuthn の RP ID は IP にできません）。ホスト名を使ってください: ${url.origin}`,
+    );
+  }
+  // ブラウザは安全な文脈でしか WebAuthn を使わせない。http は localhost と *.localhost だけ許す
   if (url.protocol === "http:" && !isLocalHost(url.hostname)) {
     throw fieldError(
       field,
-      `は https:// にしてください。http:// で WebAuthn が使えるのは localhost などのローカルだけです: ${url.origin}`,
+      `は https:// にしてください。http:// で WebAuthn が使えるのは localhost と *.localhost だけです: ${url.origin}`,
     );
   }
   return url.origin;
 }
 
-/** ブラウザが http でも安全な文脈として扱うホスト（localhost、*.localhost、127.0.0.0/8、[::1]） */
+/** ブラウザが http でも安全な文脈として扱い、RP ID にもできるホスト（localhost、*.localhost） */
 function isLocalHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
-  if (host === "localhost" || host.endsWith(".localhost")) return true;
-  if (host === "[::1]") return true;
-  return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
+  return host === "localhost" || host.endsWith(".localhost");
+}
+
+/** URL の hostname が IPv4 または IPv6（`[...]`）か。URL は 0x7f.1 のような書き方も IPv4 に正規化する */
+function isIpHost(hostname: string): boolean {
+  return hostname.startsWith("[") || /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
 }
 
 function parseOrigins(value: unknown): string[] {
@@ -95,6 +105,20 @@ function parseRpId(value: unknown, origins: string[]): string {
   const rpId = requireString(value, "rpId");
   if (!/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/.test(rpId)) {
     throw fieldError("rpId", "はホスト名（小文字）だけを書いてください。https:// やポート、パスは付けません");
+  }
+  if (/^[0-9.]+$/.test(rpId)) {
+    throw fieldError(
+      "rpId",
+      "に IP アドレスは使えません（WebAuthn の RP ID は IP にできません）。ホスト名にしてください",
+    );
+  }
+  // 公開サフィックスの一覧は持たない。github.io や com のような登録できない値は、ブラウザが登録のときに拒む。
+  // ここでは最小の規則として、localhost 以外はドットを含むこと（com のような 1 ラベルを除く）を求める
+  if (!isLocalHost(rpId) && !rpId.includes(".")) {
+    throw fieldError(
+      "rpId",
+      `「${rpId}」はドメイン名として短すぎます。localhost 以外は、example.com のようにドットを含めてください`,
+    );
   }
   // WebAuthn は、origin のホスト名が RP ID と同じか、そのサブドメインであることを求める
   for (const origin of origins) {
@@ -130,6 +154,26 @@ function parseBaseURL(value: unknown, field: string): string {
     throw fieldError(field, "にユーザー情報・クエリ・# を付けることはできません");
   }
   return url.href.replace(/\/+$/, "");
+}
+
+/** frontURL・serverURL が origins や、ブラウザの混在コンテンツの規則と食い違っていないか */
+function checkUrlsAgainstOrigins(frontURL: string, serverURL: string, origins: string[]): void {
+  const front = new URL(frontURL);
+  if (!origins.includes(front.origin)) {
+    throw fieldError(
+      "frontURL",
+      `の origin（${front.origin}）が origins にありません。クライアントの origin を origins に書いてください`,
+    );
+  }
+  const server = new URL(serverURL);
+  // https のページから http の Station へは、混在コンテンツとして止められる（localhost は例外）
+  if (front.protocol === "https:" && server.protocol === "http:" && !isLocalHost(server.hostname)) {
+    throw fieldError(
+      "serverURL",
+      "は https:// にしてください。frontURL が https:// のとき、http:// の Station へはブラウザが接続させません" +
+        "（localhost と *.localhost は除く）",
+    );
+  }
 }
 
 function hasSpaceOrControl(text: string): boolean {
@@ -190,6 +234,7 @@ export function parseStationConfig(value: unknown): StationConfig {
   const frontURL = parseBaseURL(value.frontURL, "frontURL");
   const serverURL = parseBaseURL(value.serverURL, "serverURL");
   const entrance = parseEntrance(value.entrance);
+  checkUrlsAgainstOrigins(frontURL, serverURL, origins);
   return { port, origins, rpId, rpName, frontURL, serverURL, entrance };
 }
 

@@ -45,11 +45,13 @@ Station の設定ファイルです。`project/station.json` に置きます。S
 | 欄 | 規則 |
 | --- | --- |
 | `port` | 1〜65535 の整数 |
-| `origins` | 1 つ以上。`https://` の origin（`http://` はブラウザが WebAuthn を使わせる `localhost`・`*.localhost`・`127.x.x.x`・`[::1]` だけ）。パス・クエリ・ユーザー情報は不可（末尾の `/` だけは可）。大文字小文字や既定ポートの書き方は正規化し、重複は除く |
-| `rpId` | 小文字のホスト名だけ（`https://`・ポート・パスは不可）。すべての `origins` のホスト名が、`rpId` と同じか、その配下のサブドメインであること（WebAuthn の条件） |
+| `origins` | 1 つ以上。`https://` の origin（`http://` はブラウザが WebAuthn を使わせる `localhost`・`*.localhost` だけ）。ホストが IPv4・IPv6 のものは、http でも https でも不可（WebAuthn の RP ID は IP にできない）。パス・クエリ・ユーザー情報は不可（末尾の `/` だけは可）。大文字小文字や既定ポートの書き方は正規化し、重複は除く |
+| `rpId` | 小文字のホスト名だけ（`https://`・ポート・パスは不可）。IPv4 の形（数字とドットだけ）は不可。`localhost`・`*.localhost` 以外は、ドットを 1 つ以上含むこと（`com` のような 1 ラベルを除く）。すべての `origins` のホスト名が、`rpId` と同じか、その配下のサブドメインであること（WebAuthn の条件） |
 | `rpName` | 空でない文字列。前後の空白は除く |
-| `frontURL`、`serverURL` | `http://` か `https://` の URL。ユーザー情報・クエリ・`#` は不可。末尾の `/` は除いて使う |
+| `frontURL`、`serverURL` | `http://` か `https://` の URL。ユーザー情報・クエリ・`#` は不可。末尾の `/` は除いて使う。`frontURL` の origin が `origins` に含まれること。`frontURL` が `https://` のとき、`serverURL` の `http://` は `localhost`・`*.localhost` だけ（ブラウザの混在コンテンツの規則で、それ以外の http の Station へは届かない） |
 | `entrance.redirect` | `/` で始まる。`//` 始まり、`\`、空白や制御文字は不可。クエリと `#` を除き、`.`・`..` を解決して `%` を戻したパスが `/` か `/index` になるもの（`/?tab=1`、`/#top`、`/index?x`、`/a/..` など）は、入口に戻り続けるので不可 |
+
+公開サフィックス（`github.io`、`com` など、ドメインを登録できない名前）の一覧は持ちません。`rpId` がそうだったときは、ブラウザがパスキーの登録のときに拒みます。
 
 ## ファイルが無いとき
 

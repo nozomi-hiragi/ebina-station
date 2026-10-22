@@ -101,9 +101,9 @@ Deno.test("cli: reissueToken は既存のユーザーに新しいトークンを
     const second = reissueToken(ctx, "alice", { withCode: true });
     assert(first.token !== second.token);
     assertStringIncludes(second.url, `&code=${second.code}`);
-    // 最初のトークンもまだ使える（別のパスキーを足すための発行なので、古いものは無効にしない）
+    // 発行し直すと、最初の未使用トークンは無効になる
     const registrations = new RegistrationRepo(db);
-    assert(registrations.get(first.token));
+    assertEquals(registrations.get(first.token), undefined);
     assert(registrations.get(second.token));
     assertThrows(() => reissueToken(ctx, "ghost"), UserNotFoundError);
   } finally {
@@ -226,6 +226,8 @@ Deno.test("cli runCli: token は既存のユーザーに登録 URL を発行し�
 
 Deno.test("cli runCli: list は ID・名前・パスキー数を揃えて出す", () =>
   withProject(async (root) => {
+    // DB は Station か add が作る。空の DB ならユーザーはいない
+    queryDb(root, () => {});
     const empty = captureEnv(root);
     assertEquals(await runCli(["list"], empty), 0);
     assertEquals(empty.stdout, ["ユーザーはいません"]);
@@ -239,6 +241,28 @@ Deno.test("cli runCli: list は ID・名前・パスキー数を揃えて出す"
       "alice        アリス  0",
       "bob-long-id  Bob     0",
     ]);
+  }));
+
+Deno.test("cli runCli: list と remove は、DB が無いと作らず、見た場所と EBINA_PROJECT_DIR を案内して 1", () =>
+  withProject(async (root) => {
+    for (const args of [["list"], ["remove", "alice", "--yes"]]) {
+      const env = captureEnv(root);
+      assertEquals(await runCli(args, env), 1);
+      assertEquals(env.stdout, []);
+      const err = env.stderr.join("\n");
+      assertStringIncludes(err, projectPaths(root).db);
+      assertStringIncludes(err, "EBINA_PROJECT_DIR");
+    }
+    // 空の DB もフォルダも作られていない
+    await assertRejects(() => Deno.stat(projectPaths(root).db), Deno.errors.NotFound);
+    await assertRejects(() => Deno.stat(join(root, "data")), Deno.errors.NotFound);
+  }, false));
+
+Deno.test("cli runCli: add と token は station.json を要求し、DB を作る", () =>
+  withProject(async (root) => {
+    await assertRejects(() => Deno.stat(projectPaths(root).db), Deno.errors.NotFound);
+    assertEquals(await runCli(["add", "alice", "Alice"], captureEnv(root)), 0);
+    await Deno.stat(projectPaths(root).db);
   }));
 
 Deno.test("cli runCli: remove は確認を求め、はいなら消す。--yes なら確認しない", () =>

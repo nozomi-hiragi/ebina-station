@@ -2,7 +2,7 @@ import { parseArgs } from "node:util";
 import type { DatabaseSync } from "node:sqlite";
 import { ConfigError, loadStationConfig, type StationConfig } from "../config.ts";
 import { SqliteCredentialStore } from "../db/credentials.ts";
-import { inTransaction, openDatabase } from "../db/mod.ts";
+import { DatabaseNotFoundError, inTransaction, openDatabase } from "../db/mod.ts";
 import { RegistrationRepo } from "../db/registrations.ts";
 import {
   type User,
@@ -25,8 +25,8 @@ export class UsageError extends Error {
 
 /** 処理に失敗したとき（終了コード 1）。メッセージはそのまま端末に出す */
 export class CliFailure extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "CliFailure";
   }
 }
@@ -202,8 +202,23 @@ async function withContext<T>(env: CliEnv, fn: (ctx: CliContext) => Promise<T>):
   }
 }
 
+/** DB を開いて fn を実行する。DB が無いときは作らず、見た場所と EBINA_PROJECT_DIR を案内して失敗する（list・remove 用） */
 async function withDatabase<T>(env: CliEnv, fn: (db: DatabaseSync) => Promise<T>): Promise<T> {
-  const db = openDatabase(projectPaths(env.projectRoot).db, { root: projectPaths(env.projectRoot).root });
+  const paths = projectPaths(env.projectRoot);
+  let db: DatabaseSync;
+  try {
+    db = openDatabase(paths.db, { root: paths.root, create: false });
+  } catch (e) {
+    if (e instanceof DatabaseNotFoundError) {
+      throw new CliFailure(
+        `DB が見つかりません: ${paths.db}\n` +
+          `project フォルダ（${paths.root}）を見ました。別の場所の project を使うときは、環境変数 EBINA_PROJECT_DIR で指定してください。` +
+          "ユーザーを作るには add を使います（Station を一度起動しても DB ができます）",
+        { cause: e },
+      );
+    }
+    throw e;
+  }
   try {
     return await fn(db);
   } finally {

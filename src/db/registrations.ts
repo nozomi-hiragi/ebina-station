@@ -36,6 +36,7 @@ export class RegistrationRepo {
   readonly #now: () => number;
   readonly #userExists: StatementSync;
   readonly #purge: StatementSync;
+  readonly #revokeUnused: StatementSync;
   readonly #insert: StatementSync;
   readonly #getValid: StatementSync;
   readonly #getForCheck: StatementSync;
@@ -48,6 +49,7 @@ export class RegistrationRepo {
     this.#now = now;
     this.#userExists = db.prepare("SELECT 1 AS found FROM users WHERE id = ?");
     this.#purge = db.prepare("DELETE FROM registration_tokens WHERE used = 1 OR expires_at <= ?");
+    this.#revokeUnused = db.prepare("DELETE FROM registration_tokens WHERE user_id = ? AND used = 0");
     this.#insert = db.prepare(
       "INSERT INTO registration_tokens (token_hash, user_id, code, expires_at) VALUES (?, ?, ?, ?)",
     );
@@ -77,6 +79,7 @@ export class RegistrationRepo {
 
   /**
    * userId のユーザーに登録トークンを発行する。ユーザーがいなければ UserNotFoundError。
+   * 同じユーザーの未使用のトークンは、このとき無効になる。
    * 返す token は平文で、DB には残らない（この戻り値でしか見られない）。
    */
   issue(userId: string): { token: string; code: string; expiresAt: number } {
@@ -84,6 +87,8 @@ export class RegistrationRepo {
     const now = this.#now();
     // 使えなくなった行（使用済み・期限切れ）は、照合でも無効と同じ扱いなので、ここで片付ける
     this.#purge.run(now);
+    // 発行し直したら、同じユーザーの前の未使用トークンは使えなくする（どれか 1 つだけが有効）
+    this.#revokeUnused.run(userId);
     const token = randomBytes(32).toString("base64url");
     const code = randomInt(0, 10000).toString().padStart(4, "0");
     const expiresAt = now + REGISTRATION_TTL_MS;
