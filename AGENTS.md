@@ -109,7 +109,7 @@ examples/station.json  # 開発用の station.json の例
 runner/runner.ts       # 埋め込みアプリの子プロセスで動く。entry を読み込んで待ち受ける
 apps/                  # Station に同梱するアプリ（読むだけ）。binette-editor（app.json、main.ts、names.ts、store.ts、panoplie/）
 src/
-├── main.ts            # 起動（設定 → DB → アプリ → WAKE → HTTP）と、シグナルでの終了
+├── main.ts            # 起動（設定 → DB → WAKE → HTTP の待ち受け → アプリ）と、シグナルでの終了
 ├── config.ts          # station.json の読み込みと検査
 ├── paths.ts           # project フォルダの中のパス（EBINA_PROJECT_DIR）と、同梱アプリの置き場所 BUNDLED_APPS_DIR
 ├── log.ts             # ログ関数（setLogSink でテストでは黙らせる）
