@@ -33,6 +33,14 @@ export class PortInUseError extends Error {
   }
 }
 
+/** 起動の途中で中止を求められた（signal が abort された）とき。ここまでに作ったものは片付けてある */
+export class StartAborted extends Error {
+  constructor() {
+    super("起動の途中で中止を求められたため、起動をやめました");
+    this.name = "StartAborted";
+  }
+}
+
 /** 起動した Station */
 export interface RunningStation {
   /** 待ち受けているポート */
@@ -46,11 +54,13 @@ export interface StartOptions {
   port?: number;
   /** 待ち受けるアドレス。省略すると Deno の既定（すべてのインターフェース）。テストでは 127.0.0.1 にする */
   hostname?: string;
+  /** abort すると、起動の途中でもやめる（アプリの起動待ちも打ち切る）。片付けてから StartAborted を投げる */
+  signal?: AbortSignal;
 }
 
 /**
  * Station を起動する。設定 → DB → WAKE → HTTP の待ち受け → アプリの起動の順に組み立てて、アプリが起動してから返す。
- * 設定が正しくなければ ConfigError、ポートが使用中なら PortInUseError（アプリを起動する前に失敗する）。途中で失敗したら、ここまでに作ったものを片付けてから投げる
+ * 設定が正しくなければ ConfigError、ポートが使用中なら PortInUseError（アプリを起動する前に失敗する）、signal が abort されたら StartAborted。途中で失敗したら、ここまでに作ったものを片付けてから投げる
  */
 export async function startStation(paths: ProjectPaths, options: StartOptions = {}): Promise<RunningStation> {
   const config = await loadStationConfig(paths.config);
@@ -59,7 +69,12 @@ export async function startStation(paths: ProjectPaths, options: StartOptions = 
   const killChildren = () => hub.killAllSync();
   killers.add(killChildren);
   let server: Deno.HttpServer<Deno.NetAddr> | undefined;
+  // 中止の求めが来たら、アプリの起動待ちを打ち切る（以後の子の再起動もしない）
+  const { signal } = options;
+  const onAbort = () => hub.beginStop();
+  signal?.addEventListener("abort", onAbort, { once: true });
   try {
+    if (signal?.aborted) throw new StartAborted();
     const users = new UserRepo(db);
     const credentials = new SqliteCredentialStore(db);
     const registrations = new RegistrationRepo(db);
@@ -81,13 +96,18 @@ export async function startStation(paths: ProjectPaths, options: StartOptions = 
       throw e;
     }
     // READY が来ない子がいても、待つのは最長 30 秒
+    if (signal?.aborted) throw new StartAborted();
     await hub.start();
+    if (signal?.aborted) throw new StartAborted();
   } catch (e) {
-    if (server !== undefined) await server.shutdown();
+    hub.beginStop();
+    if (server !== undefined) await shutdownWithGrace(server);
     await hub.stop();
     killers.delete(killChildren);
     db.close();
     throw e;
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
   }
 
   const listening = server;
@@ -96,14 +116,7 @@ export async function startStation(paths: ProjectPaths, options: StartOptions = 
     stopping ??= (async () => {
       // Ctrl-C は子にも届いて、子が終わる。片付けの途中で再起動されないよう、先に知らせる
       hub.beginStop();
-      // 長引く接続があっても、猶予を過ぎたら待たない
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const grace = new Promise<void>((resolve) => timer = setTimeout(resolve, SHUTDOWN_GRACE_MS));
-      try {
-        await Promise.race([listening.shutdown(), grace]);
-      } finally {
-        clearTimeout(timer);
-      }
+      await shutdownWithGrace(listening);
       await hub.stop();
       killers.delete(killChildren);
       db.close();
@@ -113,6 +126,17 @@ export async function startStation(paths: ProjectPaths, options: StartOptions = 
 
   log.info(`Station を起動しました: http://localhost:${listening.addr.port}（project: ${paths.root}）`);
   return { port: listening.addr.port, stop };
+}
+
+/** 新しい接続を止める。長引く接続があっても、猶予を過ぎたら待たない */
+async function shutdownWithGrace(server: Deno.HttpServer<Deno.NetAddr>): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const grace = new Promise<void>((resolve) => timer = setTimeout(resolve, SHUTDOWN_GRACE_MS));
+  try {
+    await Promise.race([server.shutdown(), grace]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** 書き込みが許されていないときの案内。deno task の権限は ./project だけに絞ってある */
@@ -131,6 +155,8 @@ async function main(): Promise<number> {
   const paths = projectPaths();
   let firstSignalAt: number | undefined;
   const stopRequested = Promise.withResolvers<void>();
+  // 起動の途中で最初のシグナルを受けたときに、起動をやめさせる
+  const abort = new AbortController();
   const onSignal = (name: string) => () => {
     if (firstSignalAt !== undefined) {
       // 続けて届いたシグナルは数えない（Ctrl-C は子にも届き、deno --watch は SIGTERM も送ってくる）。
@@ -144,14 +170,19 @@ async function main(): Promise<number> {
     firstSignalAt = Date.now();
     log.info(`${name} を受け取りました。終了します`);
     stopRequested.resolve();
+    abort.abort();
   };
   Deno.addSignalListener("SIGINT", onSignal("SIGINT"));
   Deno.addSignalListener("SIGTERM", onSignal("SIGTERM"));
 
   let station: RunningStation;
   try {
-    station = await startStation(paths);
+    station = await startStation(paths, { signal: abort.signal });
   } catch (e) {
+    if (e instanceof StartAborted) {
+      log.info("起動をやめて、Station を止めました");
+      return 0;
+    }
     if (e instanceof ConfigError || e instanceof PortInUseError) {
       log.error(e.message);
     } else if (isPermissionError(e)) {

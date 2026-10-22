@@ -11,12 +11,14 @@ const BUSY_TIMEOUT_MS = 5000;
  * path は ":memory:" でもよい（テスト用）。ファイルのときはフォルダが無ければ作り、権限を 0600 にする。
  * root（project フォルダ）を渡すと、root から DB ファイル（と WAL の補助ファイル）までにシンボリックリンクがあれば開かない。
  * リンクをたどると、project の外のファイルの権限を変えたり書き換えたりしてしまうため。
+ * DB ファイルと既にある補助ファイルが、ほかの場所とハードリンクでつながっている（リンク数が 2 以上）ときも開かない（root が無くても確かめる）。
  * create: false を渡すと、DB ファイルが無いときは作らず DatabaseNotFoundError を投げる（読むだけの CLI 用）。
  */
 export function openDatabase(path: string, options: { root?: string; create?: boolean } = {}): DatabaseSync {
   const inMemory = path === ":memory:";
   if (!inMemory) {
     if (options.root !== undefined) rejectSymlinks(options.root, path);
+    rejectHardLinks(path);
     if (options.create === false) requireFile(path);
     else prepareFile(path);
   }
@@ -82,6 +84,28 @@ function rejectSymlinks(root: string, path: string): void {
   for (const target of targets) {
     if (isSymlink(target)) {
       throw new Error(`${target} がシンボリックリンクのため、DB を開きません（project の外を書き換えないため）`);
+    }
+  }
+}
+
+/**
+ * DB ファイルと、既にある WAL などの補助ファイルのリンク数が 2 以上なら投げる。
+ * ハードリンクだと、chmod や SQLite の書き込みが、project の外の同じ中身のファイルにも効いてしまう。
+ * リンク数を返さない OS（nlink が null）では確かめない
+ */
+function rejectHardLinks(path: string): void {
+  for (const target of [path, ...["-wal", "-shm", "-journal"].map((suffix) => path + suffix)]) {
+    let info: Deno.FileInfo;
+    try {
+      info = Deno.lstatSync(target);
+    } catch (e) {
+      if (e instanceof Deno.errors.NotFound) continue;
+      throw e;
+    }
+    if (info.isFile && info.nlink !== null && info.nlink > 1) {
+      throw new Error(
+        `${target} がハードリンク（リンク数 ${info.nlink}）のため、DB を開きません（project の外を書き換えないため）`,
+      );
     }
   }
 }

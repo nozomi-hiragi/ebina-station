@@ -1,7 +1,7 @@
 // コマンドとして実際に起動する（deno task start / user と同じ権限）。終了コード、案内、シグナルでの終了を確かめる
 import { assert, assertEquals, assertMatch, assertStringIncludes } from "@std/assert";
 import { fromFileUrl } from "@std/path";
-import { makeProject, type TestProject } from "./fixtures/mod.ts";
+import { isProcessAlive, makeProject, type TestProject, waitFor, writeSilentApp } from "./fixtures/mod.ts";
 import { testConfigJson } from "./helpers/station.ts";
 
 const REPO_ROOT = fromFileUrl(new URL("../", import.meta.url));
@@ -50,6 +50,29 @@ const STATION_PERMISSIONS = (project: TestProject) => [
   "--allow-run",
 ];
 
+/** 起動した子の出力を読み溜める。stdout は読みながら中身を見られる */
+function collectOutput(child: Deno.ChildProcess) {
+  const out = { stdout: "" };
+  const reading = (async () => {
+    for await (const chunk of child.stdout.pipeThrough(new TextDecoderStream())) out.stdout += chunk;
+  })();
+  const err = (async () => {
+    let text = "";
+    for await (const chunk of child.stderr.pipeThrough(new TextDecoderStream())) text += chunk;
+    return text;
+  })();
+  return {
+    get stdout() {
+      return out.stdout;
+    },
+    /** 終了後に呼ぶ。stdout も読み切ってから stderr を返す */
+    async stderr() {
+      await reading;
+      return await err;
+    },
+  };
+}
+
 Deno.test("process: station.json が無いと、例の場所を案内して終了コード 1", async () => {
   const project = await makeProject([]);
   try {
@@ -83,6 +106,7 @@ Deno.test("process: 起動して応え、SIGTERM と SIGINT が続けて届い�
     const port = freePort();
     await Deno.writeTextFile(project.paths.config, JSON.stringify(testConfigJson({ port })));
     const child = spawnDeno(STATION_PERMISSIONS(project), MAIN, [], project).spawn();
+    const collected = collectOutput(child);
 
     let status: number | undefined;
     const deadline = Date.now() + 20_000;
@@ -96,12 +120,14 @@ Deno.test("process: 起動して応え、SIGTERM と SIGINT が続けて届い�
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
+    // 起動が済んでから止める（起動の途中のシグナルは、下の別のテストで確かめる）
+    await waitFor(() => collected.stdout.includes("Station を起動しました"), "Station の起動", 20_000);
     // Ctrl-C のあと deno --watch が SIGTERM も送ってくる。続けて届いたシグナルで、片付けを打ち切らない
     child.kill("SIGTERM");
     child.kill("SIGINT");
-    const output = await child.output();
-    const stdout = decoder.decode(output.stdout);
-    const stderr = decoder.decode(output.stderr);
+    const output = await child.status;
+    const stdout = collected.stdout;
+    const stderr = await collected.stderr();
 
     assertEquals(status, 404, stderr);
     assertEquals(output.code, 0, stderr);
@@ -188,6 +214,42 @@ Deno.test("process: CLI の list は DB が無いとき、作らずに案内し�
     assertStringIncludes(result.stderr, project.paths.db);
     assertStringIncludes(result.stderr, "EBINA_PROJECT_DIR");
     await Deno.stat(project.paths.db).then(() => assert(false, "DB が作られている"), () => {});
+  } finally {
+    await project.dispose();
+  }
+});
+
+Deno.test("process: アプリの起動待ちの途中で SIGTERM を受けたら、30 秒を待たずに子も止めて終了コード 0", async () => {
+  const project = await makeProject([]);
+  try {
+    const pidFile = await writeSilentApp(project);
+    await Deno.writeTextFile(project.paths.config, JSON.stringify(testConfigJson({ port: freePort() })));
+    const child = spawnDeno(STATION_PERMISSIONS(project), MAIN, [], project).spawn();
+    const collected = collectOutput(child);
+    let pid = 0;
+    await waitFor(
+      () => {
+        try {
+          pid = Number(Deno.readTextFileSync(pidFile));
+          return pid > 0;
+        } catch {
+          return false;
+        }
+      },
+      "アプリの子プロセスが起動する",
+      20_000,
+    );
+
+    const sentAt = Date.now();
+    child.kill("SIGTERM");
+    const output = await child.status;
+    const stderr = await collected.stderr();
+    const stdout = collected.stdout;
+    assertEquals(output.code, 0, stderr);
+    assert(Date.now() - sentAt < 15_000, "起動待ちの途中のシグナルで、すぐに終わっていない");
+    assertStringIncludes(stdout, "起動をやめて");
+    assert(!stdout.includes("Station を起動しました"), stdout);
+    assert(!isProcessAlive(pid), "アプリの子プロセスが残っている");
   } finally {
     await project.dispose();
   }

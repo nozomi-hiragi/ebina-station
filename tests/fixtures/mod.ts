@@ -71,3 +71,13 @@ export function isProcessAlive(pid: number): boolean {
     throw error;
   }
 }
+
+/** 起動すると pid をデータフォルダに書き、そのまま準備完了の合図を出さないアプリを置く */
+export async function writeSilentApp(project: TestProject): Promise<string> {
+  await writeApp(project.paths, "silent", {
+    "app.json": JSON.stringify({ label: "Silent", entry: "main.ts" }),
+    "main.ts": `await Deno.writeTextFile(Deno.env.get("EBINA_DATA_DIR") + "/pid", String(Deno.pid));
+await new Promise((resolve) => setTimeout(resolve, 120_000));`,
+  });
+  return `${project.paths.appDataDir("silent")}/pid`;
+}

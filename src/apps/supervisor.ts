@@ -222,10 +222,11 @@ export class AppSupervisor {
     return this.#firstAttempt;
   }
 
-  /** 止め始めたことを知らせる。以後は子が終わっても再起動しない（止まるのを待たない） */
+  /** 止め始めたことを知らせる。以後は子が終わっても再起動しない（止まるのを待たない）。最初の起動の待ちも解く */
   beginStop(): void {
     this.#stopRequested = true;
     this.#sleeper?.wake();
+    this.#settleFirstAttempt();
   }
 
   /** 子プロセスに同期で SIGKILL を送る。終了を待たず、再起動もしない（Station を強制終了する直前用） */

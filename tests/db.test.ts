@@ -292,3 +292,40 @@ Deno.test("db: project の中の DB までの道にシンボリックリンク�
     await Deno.remove(outside, { recursive: true });
   }
 });
+
+Deno.test("db: DB ファイルや補助ファイルがハードリンクなら開かず、リンク先の権限も変えない", async () => {
+  const root = await Deno.makeTempDir({ prefix: "ebina-db-hard-" });
+  const outside = await Deno.makeTempDir({ prefix: "ebina-db-outside-" });
+  try {
+    const target = join(outside, "victim.db");
+    await Deno.writeTextFile(target, "victim", { mode: 0o644 });
+    const dbPath = join(root, "data", "station", "station.db");
+    await Deno.mkdir(join(root, "data", "station"), { recursive: true });
+
+    // DB ファイルがハードリンク（作る経路と、作らない経路の両方）
+    await Deno.link(target, dbPath);
+    assertThrows(() => openDatabase(dbPath, { root }), Error, "ハードリンク");
+    assertThrows(() => openDatabase(dbPath, { root, create: false }), Error, "ハードリンク");
+    assertThrows(() => openDatabase(dbPath), Error, "ハードリンク");
+    assertEquals(await Deno.readTextFile(target), "victim");
+    assertEquals((await Deno.stat(target)).mode! & 0o777, 0o644);
+    await Deno.remove(dbPath);
+
+    // 補助ファイルがハードリンク
+    openDatabase(dbPath, { root }).close();
+    for (const suffix of ["-wal", "-shm", "-journal"]) {
+      await Deno.link(target, dbPath + suffix);
+      assertThrows(() => openDatabase(dbPath, { root }), Error, "ハードリンク");
+      assertThrows(() => openDatabase(dbPath, { root, create: false }), Error, "ハードリンク");
+      await Deno.remove(dbPath + suffix);
+    }
+    assertEquals(await Deno.readTextFile(target), "victim");
+    assertEquals((await Deno.stat(target)).mode! & 0o777, 0o644);
+
+    // 普通のファイルは開ける
+    openDatabase(dbPath, { root, create: false }).close();
+  } finally {
+    await Deno.remove(root, { recursive: true });
+    await Deno.remove(outside, { recursive: true });
+  }
+});

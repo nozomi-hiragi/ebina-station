@@ -4,10 +4,10 @@ import { WakeClient } from "@wake-protocol/client";
 import { addUser, removeUser } from "../src/cli/main.ts";
 import { ConfigError, parseStationConfig } from "../src/config.ts";
 import { openDatabase } from "../src/db/mod.ts";
-import { PortInUseError, startStation } from "../src/main.ts";
+import { PortInUseError, StartAborted, startStation } from "../src/main.ts";
 import { SoftAuthenticator } from "./helpers/authenticator.ts";
 import { jsonRequester, registerPasskey, TEST_ORIGIN, testConfigJson } from "./helpers/station.ts";
-import { isProcessAlive, makeProject, type TestProject } from "./fixtures/mod.ts";
+import { isProcessAlive, makeProject, type TestProject, waitFor, writeSilentApp } from "./fixtures/mod.ts";
 
 /** テストでは外からつながらないよう 127.0.0.1 だけで待ち受け、ポートは OS に任せる */
 const LOCAL = { hostname: "127.0.0.1", port: 0 };
@@ -146,6 +146,52 @@ Deno.test("main: ポートが使われていて待ち受けられないときは
     await assertRejects(() => startStation(project.paths, { ...LOCAL, port }), PortInUseError);
   } finally {
     occupied.close();
+    await project.dispose();
+  }
+});
+
+async function readPidWhenWritten(pidFile: string): Promise<number> {
+  let text = "";
+  await waitFor(() => {
+    try {
+      text = Deno.readTextFileSync(pidFile);
+      return text !== "";
+    } catch {
+      return false;
+    }
+  }, "アプリの子プロセスが pid を書く");
+  return Number(text);
+}
+
+Deno.test("main: アプリの起動待ちの途中で abort すると、30 秒を待たずに片付けて StartAborted を投げる", async () => {
+  const project = await makeStationProject(["echo"]);
+  try {
+    const pidFile = await writeSilentApp(project);
+    const controller = new AbortController();
+    const started = startStation(project.paths, { ...LOCAL, signal: controller.signal });
+    const settled = started.then(() => undefined, (e) => e);
+    const pid = await readPidWhenWritten(pidFile);
+    assert(isProcessAlive(pid));
+
+    const abortedAt = Date.now();
+    controller.abort();
+    const error = await settled;
+    assert(error instanceof StartAborted, String(error));
+    assert(Date.now() - abortedAt < 10_000, "abort してもすぐに返っていない");
+    assert(!isProcessAlive(pid), "起動を中止したのに、アプリの子プロセスが残っている");
+  } finally {
+    await project.dispose();
+  }
+});
+
+Deno.test("main: 始める前に abort 済みなら、アプリを起動せずに StartAborted を投げる", async () => {
+  const project = await makeStationProject(["echo"]);
+  try {
+    await assertRejects(
+      () => startStation(project.paths, { ...LOCAL, signal: AbortSignal.abort() }),
+      StartAborted,
+    );
+  } finally {
     await project.dispose();
   }
 });

@@ -162,6 +162,8 @@ export function createAppHub(deps: AppHubDeps): EmbeddedAppHub {
     records = next;
     scannedOnce = true;
     await Promise.all(retiring.map((supervisor) => supervisor.stop().then(() => live.delete(supervisor))));
+    // 入れ替えを待つあいだに止め始めたなら、新しい子は起動しない
+    if (stopping) return;
     await Promise.all(starting.map((supervisor) => supervisor.start()));
     log.info(
       `アプリを ${next.size} 件読み込みました（子プロセス ${
