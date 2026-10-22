@@ -14,7 +14,7 @@ import { UserRepo } from "../../src/db/users.ts";
 import { etJson } from "../../src/et/respond.ts";
 import { createEtHandler } from "../../src/et/handler.ts";
 import { createHttpApp } from "../../src/http/app.ts";
-import { type ProjectPaths, projectPaths } from "../../src/paths.ts";
+import { BUNDLED_APPS_DIR, type ProjectPaths, projectPaths } from "../../src/paths.ts";
 import { setLogSink } from "../../src/log.ts";
 import { createStationWake } from "../../src/wake.ts";
 import { type FixtureApp, installFixtureApps } from "../fixtures/mod.ts";
@@ -139,13 +139,18 @@ export interface TestStationOptions {
    * 子プロセスは close() で止める（`await using` で足りる）
    */
   apps?: readonly FixtureApp[];
+  /**
+   * 同梱のアプリの置き場所。true ならリポジトリの apps/（本物の Binette エディタなど）、文字列ならそのフォルダ。
+   * 指定すると本物の AppHub を使う。省略すると同梱のアプリは使わない
+   */
+  bundled?: true | string;
   config?: Record<string, unknown>;
   now?: () => number;
 }
 
 export async function createTestStation(options: TestStationOptions = {}): Promise<TestStation> {
-  if (options.hub !== undefined && options.apps !== undefined) {
-    throw new Error("hub と apps は同時に指定できません");
+  if (options.hub !== undefined && (options.apps !== undefined || options.bundled !== undefined)) {
+    throw new Error("hub と apps / bundled は同時に指定できません");
   }
   const root = await Deno.makeTempDir({ prefix: "ebina-station-test-" });
   const paths = projectPaths(root);
@@ -157,20 +162,28 @@ export async function createTestStation(options: TestStationOptions = {}): Promi
   const users = new UserRepo(db);
   const credentials = new SqliteCredentialStore(db);
   const registrations = new RegistrationRepo(db, options.now);
-  const embedded = options.apps === undefined ? undefined : createAppHub({ paths, states: new AppStateRepo(db) });
+  const realHub = options.apps !== undefined || options.bundled !== undefined;
+  const bundledAppsDir = options.bundled === true ? BUNDLED_APPS_DIR : options.bundled;
+  const embedded = realHub && options.hub === undefined
+    ? createAppHub({
+      paths,
+      states: new AppStateRepo(db),
+      ...(bundledAppsDir === undefined ? {} : { bundledAppsDir }),
+    })
+    : undefined;
   const hub = options.hub ?? embedded ?? createFakeHub();
   const etHandler = createEtHandler({ config, users, credentials, hub });
   const wake = createStationWake({ config, db, credentials, etHandler });
   const app = createHttpApp({ config, wake, credentials, registrations });
 
   // main.ts の startStation と同じ順（WAKE と HTTP の組み立てのあとにアプリを起動する）
-  if (options.apps !== undefined) {
+  if (embedded !== undefined) {
     // 起動に失敗したときも、作った子プロセスと一時フォルダを残さない
     try {
-      await installFixtureApps(paths, options.apps);
-      await hub.start();
+      await installFixtureApps(paths, options.apps ?? []);
+      await embedded.start();
     } catch (e) {
-      await hub.stop();
+      await embedded.stop();
       db.close();
       await Deno.remove(root, { recursive: true });
       throw e;

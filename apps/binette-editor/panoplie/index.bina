@@ -1,0 +1,9 @@
+{
+  "binette": "0.1",
+  "title": "Binette エディタ",
+  "entry": "main",
+  "assets": {
+    "main": { "type": "js", "src": "/binette-editor/files/list.js" },
+    "style": { "type": "css", "src": "/binette-editor/files/editor.css" }
+  }
+}

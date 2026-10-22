@@ -10,7 +10,8 @@ import { jsonRequester, registerPasskey, TEST_ORIGIN, testConfigJson } from "./h
 import { isProcessAlive, makeProject, type TestProject, waitFor, writeSilentApp } from "./fixtures/mod.ts";
 
 /** テストでは外からつながらないよう 127.0.0.1 だけで待ち受け、ポートは OS に任せる */
-const LOCAL = { hostname: "127.0.0.1", port: 0 };
+// 同梱のアプリ（Binette エディタ）は使わない。ここで確かめたいのはテスト用のアプリだけ
+const LOCAL = { hostname: "127.0.0.1", port: 0, bundledAppsDir: null };
 
 /** station.json を置いた project（apps/ に fixtures を写してある） */
 async function makeStationProject(apps: string[]): Promise<TestProject> {

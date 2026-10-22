@@ -15,18 +15,18 @@
     "exclude": ["npm:@binette/core", "npm:@binette/coulisses", "npm:@binette/scene"]
   },
   "tasks": {
-    "dev": "deno run --no-prompt --watch=src/,runner/ --allow-net --allow-read --allow-write=./project --allow-env --allow-run src/main.ts",
+    "dev": "deno run --no-prompt --watch=src/,runner/,apps/ --allow-net --allow-read --allow-write=./project --allow-env --allow-run src/main.ts",
     "start": "deno run --no-prompt --allow-net --allow-read --allow-write=./project --allow-env --allow-run src/main.ts",
     "user": "deno run --no-prompt --allow-read --allow-write=./project --allow-env src/cli/main.ts",
-    "check": "deno fmt --check && deno lint && deno check \"src/**/*.ts\" \"runner/**/*.ts\" \"tests/**/*.ts\"",
+    "check": "deno fmt --check && deno lint && deno check \"src/**/*.ts\" \"runner/**/*.ts\" \"apps/**/*.ts\" \"tests/**/*.ts\"",
     "test": "deno test --no-prompt --allow-read --allow-write --allow-env --allow-net=127.0.0.1,localhost --allow-run tests/"
   },
   "fmt": {
     "lineWidth": 120,
-    "include": ["deno.json", "examples/", "src/", "runner/", "tests/"]
+    "include": ["deno.json", "examples/", "src/", "runner/", "apps/", "tests/"]
   },
   "lint": {
-    "include": ["src/", "runner/", "tests/"],
+    "include": ["src/", "runner/", "apps/", "tests/"],
     "rules": { "tags": ["recommended"] }
   }
 }

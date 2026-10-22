@@ -1,4 +1,4 @@
-import { join, resolve } from "@std/path";
+import { fromFileUrl, join, resolve } from "@std/path";
 import { isAppNameFormat } from "./apps/names.ts";
 
 /** project フォルダの中の決まった場所 */
@@ -14,6 +14,9 @@ export interface ProjectPaths {
   /** `<root>/data/apps/<name>`。name はアプリ名の形式でなければ投げる */
   appDataDir(name: string): string;
 }
+
+/** Station に同梱するアプリの置き場所（リポジトリの `apps/`）。読むだけで、書き込まない */
+export const BUNDLED_APPS_DIR = resolve(fromFileUrl(new URL("../apps/", import.meta.url)));
 
 /** 環境変数で project フォルダを指定しないときの場所 */
 export const DEFAULT_PROJECT_DIR = "./project";

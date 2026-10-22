@@ -65,3 +65,21 @@ export async function scanApps(appsDir: string): Promise<RegisteredApp[]> {
   }
   return apps;
 }
+
+/**
+ * 同梱のアプリ（bundledDir）と使用者のアプリ（appsDir）を走査して、名前順に返す。
+ * 同じ名前があれば使用者のアプリを使い、同梱のものは使わない（ログに 1 行出す）。bundledDir が undefined なら同梱は無い。appsDir が undefined なら使用者のアプリは無い。
+ */
+export async function scanAllApps(
+  bundledDir: string | undefined,
+  appsDir: string | undefined,
+): Promise<RegisteredApp[]> {
+  const bundled = bundledDir === undefined ? [] : await scanApps(bundledDir);
+  const own = appsDir === undefined ? [] : await scanApps(appsDir);
+  const byName = new Map(bundled.map((app) => [app.name, app]));
+  for (const app of own) {
+    if (byName.has(app.name)) log.info(`project/apps/${app.name} が同梱のアプリ ${app.name} の代わりに使われます`);
+    byName.set(app.name, app);
+  }
+  return [...byName.values()].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
