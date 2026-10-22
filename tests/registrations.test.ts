@@ -252,3 +252,37 @@ Deno.test("registrations: 発行のときに使えなくなった行を片付け
     db.close();
   }
 });
+
+Deno.test("registrations: 同じ DB ファイルを開いた 2 つの接続から交互に発行しても、有効なトークンは 1 つだけ", async () => {
+  const dir = await Deno.makeTempDir({ prefix: "ebina-reg-" });
+  const path = `${dir}/station.db`;
+  const dbA = openDatabase(path);
+  const dbB = openDatabase(path);
+  try {
+    new UserRepo(dbA).create("alice", "Alice");
+    const a = new RegistrationRepo(dbA);
+    const b = new RegistrationRepo(dbB);
+    const issued = [];
+    for (let i = 0; i < 10; i++) issued.push((i % 2 === 0 ? a : b).issue("alice"));
+    const valid = issued.filter((x) => a.get(x.token) !== undefined);
+    assertEquals(valid.length, 1);
+    assertEquals(valid[0], issued.at(-1));
+    const count = dbA.prepare("SELECT COUNT(*) AS n FROM registration_tokens WHERE user_id = ? AND used = 0").get(
+      "alice",
+    );
+    assertEquals(count?.n, 1);
+    // ユーザーがいなければ投げ、トランザクションは残らない
+    assertThrows(() => b.issue("nobody"), UserNotFoundError);
+    assertEquals(dbB.isTransaction, false);
+    // 外側のトランザクションの中でも発行できる
+    dbA.exec("BEGIN IMMEDIATE");
+    const inner = a.issue("alice");
+    assertEquals(dbA.isTransaction, true);
+    dbA.exec("COMMIT");
+    assertEquals(b.get(inner.token)?.user.id, "alice");
+  } finally {
+    dbA.close();
+    dbB.close();
+    await Deno.remove(dir, { recursive: true });
+  }
+});

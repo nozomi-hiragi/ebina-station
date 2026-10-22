@@ -539,3 +539,33 @@ Deno.test("hub: scanned は最初の走査（start）が済むまで false", asy
     assertEquals(hub.scanned(), true);
   });
 });
+
+Deno.test("hub: project/apps が外を指すリンクなら、静的なアプリ（panoplie/ だけ）も走査せず配らない", async () => {
+  await withHub([], async (hub, paths) => {
+    const outside = await Deno.makeTempDir({ prefix: "ebina-outside-" });
+    try {
+      const realApps = join(outside, "apps");
+      await Deno.mkdir(join(realApps, "leak", "panoplie"), { recursive: true });
+      await Deno.writeTextFile(join(realApps, "leak", "app.json"), JSON.stringify({ label: "Leak" }));
+      await Deno.writeTextFile(join(realApps, "leak", "panoplie", "secret.txt"), "OUTSIDE-SECRET");
+      await Deno.remove(paths.appsDir, { recursive: true });
+      await Deno.symlink(realApps, paths.appsDir);
+
+      await hub.start();
+      assertEquals(hub.list(), []);
+      assert(hub.scanned());
+      const response = await hub.relay("leak", "/secret.txt", etRequest("GET"), "alice");
+      assertEquals(response.status, 404);
+      assertFalse(bodyText(response).includes("OUTSIDE-SECRET"));
+
+      // リンクを外して本物のフォルダにすれば、読み込まれる
+      await Deno.remove(paths.appsDir);
+      await Deno.rename(realApps, paths.appsDir);
+      await hub.reload();
+      assertEquals(hub.get("leak")?.status, "running");
+      assertEquals(bodyText(await hub.relay("leak", "/secret.txt", etRequest("GET"), "alice")), "OUTSIDE-SECRET");
+    } finally {
+      await Deno.remove(outside, { recursive: true });
+    }
+  });
+});

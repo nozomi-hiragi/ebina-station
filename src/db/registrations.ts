@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import type { DatabaseSync, StatementSync } from "node:sqlite";
+import { inTransaction } from "./mod.ts";
 import { type Row, rowNumber, rowOptionalString, rowString } from "./row.ts";
 import { type User, UserNotFoundError } from "./users.ts";
 
@@ -33,6 +34,7 @@ function sameCode(expected: string, given: unknown): boolean {
 
 /** 登録トークン（パスキー登録用の使い捨てリンク）の発行と照合 */
 export class RegistrationRepo {
+  readonly #db: DatabaseSync;
   readonly #now: () => number;
   readonly #userExists: StatementSync;
   readonly #purge: StatementSync;
@@ -46,6 +48,7 @@ export class RegistrationRepo {
   readonly #markUsed: StatementSync;
 
   constructor(db: DatabaseSync, now: () => number = Date.now) {
+    this.#db = db;
     this.#now = now;
     this.#userExists = db.prepare("SELECT 1 AS found FROM users WHERE id = ?");
     this.#purge = db.prepare("DELETE FROM registration_tokens WHERE used = 1 OR expires_at <= ?");
@@ -83,17 +86,20 @@ export class RegistrationRepo {
    * 返す token は平文で、DB には残らない（この戻り値でしか見られない）。
    */
   issue(userId: string): { token: string; code: string; expiresAt: number } {
-    if (!this.#userExists.get(userId)) throw new UserNotFoundError(userId);
-    const now = this.#now();
-    // 使えなくなった行（使用済み・期限切れ）は、照合でも無効と同じ扱いなので、ここで片付ける
-    this.#purge.run(now);
-    // 発行し直したら、同じユーザーの前の未使用トークンは使えなくする（どれか 1 つだけが有効）
-    this.#revokeUnused.run(userId);
-    const token = randomBytes(32).toString("base64url");
-    const code = randomInt(0, 10000).toString().padStart(4, "0");
-    const expiresAt = now + REGISTRATION_TTL_MS;
-    this.#insert.run(sha256(token), userId, code, expiresAt);
-    return { token, code, expiresAt };
+    // 別の接続（並行して動く CLI など）の発行と混ざらないよう、確認から挿入までを 1 つのトランザクションにする
+    return inTransaction(this.#db, () => {
+      if (!this.#userExists.get(userId)) throw new UserNotFoundError(userId);
+      const now = this.#now();
+      // 使えなくなった行（使用済み・期限切れ）は、照合でも無効と同じ扱いなので、ここで片付ける
+      this.#purge.run(now);
+      // 発行し直したら、同じユーザーの前の未使用トークンは使えなくする（どれか 1 つだけが有効）
+      this.#revokeUnused.run(userId);
+      const token = randomBytes(32).toString("base64url");
+      const code = randomInt(0, 10000).toString().padStart(4, "0");
+      const expiresAt = now + REGISTRATION_TTL_MS;
+      this.#insert.run(sha256(token), userId, code, expiresAt);
+      return { token, code, expiresAt };
+    });
   }
 
   /** 有効（存在・未使用・期限内）なトークンのユーザーと、保存済みの challenge を返す */

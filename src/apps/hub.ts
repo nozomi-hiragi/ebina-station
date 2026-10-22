@@ -3,6 +3,7 @@ import { etError } from "../et/respond.ts";
 import { log } from "../log.ts";
 import type { ProjectPaths } from "../paths.ts";
 import type { LoadedApp } from "./manifest.ts";
+import { symlinkInChain } from "./links.ts";
 import { isValidAppName } from "./names.ts";
 import { scanApps } from "./registry.ts";
 import { appUnavailable, isRelayPath, notFound, type RelayOptions, relayToChild } from "./relay.ts";
@@ -113,7 +114,10 @@ export function createAppHub(deps: AppHubDeps): EmbeddedAppHub {
   /** apps/ を読み直して、起動・停止を今の状態に合わせる */
   async function sync(): Promise<void> {
     if (stopping) return;
-    const scanned = await scanApps(paths.appsDir);
+    // project から apps/ までの途中がリンクなら、リンク先を走査・配信しないよう、アプリ 0 件として扱う
+    const chainProblem = await symlinkInChain(paths.root, paths.appsDir, "apps/");
+    if (chainProblem !== null) log.warn(`${chainProblem}。アプリを読み込みません`);
+    const scanned = chainProblem === null ? await scanApps(paths.appsDir) : [];
     const next = new Map<string, AppRecord>();
     const retiring: AppSupervisor[] = [];
     const starting: AppSupervisor[] = [];
