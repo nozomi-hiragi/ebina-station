@@ -11,12 +11,34 @@ export class InvalidNameError extends Error {
   }
 }
 
+/** ビネットの件数の上限。一覧の応答（名前は最大 200 文字なので 1000 件で約 200 KB）が中継の 1 MiB に収まる数 */
+export const BINETTE_MAX_COUNT = 1000;
+
+/** write の結果。exists は createOnly で既にあった、full は件数が上限で新しく作れなかった */
+export type WriteResult = "created" | "updated" | "exists" | "full";
+
+export interface WriteOptions {
+  /** true なら、既にあるときは書かずに "exists" を返す */
+  createOnly?: boolean;
+}
+
 /** データフォルダの binette/ にビネットの JSON 文字列を保存する。ファイルは `<名前>.bina` */
 export class BinetteStore {
   readonly #root: string;
+  readonly #maxCount: number;
+  /** 保存と削除を 1 つずつ行うための Promise の列 */
+  #queue: Promise<unknown> = Promise.resolve();
 
-  constructor(dataDir: string) {
+  constructor(dataDir: string, maxCount: number = BINETTE_MAX_COUNT) {
     this.#root = join(dataDir, "binette");
+    this.#maxCount = maxCount;
+  }
+
+  /** 保存と削除を 1 つずつ行う（フォルダの片付けと一時ファイルの書き込み、作成の判定が重ならないように） */
+  #exclusive<T>(task: () => Promise<T>): Promise<T> {
+    const result = this.#queue.then(task);
+    this.#queue = result.catch(() => {});
+    return result;
   }
 
   #pathOf(name: string): string {
@@ -61,25 +83,36 @@ export class BinetteStore {
     }
   }
 
-  /** 一時ファイルに書いてから rename で置き換える。新しく作ったなら true、上書きなら false */
-  async write(name: string, text: string): Promise<boolean> {
+  /**
+   * 一時ファイルに書いてから rename で置き換える。新しく作ったなら "created"、上書きなら "updated"。
+   * 新しく作るときに件数が上限なら "full"、createOnly で既にあれば "exists"（どちらも書かない）
+   */
+  async write(name: string, text: string, options: WriteOptions = {}): Promise<WriteResult> {
     const path = this.#pathOf(name);
-    const existed = await this.read(name) !== null;
-    await Deno.mkdir(dirname(path), { recursive: true });
-    const temp = `${path}.tmp-${crypto.randomUUID()}`;
-    try {
-      await Deno.writeTextFile(temp, text, { createNew: true });
-      await Deno.rename(temp, path);
-    } catch (error) {
-      await Deno.remove(temp).catch(() => {});
-      throw error;
-    }
-    return !existed;
+    return await this.#exclusive(async () => {
+      const existed = await this.read(name) !== null;
+      if (existed && options.createOnly === true) return "exists";
+      if (!existed && (await this.list()).length >= this.#maxCount) return "full";
+      await Deno.mkdir(dirname(path), { recursive: true });
+      const temp = `${path}.tmp-${crypto.randomUUID()}`;
+      try {
+        await Deno.writeTextFile(temp, text, { createNew: true });
+        await Deno.rename(temp, path);
+      } catch (error) {
+        await Deno.remove(temp).catch(() => {});
+        throw error;
+      }
+      return existed ? "updated" : "created";
+    });
   }
 
   /** 消す。消したなら true、無ければ false。空になったフォルダは binette/ の手前まで片付ける */
   async remove(name: string): Promise<boolean> {
     const path = this.#pathOf(name);
+    return await this.#exclusive(() => this.#removeNow(path));
+  }
+
+  async #removeNow(path: string): Promise<boolean> {
     try {
       await Deno.remove(path);
     } catch (error) {

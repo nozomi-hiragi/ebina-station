@@ -9,7 +9,7 @@
  */
 import { parseBinette } from "@binette/core";
 import { nameProblem } from "./names.ts";
-import { BinetteStore } from "./store.ts";
+import { BINETTE_MAX_COUNT, BinetteStore } from "./store.ts";
 
 /** 保存できる本文の大きさの上限（ET で運べる本文の上限と同じ 1 MiB） */
 export const BODY_MAX = 1024 * 1024;
@@ -20,6 +20,22 @@ const BINA_EXTENSION = ".bina";
 
 function jsonError(status: number, message: string, headers: HeadersInit = {}): Response {
   return Response.json({ error: message }, { status, headers: { "Cache-Control": "no-store", ...headers } });
+}
+
+/**
+ * プレビュー用に、ビネットの settings を除く（Scene は取得したビネットの settings を覚えて設定画面に出し続けるため）。
+ * JSON として読めない、オブジェクトでない、settings が無いときは、そのまま返す
+ */
+function withoutSettings(text: string): string {
+  try {
+    const value: unknown = JSON.parse(text);
+    if (typeof value !== "object" || value === null || Array.isArray(value) || !("settings" in value)) return text;
+    const rest = { ...value } as Record<string, unknown>;
+    delete rest.settings;
+    return JSON.stringify(rest);
+  } catch {
+    return text;
+  }
 }
 
 function methodNotAllowed(allow: string): Response {
@@ -66,8 +82,11 @@ async function readText(req: Request): Promise<string | null | undefined> {
 }
 
 /** データフォルダ dataDir を使うハンドラを作る */
-export function createHandler(dataDir: string): (req: Request) => Promise<Response> {
-  const store = new BinetteStore(dataDir);
+export function createHandler(
+  dataDir: string,
+  options: { maxCount?: number } = {},
+): (req: Request) => Promise<Response> {
+  const store = new BinetteStore(dataDir, options.maxCount);
 
   async function putBinette(name: string, req: Request): Promise<Response> {
     const text = await readText(req);
@@ -78,8 +97,20 @@ export function createHandler(dataDir: string): (req: Request) => Promise<Respon
     } catch (error) {
       return jsonError(400, error instanceof Error ? error.message : "ビネットの形式が正しくありません");
     }
-    const created = await store.write(name, text);
-    return Response.json({ name }, { status: created ? 201 : 200, headers: { "Cache-Control": "no-store" } });
+    // 作るだけ（If-None-Match: *）の判定は、store の列の中で行う
+    const createOnly = req.headers.get("if-none-match")?.trim() === "*";
+    const result = await store.write(name, text, { createOnly });
+    if (result === "exists") return jsonError(412, `ビネット「${name}」はすでにあります`);
+    if (result === "full") {
+      return jsonError(
+        409,
+        `ビネットは ${options.maxCount ?? BINETTE_MAX_COUNT} 件までです。いらないものを消してください`,
+      );
+    }
+    return Response.json({ name }, {
+      status: result === "created" ? 201 : 200,
+      headers: { "Cache-Control": "no-store" },
+    });
   }
 
   async function api(req: Request, rest: string): Promise<Response> {
@@ -119,7 +150,7 @@ export function createHandler(dataDir: string): (req: Request) => Promise<Respon
     if (nameProblem(name) !== null) return jsonError(404, "見つかりません");
     const text = await store.read(name);
     if (text === null) return jsonError(404, `ビネット「${name}」がありません`);
-    return new Response(req.method === "HEAD" ? null : text, {
+    return new Response(req.method === "HEAD" ? null : withoutSettings(text), {
       headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
     });
   }

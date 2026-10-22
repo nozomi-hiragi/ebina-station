@@ -182,12 +182,17 @@ export function mount(el, sh) {
     createButton.disabled = true;
     const result = await call(sh, `${API}/${name}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      // 作るだけ。同じ名前がすでにあれば 412（上書きしない）
+      headers: { "Content-Type": "application/json", "If-None-Match": "*" },
       body: template(name),
     });
     if (disposed) return;
     createButton.disabled = false;
-    if (!result.ok) return showError(failure(result));
+    if (!result.ok) {
+      // 412 のメッセージ（すでにあります）などはサーバーの文面をそのまま出す
+      if (result.status === 412) void load();
+      return showError(failure(result));
+    }
     sh.navigate(`/binette-editor/edit?name=${encodeURIComponent(name)}`);
   }
 

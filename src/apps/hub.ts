@@ -58,6 +58,17 @@ interface AppRecord {
   site: StaticSite | undefined;
 }
 
+/** 2 つのフォルダが（リンクをたどって）同じ実体か。どちらかが無ければ false */
+async function sameDirectory(a: string | undefined, b: string): Promise<boolean> {
+  if (a === undefined) return false;
+  try {
+    return await Deno.realPath(a) === await Deno.realPath(b);
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return false;
+    throw error;
+  }
+}
+
 function isAlive(status: AppStatus): boolean {
   return status === "starting" || status === "running";
 }
@@ -118,8 +129,16 @@ export function createAppHub(deps: AppHubDeps): EmbeddedAppHub {
     if (stopping) return;
     // project から apps/ までの途中がリンクなら、リンク先を走査・配信しないよう、project のアプリは 0 件として扱う
     const chainProblem = await symlinkInChain(paths.root, paths.appsDir, "apps/");
-    if (chainProblem !== null) log.warn(`${chainProblem}。project/apps のアプリを読み込みません`);
-    const scanned = await scanAllApps(deps.bundledAppsDir, chainProblem === null ? paths.appsDir : undefined);
+    if (chainProblem !== null) {
+      // 理由の後ろの「起動しません」は Station 全体に聞こえるので外し、読み込まないのは project/apps だけだと伝える
+      const reason = chainProblem.split("。")[0];
+      log.warn(`${reason}。project/apps のアプリを読み込みません（同梱のアプリは使います）`);
+    }
+    // EBINA_PROJECT_DIR がリポジトリの根のとき、project/apps と同梱の apps/ は同じ実体になる。二重に読まない
+    const bundledDir = chainProblem === null && await sameDirectory(deps.bundledAppsDir, paths.appsDir)
+      ? undefined
+      : deps.bundledAppsDir;
+    const scanned = await scanAllApps(bundledDir, chainProblem === null ? paths.appsDir : undefined);
     const next = new Map<string, AppRecord>();
     const retiring: AppSupervisor[] = [];
     const starting: AppSupervisor[] = [];

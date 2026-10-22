@@ -73,7 +73,7 @@ AI エージェント向けの作業ルール。人間向けの説明は [README
 
 ```sh
 mkdir -p project && cp examples/station.json project/station.json
-deno task dev     # 開発用に起動（--watch=src/,runner/）。ebina-front の npm run dev と組む例の設定
+deno task dev     # 開発用に起動（--watch=src/,runner/,apps/）。ebina-front の npm run dev と組む例の設定
 deno task start   # 起動
 deno task user    # ユーザー管理の CLI（add / token / list / remove）
 deno task check   # deno fmt --check、deno lint、deno check（src/ runner/ apps/ tests/）

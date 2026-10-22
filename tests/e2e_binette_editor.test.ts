@@ -81,6 +81,10 @@ Deno.test("e2e: API で作成・一覧・取得・上書き・削除でき、デ
   // 保存先はアプリのデータフォルダ（Station の project/data/apps/binette-editor/binette）
   const saved = join(station.paths.appDataDir("binette-editor"), "binette", "notes", "hello.bina");
   assertEquals(await Deno.readTextFile(saved), PAGE);
+  // 同梱のアプリのデータフォルダも project/data/apps/<名前> に 0700 で作られる
+  const dataDir = station.paths.appDataDir("binette-editor");
+  assertEquals(dataDir, join(station.paths.root, "data", "apps", "binette-editor"));
+  assertEquals((await Deno.stat(dataDir)).mode! & 0o777, 0o700);
 
   res = await api("/notes/hello");
   assertEquals(res.status, 200);

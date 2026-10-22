@@ -3,7 +3,7 @@ import { assert, assertEquals, assertMatch, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { BODY_MAX, createHandler } from "../apps/binette-editor/main.ts";
 import { NAME_MAX_LENGTH, nameProblem } from "../apps/binette-editor/names.ts";
-import { BinetteStore, InvalidNameError } from "../apps/binette-editor/store.ts";
+import { BINETTE_MAX_COUNT, BinetteStore, InvalidNameError } from "../apps/binette-editor/store.ts";
 
 const BASE = "http://127.0.0.1";
 
@@ -292,5 +292,121 @@ Deno.test("binette-editor: 一覧は形式に合わないファイルとシン�
     await Deno.mkdir(join(root, "dir"));
     await Deno.writeTextFile(join(root, "dir", "inner.bina"), PAGE);
     assertEquals(await json(await call("/api/binettes")), { names: ["dir/inner", "ok"] });
+  });
+});
+
+Deno.test("binette-editor: 同じフォルダの PUT と DELETE を並べても 500 にならない", async () => {
+  await withHandler(async (call) => {
+    const results: number[] = [];
+    const jobs: Promise<void>[] = [];
+    for (let i = 0; i < 300; i++) {
+      const name = `dir/n${i % 5}`;
+      const init: RequestInit = i % 2 === 0 ? { method: "PUT", body: PAGE } : { method: "DELETE" };
+      jobs.push(
+        call(`/api/binettes/${name}`, init).then(async (res) => {
+          results.push(res.status);
+          await res.body?.cancel();
+        }),
+      );
+    }
+    await Promise.all(jobs);
+    assertEquals(results.length, 300);
+    for (const status of results) assert([200, 201, 404].includes(status), `status ${status}`);
+  });
+});
+
+Deno.test("binette-editor: 同じ新しい名前への同時 PUT で、201 は 1 つだけ", async () => {
+  await withHandler(async (call) => {
+    const responses = await Promise.all(Array.from({ length: 50 }, () => put(call, "same/name", PAGE)));
+    const statuses = responses.map((res) => res.status);
+    for (const res of responses) await res.body?.cancel();
+    assertEquals(statuses.filter((s) => s === 201).length, 1);
+    assertEquals(statuses.filter((s) => s === 200).length, 49);
+    // If-None-Match: * なら、同時でも作れるのは 1 つで、あとは 412
+    const creates = await Promise.all(
+      Array.from(
+        { length: 20 },
+        () => call("/api/binettes/only", { method: "PUT", body: PAGE, headers: { "If-None-Match": "*" } }),
+      ),
+    );
+    const created = creates.map((res) => res.status);
+    assertEquals(created.filter((s) => s === 201).length, 1);
+    assertEquals(created.filter((s) => s === 412).length, 19);
+    const failed = creates.find((res) => res.status === 412);
+    assertMatch(String((await json(failed!)).error), /すでにあります/);
+    for (const res of creates) await res.body?.cancel().catch(() => {});
+  });
+});
+
+Deno.test("binette-editor: If-None-Match: * は、無ければ作り、あれば 412 で上書きしない", async () => {
+  await withHandler(async (call) => {
+    const create = (body: string) =>
+      call("/api/binettes/x", { method: "PUT", body, headers: { "If-None-Match": "*" } });
+    assertEquals((await create(PAGE)).status, 201);
+    const other = JSON.stringify({ binette: "0.1", redirect: "/other" });
+    const res = await create(other);
+    assertEquals(res.status, 412);
+    assertMatch(String((await json(res)).error), /すでにあります/);
+    assertEquals(await (await call("/api/binettes/x")).text(), PAGE);
+    // ヘッダーが無ければ上書きできる
+    assertEquals((await put(call, "x", other)).status, 200);
+  });
+});
+
+Deno.test("binette-editor: 件数が上限なら新しく作れず 409。上書きと削除はできる", async () => {
+  const dataDir = await Deno.makeTempDir({ prefix: "ebina-editor-" });
+  try {
+    const handler = createHandler(dataDir, { maxCount: 3 });
+    const call: Caller = (path, init) => handler(new Request(`${BASE}${path}`, init));
+    for (const name of ["a", "b", "c/d"]) assertEquals((await put(call, name, PAGE)).status, 201);
+    const full = await put(call, "e", PAGE);
+    assertEquals(full.status, 409);
+    assertMatch(String((await json(full)).error), /3 件まで/);
+    assertEquals((await call("/api/binettes/e")).status, 404);
+    // 既存の上書きは許す
+    assertEquals((await put(call, "a", PAGE)).status, 200);
+    // 消せば作れる
+    assertEquals((await call("/api/binettes/b", { method: "DELETE" })).status, 200);
+    assertEquals((await put(call, "e", PAGE)).status, 201);
+  } finally {
+    await Deno.remove(dataDir, { recursive: true });
+  }
+});
+
+Deno.test("binette-editor: 既定の上限（1000 件）でも、一覧の応答は中継の上限 1 MiB に収まる", () => {
+  assertEquals(BINETTE_MAX_COUNT, 1000);
+  const longest = "a".repeat(63) + "/" + "b".repeat(63) + "/" + "c".repeat(63) + "/" + "d".repeat(8);
+  assertEquals(longest.length, NAME_MAX_LENGTH);
+  const body = JSON.stringify({ names: Array.from({ length: BINETTE_MAX_COUNT }, () => longest) });
+  assert(new TextEncoder().encode(body).byteLength < 1024 * 1024 / 4);
+});
+
+Deno.test("binette-editor: プレビューは settings を除く。読めないものはそのまま", async () => {
+  await withHandler(async (call, dataDir) => {
+    const withSettings = JSON.stringify({
+      binette: "0.1",
+      title: "設定つき",
+      entry: "main",
+      assets: { main: { type: "html", content: "<p>x</p>" } },
+      settings: [{ title: "下書き", order: 10, type: "element", component: "logout" }],
+    });
+    assertEquals((await put(call, "s", withSettings)).status, 201);
+    let res = await call("/preview/s.bina");
+    const previewed = JSON.parse(await res.text());
+    assertEquals("settings" in previewed, false);
+    assertEquals(previewed.title, "設定つき");
+    assertEquals(previewed.entry, "main");
+    // HEAD も同じ。API の取得は保存したまま
+    res = await call("/preview/s.bina", { method: "HEAD" });
+    assertEquals(res.status, 200);
+    await res.body?.cancel();
+    assertEquals(await (await call("/api/binettes/s")).text(), withSettings);
+    // settings が無ければ、整形も含めて保存したまま
+    const spaced = `{ "binette": "0.1",\n  "redirect": "/home" }\n`;
+    assertEquals((await put(call, "p", spaced)).status, 201);
+    assertEquals(await (await call("/preview/p.bina")).text(), spaced);
+    // 検査に通らず保存できない形で直接置かれたファイルは、そのまま返す
+    await Deno.writeTextFile(join(dataDir, "binette", "broken.bina"), "{ not json");
+    assertEquals(await (await call("/preview/broken.bina")).text(), "{ not json");
   });
 });

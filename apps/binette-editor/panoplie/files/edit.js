@@ -119,6 +119,8 @@ export function mount(el, sh) {
     }
     // 保存している間に打ち足した分は、まだ未保存
     if (editor.value === sent) setDirty(false);
+    // 保存できたので、離れるときの確認は隠す
+    prompt.hidden = true;
     showStatus("保存しました");
     return true;
   }
@@ -166,6 +168,14 @@ export function mount(el, sh) {
     }
   });
 
+  // 未保存の変更があるあいだは、ページを離れる前にブラウザの確認を出す
+  const onBeforeUnload = (event) => {
+    if (!dirty) return;
+    event.preventDefault();
+    event.returnValue = "";
+  };
+  globalThis.addEventListener("beforeunload", onBeforeUnload);
+
   const title = h("h1", null, "ビネットを編集");
   const root = h("main", { class: "be-root" }, title);
   if (!isValidName(name)) {
@@ -189,6 +199,7 @@ export function mount(el, sh) {
 
   return () => {
     disposed = true;
+    globalThis.removeEventListener("beforeunload", onBeforeUnload);
     root.remove();
   };
 }

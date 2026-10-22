@@ -651,3 +651,61 @@ Deno.test("hub: 同梱のアプリと project のアプリを合わせて配り�
     await own.dispose();
   }
 });
+
+Deno.test("hub: project/apps がリンクでも、同梱のアプリは読み込まれる（警告は同梱は使うと伝える）", async () => {
+  const bundled = await makeProject(["notes"]);
+  const own = await makeProject();
+  const outside = await Deno.makeTempDir({ prefix: "ebina-outside-" });
+  const lines: string[] = [];
+  setLogSink((line) => lines.push(line));
+  const hub = createAppHub({
+    paths: own.paths,
+    bundledAppsDir: bundled.paths.appsDir,
+    states: { isEnabled: () => true },
+    supervisor: FAST,
+  });
+  try {
+    const realApps = join(outside, "apps");
+    await Deno.mkdir(join(realApps, "leak", "panoplie"), { recursive: true });
+    await Deno.writeTextFile(join(realApps, "leak", "app.json"), JSON.stringify({ label: "Leak" }));
+    await Deno.writeTextFile(join(realApps, "leak", "panoplie", "secret.txt"), "OUTSIDE-SECRET");
+    await Deno.remove(own.paths.appsDir, { recursive: true });
+    await Deno.symlink(realApps, own.paths.appsDir);
+
+    await hub.start();
+    assertEquals(hub.list().map((app) => [app.name, app.status]), [["notes", "running"]]);
+    assertEquals((await hub.relay("notes", "/files/hello.txt", etRequest("GET"), "alice")).status, 200);
+    assertEquals((await hub.relay("leak", "/secret.txt", etRequest("GET"), "alice")).status, 404);
+    const warning = lines.find((line) => line.includes("WARN"));
+    assertStringIncludes(warning ?? "", "project/apps のアプリを読み込みません（同梱のアプリは使います）");
+    assertFalse((warning ?? "").includes("起動しません"));
+  } finally {
+    await hub.stop();
+    setLogSink(undefined);
+    await Deno.remove(outside, { recursive: true });
+    await bundled.dispose();
+    await own.dispose();
+  }
+});
+
+Deno.test("hub: 同梱の apps/ と project/apps が同じ実体なら、二重に読まない", async () => {
+  const project = await makeProject(["notes"]);
+  const lines: string[] = [];
+  setLogSink((line) => lines.push(line));
+  const hub = createAppHub({
+    paths: project.paths,
+    bundledAppsDir: project.paths.appsDir,
+    states: { isEnabled: () => true },
+    supervisor: FAST,
+  });
+  try {
+    await hub.start();
+    assertEquals(hub.list().map((app) => [app.name, app.status]), [["notes", "running"]]);
+    // 同梱と project の両方に見えて「代わりに使われます」と出ることはない
+    assertFalse(lines.some((line) => line.includes("代わりに使われます")));
+  } finally {
+    await hub.stop();
+    setLogSink(undefined);
+    await project.dispose();
+  }
+});
