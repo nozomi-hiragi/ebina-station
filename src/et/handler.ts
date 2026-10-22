@@ -108,8 +108,11 @@ export function createEtHandler(deps: EtHandlerDeps): EtHandler {
       case "me":
         return getOnly(req.method, () => etJson(200, { id: user.id, name: user.name }));
       case "entrance":
+        // 最初の走査が済むまでは、アプリの一覧が空なだけで「無い」とは言えない
+        if (!hub.scanned()) return etError(503, "app_unavailable");
         return getOnly(req.method, () => etJson(200, buildEntrance(config, hub.list())));
       case "app": {
+        if (!hub.scanned()) return etError(503, "app_unavailable");
         const app = hub.get(target.name);
         if (!app || !app.enabled) return notFound();
         try {

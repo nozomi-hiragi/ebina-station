@@ -68,7 +68,7 @@ export async function startStation(paths: ProjectPaths, options: StartOptions = 
     const app = createHttpApp({ config, wake, credentials, registrations });
 
     // 先に待ち受ける。ポートが使用中なら、アプリの子プロセスを起動する前に失敗させる。
-    // 起動しきっていないアプリへのリクエストは、アプリが見つかるまでは 404、子が起動中の間は 503 になる
+    // 起動しきっていないアプリへのリクエストは、最初の走査が済むまでも、子が起動中の間も 503（app_unavailable）になる
     const port = options.port ?? config.port;
     try {
       server = Deno.serve({

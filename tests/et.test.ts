@@ -260,6 +260,30 @@ Deno.test("handler: 有効で存在するアプリだけを中継し、hub の�
   assertEquals(hub.calls.length, 2);
 });
 
+Deno.test("handler: 最初の走査が済むまでは、アプリと入口が 503 app_unavailable", async () => {
+  const hub = createFakeHub({ apps: [fakeApp("echo")] });
+  hub.isScanned = false;
+  await using station = await createTestStation({ hub });
+  const handler = createEtHandler({ ...station, hub });
+  const auth = addAuth(station, "alice");
+
+  for (
+    const url of ["wake://station/echo", "wake://station/echo/a", "wake://station/nothere", "wake://station/index.bina"]
+  ) {
+    const res = await handler(request(url), auth);
+    assertEquals(res.status, 503, url);
+    assertEquals(bodyOf(res), { error: { code: "app_unavailable" } });
+  }
+  assertEquals(hub.calls.length, 0);
+  // アプリを経由しない me は走査を待たない
+  assertEquals((await handler(request("wake://station/me"), auth)).status, 200);
+
+  hub.isScanned = true;
+  assertEquals((await handler(request("wake://station/echo"), auth)).status, 200);
+  assertEquals((await handler(request("wake://station/index.bina"), auth)).status, 200);
+  assertEquals((await handler(request("wake://station/nothere"), auth)).status, 404);
+});
+
 Deno.test("handler: relay が例外を投げたら 500 internal（内容は返さず、ログに残す）", async () => {
   const hub = createFakeHub({
     apps: [fakeApp("echo")],

@@ -62,6 +62,7 @@ function isAlive(status: AppStatus): boolean {
 /** 埋め込みアプリ（apps/ のフォルダ）を走査・起動・中継する部品をまとめる */
 export function createAppHub(deps: AppHubDeps): EmbeddedAppHub {
   const { paths, states } = deps;
+  let scannedOnce = false;
   let records = new Map<string, AppRecord>();
   let queue: Promise<unknown> = Promise.resolve();
   let stopping = false;
@@ -155,6 +156,7 @@ export function createAppHub(deps: AppHubDeps): EmbeddedAppHub {
     }
 
     records = next;
+    scannedOnce = true;
     await Promise.all(retiring.map((supervisor) => supervisor.stop().then(() => live.delete(supervisor))));
     await Promise.all(starting.map((supervisor) => supervisor.start()));
     log.info(
@@ -199,6 +201,7 @@ export function createAppHub(deps: AppHubDeps): EmbeddedAppHub {
       return record === undefined ? undefined : toInfo(record);
     },
     relay,
+    scanned: () => scannedOnce,
     start: () => exclusive(sync),
     reload: () => exclusive(sync),
     stop: () =>

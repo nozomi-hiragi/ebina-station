@@ -70,6 +70,8 @@ export interface FakeHub extends AppHub {
   /** relay が呼ばれた順の記録 */
   readonly calls: RelayCall[];
   apps: AppInfo[];
+  /** false の間は scanned() が false を返す（走査前の状態を作る） */
+  isScanned: boolean;
 }
 
 /** 子プロセスを使わない偽の AppHub。relay は引数を記録して respond の結果（既定は 200 `{"relayed":true}`）を返す */
@@ -80,6 +82,7 @@ export function createFakeHub(
   const hub: FakeHub = {
     calls,
     apps: options.apps ?? [],
+    isScanned: true,
     list: () => [...hub.apps].sort((a, b) => a.name.localeCompare(b.name)),
     get: (name) => hub.apps.find((a) => a.name === name),
     relay: async (name, path, req, userId) => {
@@ -87,6 +90,7 @@ export function createFakeHub(
       calls.push(call);
       return options.respond ? await options.respond(call) : etJson(200, { relayed: true });
     },
+    scanned: () => hub.isScanned,
     start: () => Promise.resolve(),
     reload: () => Promise.resolve(),
     stop: () => Promise.resolve(),

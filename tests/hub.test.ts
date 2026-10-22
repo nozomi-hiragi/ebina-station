@@ -531,3 +531,11 @@ Deno.test("hub: panoplie/ に配れない大きさのファイルがあれば、
     assertEquals(hub.get("big")?.status, "running");
   });
 });
+
+Deno.test("hub: scanned は最初の走査（start）が済むまで false", async () => {
+  await withHub([], async (hub) => {
+    assertEquals(hub.scanned(), false);
+    await hub.start();
+    assertEquals(hub.scanned(), true);
+  });
+});
