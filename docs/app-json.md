@@ -67,6 +67,9 @@ apps/<アプリ名>/
 
 子プロセスは、Deno の権限を絞って起動します。ほかのファイル、ネットワーク、環境変数、サブプロセスは使えません。
 
+> [!IMPORTANT]
+> Deno の権限は、ローカルのファイルの `import`（`with { type: "text" }` や JSON）を止めません。アプリは `import` で `--allow-read` の外のファイルを読めてしまいます。埋め込みアプリは、実装者が自分で置く信頼できるコードとして扱います（[spec.md](spec.md) の「埋め込みアプリの信頼」）。
+
 | 権限 | 範囲 |
 | --- | --- |
 | `--allow-env` | `EBINA_PORT`、`EBINA_APP_TOKEN`、`EBINA_DATA_DIR` だけ |
