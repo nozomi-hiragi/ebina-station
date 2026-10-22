@@ -167,6 +167,24 @@ Deno.test("loadApp: entry が無い・フォルダ・外を指すものは異常
   });
 });
 
+Deno.test("loadApp: フォルダの中にハードリンクがあれば異常（panoplie/ だけのアプリも）", async () => {
+  await withTempDir(async (root) => {
+    const dir = join(root, "app");
+    await write(dir, "app.json", JSON.stringify({ label: "A" }));
+    await write(dir, "panoplie/index.bina", "{}");
+    await write(root, "secret.txt", "x");
+    assert((await loadApp(dir)).panoplieDir !== undefined);
+
+    await Deno.link(join(root, "secret.txt"), join(dir, "panoplie/hard.txt"));
+    const error = await assertRejects(() => loadApp(dir), ManifestError);
+    assertStringIncludes(error.message, "ハードリンクがあります");
+    assertStringIncludes(error.message, "panoplie/hard.txt");
+
+    await Deno.remove(join(dir, "panoplie/hard.txt"));
+    assert((await loadApp(dir)).panoplieDir !== undefined);
+  });
+});
+
 Deno.test("loadApp: フォルダの中にシンボリックリンクがあれば異常（Deno の権限はリンクの先を解決しないため）", async () => {
   await withTempDir(async (root) => {
     const dir = join(root, "app");

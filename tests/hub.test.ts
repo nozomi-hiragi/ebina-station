@@ -507,6 +507,37 @@ Deno.test("hub: アプリのフォルダにシンボリックリンクがあれ�
   });
 });
 
+Deno.test("hub: アプリのフォルダに外のファイルへのハードリンクがあれば error で、起動も配信もしない", async () => {
+  await withHub(["echo", "notes"], async (hub, paths) => {
+    const outside = join(paths.root, "outside.txt");
+    await Deno.writeTextFile(outside, "SECRET-CONTENT");
+    // 子プロセスのアプリ
+    await Deno.link(outside, join(paths.appsDir, "echo", "hard.txt"));
+    // 静的なアプリ（panoplie/ だけ）
+    await writeApp(paths, "site", {
+      "app.json": JSON.stringify({ label: "静的" }),
+      "panoplie/index.bina": JSON.stringify({ binette: "0.1", redirect: "/home" }),
+    });
+    await Deno.link(outside, join(paths.appsDir, "site", "panoplie", "hard.txt"));
+
+    await hub.start();
+    for (const name of ["echo", "site"]) {
+      assertEquals(hub.get(name)?.status, "error", name);
+      assertStringIncludes(hub.get(name)?.error ?? "", "ハードリンクがあります");
+      assertEquals((await hub.relay(name, "/index.bina", etRequest("GET"), "alice")).status, 503, name);
+    }
+    // ほかのアプリには影響しない
+    assertEquals(hub.get("notes")?.status, "running");
+
+    // リンクを消して reload() すれば動く
+    await Deno.remove(join(paths.appsDir, "echo", "hard.txt"));
+    await Deno.remove(join(paths.appsDir, "site", "panoplie", "hard.txt"));
+    await hub.reload();
+    assertEquals(hub.get("echo")?.status, "running");
+    assertEquals(hub.get("site")?.status, "running");
+  });
+});
+
 Deno.test("hub: panoplie/ に配れない大きさのファイルがあれば、読み込まずにそのアプリを error にする", async () => {
   await withHub(["notes"], async (hub, paths) => {
     await writeApp(paths, "big", {

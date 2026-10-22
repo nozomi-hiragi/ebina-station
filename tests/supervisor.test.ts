@@ -568,6 +568,32 @@ Deno.test("supervisor: データフォルダがリンクでも、中にリンク
   });
 });
 
+Deno.test("supervisor: データフォルダに外のファイルへのハードリンクがあれば起動しない", async () => {
+  await withProject(async (paths) => {
+    const outside = join(paths.root, "outside.txt");
+    await Deno.writeTextFile(outside, "SECRET-CONTENT");
+    const supervisor = await supervisorFor(paths, "hard", OK_APP);
+    await Deno.mkdir(paths.appDataDir("hard"), { recursive: true });
+    const link = join(paths.appDataDir("hard"), "hard.txt");
+    await Deno.link(outside, link);
+    try {
+      await supervisor.start();
+      assertEquals(supervisor.status, "error");
+      assertStringIncludes(supervisor.error ?? "", "データフォルダにハードリンクがあります");
+      assertStringIncludes(supervisor.error ?? "", "hard.txt");
+      assertEquals(supervisor.pid, undefined);
+
+      // リンクを消してもう一度起動すれば動く
+      await supervisor.stop();
+      await Deno.remove(link);
+      await supervisor.start();
+      assertEquals(supervisor.status, "running");
+    } finally {
+      await supervisor.stop();
+    }
+  });
+});
+
 Deno.test("supervisor: モジュールを取得せず、deno.lock も書き換えない（lock に無い依存・URL の import は読み込めない）", async () => {
   await withProject(async (paths) => {
     // Station の deno.json と deno.lock の写しを使う（元のファイルは書き換えられないことの確認のため）

@@ -1,18 +1,26 @@
 import { isAbsolute, join, relative, resolve, SEPARATOR } from "@std/path";
 
+/** 見つかったリンクの種類と、dir からの相対パス */
+type FoundLink = { kind: "symlink" | "hardlink"; path: string };
+
 /**
- * dir の中（深さを問わず）にあるシンボリックリンクを 1 つ探し、dir からの相対パスで返す。無ければ undefined。
- * リンクの先はたどらない。
+ * dir の中（深さを問わず）にあるシンボリックリンクか、リンク数が 2 以上の通常ファイル（ハードリンク）を 1 つ探す。
+ * 無ければ undefined。リンクの先はたどらない。nlink が null の OS ではハードリンクは確かめない。
  */
-async function findSymlink(dir: string): Promise<string | undefined> {
+async function findLink(dir: string): Promise<FoundLink | undefined> {
   const pending = [""];
   while (pending.length > 0) {
     const relative = pending.pop() ?? "";
     try {
       for await (const entry of Deno.readDir(relative === "" ? dir : join(dir, relative))) {
         const path = relative === "" ? entry.name : `${relative}/${entry.name}`;
-        if (entry.isSymlink) return path;
-        if (entry.isDirectory) pending.push(path);
+        if (entry.isSymlink) return { kind: "symlink", path };
+        if (entry.isDirectory) {
+          pending.push(path);
+        } else if (entry.isFile) {
+          const info = await Deno.lstat(join(dir, path));
+          if (info.isFile && info.nlink !== null && info.nlink > 1) return { kind: "hardlink", path };
+        }
       }
     } catch (error) {
       // 調べている間に消えたフォルダは、調べる対象から外れただけ
@@ -23,11 +31,12 @@ async function findSymlink(dir: string): Promise<string | undefined> {
 }
 
 /**
- * dir 自体がシンボリックリンクか、dir の中にシンボリックリンクがあるときの理由を日本語で返す。無ければ null。
- * dir が無いときも null。
+ * dir 自体がシンボリックリンクか、dir の中にシンボリックリンクかハードリンク（リンク数 2 以上の通常ファイル）が
+ * あるときの理由を日本語で返す。無ければ null。dir が無いときも null。
  *
- * Deno のパスの権限は、リンクの先を解決せずに判定する。そのため許可したフォルダの中にあるリンクは、
- * 先がどこでも読めてしまう。子プロセスに権限を渡すフォルダには、リンクを置かせない。
+ * Deno のパスの権限は、リンクの先を解決せずに判定する。そのため許可したフォルダの中にあるシンボリックリンクは、
+ * 先がどこでも読めてしまう。ハードリンクも、project の外のファイルと同じ中身を読み書きできてしまう。
+ * 子プロセスに権限を渡すフォルダには、どちらも置かせない。
  *
  * @param label 理由に入れるフォルダの呼び名（例: アプリのフォルダ）
  */
@@ -38,9 +47,12 @@ export async function symlinkProblem(dir: string, label: string): Promise<string
     if (error instanceof Deno.errors.NotFound) return null;
     throw error;
   }
-  const found = await findSymlink(dir);
+  const found = await findLink(dir);
   if (found === undefined) return null;
-  return `${label}にシンボリックリンクがあります（${found}）。リンクの先は権限で絞れないため、置けません`;
+  if (found.kind === "hardlink") {
+    return `${label}にハードリンクがあります（${found.path}）。project の外のファイルを読み書きできてしまうため、置けません`;
+  }
+  return `${label}にシンボリックリンクがあります（${found.path}）。リンクの先は権限で絞れないため、置けません`;
 }
 
 /**
