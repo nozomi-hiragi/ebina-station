@@ -641,3 +641,22 @@ Deno.test("supervisor: project/data/apps や project/apps がリンクなら起�
     }
   });
 });
+
+Deno.test("supervisor: アプリが改行なしで標準出力に書いても、合図の行とつながらずに running になる", async () => {
+  await withProject(async (paths) => {
+    const supervisor = await supervisorFor(
+      paths,
+      "noeol",
+      `await Deno.stdout.write(new TextEncoder().encode("prefix-without-newline"));\nexport default { fetch: () => new Response("ok") };`,
+      { startTimeoutMs: 5_000 },
+    );
+    try {
+      await supervisor.start();
+      assertEquals(supervisor.status, "running");
+      const res = await authorized(supervisor, "/");
+      assertEquals(await res.text(), "ok");
+    } finally {
+      await supervisor.stop();
+    }
+  });
+});

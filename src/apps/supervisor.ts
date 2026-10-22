@@ -359,11 +359,8 @@ export class AppSupervisor {
     const redact = (text: string) => text.replaceAll(token, "(token)");
     const onLine = (stream: LogStream, text: string) => {
       this.#push(stream, text);
-      if (stream === "stdout" && text === READY_LINE) {
-        // アプリが同じ行を出力することもあるので、行だけでは running にしない。runner に確かめてから
-        if (this.#child === child && this.#status === "starting") void this.#confirmReady(child, port, token);
-        return;
-      }
+      // runner の合図の行はログに出さない。起動済みかどうかは、行ではなく runner への確認で決める（下の #confirmReady）
+      if (stream === "stdout" && text === READY_LINE) return;
       // 起動に失敗した理由やアプリの例外は標準エラーに出る。画面ができるまで、Station のログでも見られるようにする
       if (stream === "stderr") log.warn(`アプリ ${options.name}: ${text}`);
       else log.info(`アプリ ${options.name}: ${text}`);
@@ -372,6 +369,8 @@ export class AppSupervisor {
       this.#pump(child.stdout, "stdout", onLine, redact, token.length),
       this.#pump(child.stderr, "stderr", onLine, redact, token.length),
     ];
+    // アプリの出力は合図の行とつながることがあるので、標準出力の行を待たずに、起動した直後から確かめ続ける
+    void this.#confirmReady(child, port, token);
 
     let timedOut = false;
     const timer = setTimeout(() => {
@@ -405,11 +404,14 @@ export class AppSupervisor {
     return timedOut ? { kind: "start-timeout" } : { kind: "exited", description };
   }
 
-  /** runner が待ち受けていることを、トークン付きの確認で確かめてから running にする。確かめられなければ starting のまま */
+  /**
+   * runner が待ち受けていることを、トークン付きの確認で確かめてから running にする。
+   * 子が替わるか starting でなくなるまで（起動の時間切れで子が止められるまで）確かめ続ける
+   */
   async #confirmReady(child: Deno.ChildProcess, port: number, token: string): Promise<void> {
     const client = this.#client;
     if (client === undefined) return;
-    for (let i = 0; i < 20; i++) {
+    for (;;) {
       if (this.#child !== child || this.#status !== "starting") return;
       try {
         const res = await fetch(`http://127.0.0.1:${port}/`, {
