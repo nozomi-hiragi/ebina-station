@@ -1,0 +1,32 @@
+{
+  "imports": {
+    "@binette/core": "npm:@binette/core@0.1.0",
+    "@binette/coulisses": "npm:@binette/coulisses@0.1.0",
+    "@wake-protocol/server": "npm:@wake-protocol/server@0.6.1",
+    "@wake-protocol/client": "npm:@wake-protocol/client@0.6.1",
+    "@simplewebauthn/server": "npm:@simplewebauthn/server@14.0.3",
+    "hono": "npm:hono@4.13.13",
+    "qrcode": "npm:qrcode@1.5.4",
+    "@std/assert": "jsr:@std/assert@1.0.19",
+    "@std/path": "jsr:@std/path@1.1.6"
+  },
+  "minimumDependencyAge": {
+    "age": "P1D",
+    "exclude": ["npm:@binette/core", "npm:@binette/coulisses", "npm:@binette/scene"]
+  },
+  "tasks": {
+    "dev": "deno run --no-prompt --watch=src/,runner/ --allow-net --allow-read --allow-write=./project --allow-env --allow-run src/main.ts",
+    "start": "deno run --no-prompt --allow-net --allow-read --allow-write=./project --allow-env --allow-run src/main.ts",
+    "user": "deno run --no-prompt --allow-read --allow-write=./project --allow-env src/cli/main.ts",
+    "check": "deno fmt --check && deno lint && deno check \"src/**/*.ts\" \"runner/**/*.ts\" \"tests/**/*.ts\"",
+    "test": "deno test --no-prompt --allow-read --allow-write --allow-env --allow-net=127.0.0.1,localhost --allow-run tests/"
+  },
+  "fmt": {
+    "lineWidth": 120,
+    "include": ["deno.json", "examples/", "src/", "runner/", "tests/"]
+  },
+  "lint": {
+    "include": ["src/", "runner/", "tests/"],
+    "rules": { "tags": ["recommended"] }
+  }
+}

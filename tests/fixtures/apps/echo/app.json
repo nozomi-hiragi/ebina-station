@@ -1,0 +1,7 @@
+{
+  "label": "Echo",
+  "version": "0.0.1",
+  "description": "受けたリクエストを返すテスト用のアプリ",
+  "icon": "🔁",
+  "entry": "main.ts"
+}

@@ -1,0 +1,8 @@
+{
+  "binette": "0.1",
+  "title": "メモ",
+  "entry": "main",
+  "assets": {
+    "main": { "type": "html", "content": "<p>メモの一覧</p>" }
+  }
+}
