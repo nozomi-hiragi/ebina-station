@@ -204,11 +204,21 @@ Deno.test("handler: me と入口は GET だけ", async () => {
   assertEquals((bodyOf(entrance) as { binette: string }).binette, "0.1");
 
   for (const url of ["wake://station/me", "wake://station/index.bina"]) {
-    for (const method of ["POST", "PUT", "DELETE", "HEAD", "PATCH"]) {
+    for (const method of ["POST", "PUT", "DELETE", "PATCH"]) {
       const res = await handler(request(url, method), auth);
       assertEquals(res.status, 405, `${method} ${url}`);
       assertEquals(bodyOf(res), { error: { code: "method_not_allowed" } });
+      assert(
+        (res.headers ?? []).some(([name, value]) => name === "allow" && value === "GET, HEAD"),
+        `${method} ${url}`,
+      );
     }
+    // HEAD は GET と同じステータスとヘッダーで、本文は空
+    const get = await handler(request(url, "GET"), auth);
+    const head = await handler(request(url, "HEAD"), auth);
+    assertEquals(head.status, get.status);
+    assertEquals(head.headers, get.headers);
+    assertEquals(head.body?.byteLength, 0);
   }
 });
 

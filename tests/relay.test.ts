@@ -5,6 +5,7 @@ import {
   isRelayPath,
   RELAY_BODY_MAX,
   relayToChild,
+  rewriteLocation,
   toEtResponse,
 } from "../src/apps/relay.ts";
 import { setLogSink } from "../src/log.ts";
@@ -131,6 +132,79 @@ Deno.test("relay: Response を ET の応答にする", async () => {
 
   assertEquals((await toEtResponse(new Response("", { status: 599 }))).status, 599);
   assertEquals((await toEtResponse(new Response("", { status: 302, headers: { Location: "/x" } }))).status, 302);
+});
+
+Deno.test("relay: 伸ばせない content-encoding は 502、伸ばせる単独の値は通す", async () => {
+  for (const value of ["zstd", "gzip, gzip", "gzip, br", "compress", "foo"]) {
+    const lines = await collectLogs(async () => {
+      const result = await toEtResponse(new Response("x", { headers: { "Content-Encoding": value } }), 100, "foo");
+      assertEquals(result.status, 502, value);
+    });
+    assertEquals(lines.length, 1);
+    assertStringIncludes(lines[0], "content-encoding");
+  }
+  for (const value of ["gzip", "x-gzip", "br", "deflate", "identity", "GZIP", " gzip "]) {
+    const result = await toEtResponse(new Response("x", { headers: { "Content-Encoding": value } }));
+    assertEquals(result.status, 200, value);
+    assertFalse((result.headers ?? []).some(([name]) => name === "content-encoding"));
+  }
+  assertEquals((await toEtResponse(new Response("x"))).status, 200);
+});
+
+Deno.test("relay: Location の書き換え", () => {
+  const t = { name: "notes", port: 4321 };
+  const cases: [string, string][] = [
+    ["http://127.0.0.1:4321/a/b?x=1#h", "/notes/a/b?x=1#h"],
+    ["http://127.0.0.1:4321", "/notes/"],
+    ["/login?next=/x", "/notes/login?next=/x"],
+    ["/", "/notes/"],
+    ["/../../etc", "/notes/etc"],
+    ["/a/%2e%2e/%2e%2e/x", "/notes/x"],
+    ["//evil.example/x", "//evil.example/x"],
+    ["/\\evil.example/x", "/\\evil.example/x"],
+    ["http://127.0.0.1:9999/a", "http://127.0.0.1:9999/a"],
+    ["http://localhost:4321/a", "http://localhost:4321/a"],
+    ["https://example.com/a", "https://example.com/a"],
+    ["b", "b"],
+    ["../x", "../x"],
+    ["?q=1", "?q=1"],
+  ];
+  for (const [input, expected] of cases) assertEquals(rewriteLocation(input, t), expected, input);
+});
+
+Deno.test("relay: Location・Content-Location を応答で書き換える", async () => {
+  const response = new Response(null, {
+    status: 302,
+    headers: { Location: "http://127.0.0.1:4321/a?x=1", "Content-Location": "/b" },
+  });
+  const result = await toEtResponse(response, 100, "notes", { name: "notes", port: 4321 });
+  assertEquals(result.headers, [["content-location", "/notes/b"], ["location", "/notes/a?x=1"]]);
+  // 対象を渡さなければそのまま
+  const plain = await toEtResponse(new Response(null, { status: 302, headers: { Location: "/x" } }));
+  assertEquals(plain.headers, [["location", "/x"]]);
+});
+
+Deno.test("relay: 子プロセスからの中継で Location を書き換える", async () => {
+  const respond = (req: Request) => {
+    const port = new URL(req.url).port;
+    return new Response(null, { status: 302, headers: { Location: `http://127.0.0.1:${port}/next?a=b` } });
+  };
+  await withServer(respond, async (port) => {
+    const result = await relayToChild({ name: "foo", port, token: "T" }, "/", etRequest("GET", []), "alice");
+    assertEquals(result.status, 302);
+    assertEquals(result.headers?.filter(([name]) => name === "location"), [["location", "/foo/next?a=b"]]);
+  });
+});
+
+Deno.test("relay: 204・205・304 は本文を捨てる", async () => {
+  for (const status of [204, 205, 304]) {
+    const response = new Response("本文", { status: 200, headers: { "Content-Length": "6", "X-A": "1" } });
+    Object.defineProperty(response, "status", { value: status });
+    const result = await toEtResponse(response);
+    assertEquals(result.status, status);
+    assertEquals(result.body?.byteLength, 0, String(status));
+    assertEquals(result.headers?.filter(([name]) => name === "x-a"), [["x-a", "1"]]);
+  }
 });
 
 Deno.test("relay: ステータスが 200〜599 でなければ 502", async () => {
@@ -355,7 +429,8 @@ Deno.test("relay: リダイレクトは辿らずそのまま返す", async () =>
   await withServer(respond, async (port) => {
     const result = await relayToChild({ name: "app", port, token: "t" }, "/", etRequest("GET"), "alice");
     assertEquals(result.status, 302);
-    assertEquals(result.headers?.find(([name]) => name === "location")?.[1], "/elsewhere");
+    // 中継では、アプリ名を前置きして返す
+    assertEquals(result.headers?.find(([name]) => name === "location")?.[1], "/app/elsewhere");
   });
 });
 

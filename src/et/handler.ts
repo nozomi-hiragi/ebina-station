@@ -83,7 +83,16 @@ export interface EtHandlerDeps {
 export function createEtHandler(deps: EtHandlerDeps): EtHandler {
   const { config, users, credentials, hub } = deps;
   const notFound = (): EtHandlerResponse => etError(404, "not_found");
-  const methodNotAllowed = (): EtHandlerResponse => etError(405, "method_not_allowed");
+  const methodNotAllowed = (): EtHandlerResponse => {
+    const res = etError(405, "method_not_allowed");
+    return { ...res, headers: [...(res.headers ?? []), ["allow", "GET, HEAD"]] };
+  };
+  // GET と HEAD だけ許す。HEAD は GET と同じステータスとヘッダーで、本文を空にする
+  const getOnly = (method: string, make: () => EtHandlerResponse): EtHandlerResponse => {
+    if (method === "GET") return make();
+    if (method === "HEAD") return { ...make(), body: new Uint8Array(0) };
+    return methodNotAllowed();
+  };
 
   return async (req, auth) => {
     // CLI で消されたユーザー・パスキーのセッションは Station のメモリに残るため、ここで止める
@@ -97,9 +106,9 @@ export function createEtHandler(deps: EtHandlerDeps): EtHandler {
       case "error":
         return etError(target.status, target.code);
       case "me":
-        return req.method === "GET" ? etJson(200, { id: user.id, name: user.name }) : methodNotAllowed();
+        return getOnly(req.method, () => etJson(200, { id: user.id, name: user.name }));
       case "entrance":
-        return req.method === "GET" ? etJson(200, buildEntrance(config, hub.list())) : methodNotAllowed();
+        return getOnly(req.method, () => etJson(200, buildEntrance(config, hub.list())));
       case "app": {
         const app = hub.get(target.name);
         if (!app || !app.enabled) return notFound();

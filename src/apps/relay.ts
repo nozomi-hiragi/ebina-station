@@ -61,12 +61,54 @@ export function buildChildHeaders(headers: EtHandlerRequest["headers"], userId: 
   return result;
 }
 
+/** Location を書き換える対象のアプリ */
+export interface LocationTarget {
+  name: string;
+  port: number;
+}
+
+/**
+ * アプリの Location（Content-Location）を、クライアントから見たパスに書き換える。
+ * - `http://127.0.0.1:<アプリのポート>` で始まる絶対 URL → `/<アプリ名>` + パス・クエリ・#
+ * - `/` で始まるパス（`//` で始まるものは除く）→ `/<アプリ名>` + パス
+ * - ほかの絶対 URL や相対パスはそのまま
+ * `new URL` で解決してから前置きするので、`..` でアプリ名の外には出ない。
+ */
+export function rewriteLocation(value: string, target: LocationTarget): string {
+  const base = `http://127.0.0.1:${target.port}`;
+  let resolved: URL;
+  try {
+    if (value.startsWith("//")) return value;
+    if (value.startsWith("/")) {
+      resolved = new URL(value, base);
+      // `/\host` のように、解決するとほかの host になるものは書き換えない
+      if (resolved.origin !== base) return value;
+    } else {
+      resolved = new URL(value);
+      if (resolved.protocol !== "http:" || resolved.hostname !== "127.0.0.1" || resolved.port !== String(target.port)) {
+        return value;
+      }
+    }
+  } catch {
+    // 相対パスなど、絶対 URL として解釈できないもの
+    return value;
+  }
+  return `/${target.name}${resolved.pathname}${resolved.search}${resolved.hash}`;
+}
+
+/** Content-Encoding として受け付ける値。Deno の fetch が伸ばせる単独の値と、付いていない場合 */
+export function isDecodableEncoding(value: string | null): boolean {
+  const v = (value ?? "").trim().toLowerCase();
+  return v === "" || v === "identity" || v === "gzip" || v === "x-gzip" || v === "br" || v === "deflate";
+}
+
 /**
  * アプリの応答のヘッダーから、ET で返すヘッダーを作る。
  * hop-by-hop、connection に名前が挙がっているもの、content-length、content-encoding、set-cookie、`ebina-` で始まるものは除く。
+ * location を渡すと、Location と Content-Location を書き換える。
  * 名前や値が ET の規則に合わない、または合計が 8 KiB を超えるときは null。
  */
-export function filterResponseHeaders(headers: Headers): EtHeaders | null {
+export function filterResponseHeaders(headers: Headers, location?: LocationTarget): EtHeaders | null {
   // connection に名前が挙がったヘッダーも hop-by-hop なので除く（リクエストの向きの buildChildHeaders と同じ）
   const named = new Set<string>();
   for (const item of (headers.get("connection") ?? "").split(",")) {
@@ -81,9 +123,12 @@ export function filterResponseHeaders(headers: Headers): EtHeaders | null {
     // content-encoding は fetch が本文を伸ばした後なので付け直さない
     if (lower === "content-length" || lower === "content-encoding" || lower === "set-cookie") continue;
     if (!HEADER_NAME.test(name) || !HEADER_VALUE.test(value)) return null;
-    total += name.length + value.length;
+    const out = location && (lower === "location" || lower === "content-location")
+      ? rewriteLocation(value, location)
+      : value;
+    total += name.length + out.length;
     if (total > RELAY_HEADERS_MAX) return null;
-    result.push([lower, value]);
+    result.push([lower, out]);
   }
   return result;
 }
@@ -122,13 +167,18 @@ async function readLimited(body: ReadableStream<Uint8Array> | null, max: number)
  * - ステータスが 200〜599 でない
  * - ヘッダーが規則に合わない
  * - 本文が max を超える
+ * - content-encoding が、伸ばせない値（gzip・x-gzip・br・deflate の単独以外）
+ *
+ * 204・205・304 は本文を捨てる。
  *
  * @param source ログに出すアプリ名
+ * @param location 渡すと Location・Content-Location を書き換える
  */
 export async function toEtResponse(
   response: Response,
   bodyMax: number = RELAY_BODY_MAX,
   source = "(不明)",
+  location?: LocationTarget,
 ): Promise<EtHandlerResponse> {
   const reject = async (reason: string): Promise<EtHandlerResponse> => {
     try {
@@ -141,8 +191,20 @@ export async function toEtResponse(
   };
 
   if (response.status < 200 || response.status > 599) return await reject(`ステータス ${response.status} は使えません`);
-  const headers = filterResponseHeaders(response.headers);
+  if (!isDecodableEncoding(response.headers.get("content-encoding"))) {
+    return await reject("content-encoding が伸ばせない値です");
+  }
+  const headers = filterResponseHeaders(response.headers, location);
   if (headers === null) return await reject("ヘッダーが ET の規則に合わないか、合計が 8 KiB を超えています");
+  // 204・205・304 に本文は付けられない（ET の検査に当たるため）。content-length は元から付け直さない
+  if (response.status === 204 || response.status === 205 || response.status === 304) {
+    try {
+      await response.body?.cancel();
+    } catch {
+      // すでに閉じている
+    }
+    return { status: response.status, headers, body: new Uint8Array(0) };
+  }
   const declared = Number(response.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > bodyMax) {
     return await reject(`本文が ${bodyMax} バイトを超えています`);
@@ -206,7 +268,7 @@ export async function relayToChild(
       client: target.client,
     });
     // 本文を読み終えるまで時間切れの対象にする
-    return await toEtResponse(response, bodyMax, target.name);
+    return await toEtResponse(response, bodyMax, target.name, target);
   } catch (error) {
     // エラーの文面にはクエリ付きの URL が入るので、出さない
     const detail = error instanceof Error ? error.message.replaceAll(url, "(URL)") : String(error);

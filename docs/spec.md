@@ -112,8 +112,8 @@ ET で運ぶ URL は `wake://station/…` で表します。振り分けは、�
 
 | URL のパス | 行き先 |
 | --- | --- |
-| `/me` | Station。ログイン中のユーザー `{ id, name }`。GET だけ（他は 405 `method_not_allowed`） |
-| `/index.bina` | Station の入口。GET だけ（他は 405） |
+| `/me` | Station。ログイン中のユーザー `{ id, name }`。GET と HEAD だけ（他は 405 `method_not_allowed`、`allow: GET, HEAD` 付き）。HEAD は GET と同じステータスとヘッダーで本文を空にする |
+| `/index.bina` | Station の入口。GET と HEAD だけ（他は 405） |
 | `/<アプリ名>.bina` | アプリの `/index.bina` |
 | `/<アプリ名>` | アプリの `/` |
 | `/<アプリ名>/…` | アプリの `/…`（クエリはそのまま） |
@@ -144,9 +144,9 @@ ET の応答の誤りは `{ "error": { "code": "<コード>" } }` で返しま�
 | 400 | `invalid_header` | ヘッダーをアプリへ渡せない |
 | 401 | `unauthorized` | ログイン中のユーザーかパスキーが DB に無い。ヘッダー `Ebina-Station-Error: unauthorized` を付ける（アプリが返す 401 と区別するため） |
 | 404 | `not_found` | 知らない URL、予約名、無い・無効なアプリ |
-| 405 | `method_not_allowed` | `/me`・`/index.bina` に GET 以外 |
+| 405 | `method_not_allowed` | `/me`・`/index.bina` に GET・HEAD 以外（`allow: GET, HEAD` を付ける） |
 | 500 | `internal` | Station の処理で想定外の例外 |
-| 502 | `bad_gateway` | アプリにつながらない、時間切れ、応答が規則に合わない |
+| 502 | `bad_gateway` | アプリにつながらない、時間切れ、応答が規則に合わない（伸ばせない `content-encoding` を含む） |
 | 503 | `app_unavailable` | アプリが起動していない（起動中、停止中、異常） |
 
 WAKE 自身が返す誤り（`invalid_request`、`invalid_method`、`invalid_url`、`invalid_header` は 400、`too_large` は 413）もあります。
@@ -203,9 +203,13 @@ Station 組み込みのビネット（js の画面）です。操作は次のと
 - クライアントが送った `Ebina-` で始まるヘッダーは捨てて、Station が付け直します。
 - `accept-encoding` と `content-encoding` を外すのは、Station がアプリの応答を伸ばして受け取るためです。
 - 応答のヘッダー名は小文字にして返します。
-- 応答のステータスが 200〜599 でないとき、ヘッダーの名前（HTTP の token）や値（`\t`、0x20〜0x7e、0x80〜0xff）が規則に合わないとき、ヘッダーの合計が 8 KiB を超えるとき、本文が 1 MiB を超えるときは、502 にします。理由はログに出します（ヘッダーの値とクエリは出しません）。
+- 応答のステータスが 200〜599 でないとき、ヘッダーの名前（HTTP の token）や値（`\t`、0x20〜0x7e、0x80〜0xff）が規則に合わないとき、ヘッダーの合計が 8 KiB を超えるとき、本文が 1 MiB を超えるときは、502 にします。`content-encoding` が無い・`identity`・`gzip`・`x-gzip`・`br`・`deflate`（単独の値）のどれでもないとき（`zstd`、`gzip, gzip` など）も 502 です（Station は fetch で伸ばせるものだけを扱います）。理由はログに出します（ヘッダーの値とクエリは出しません）。
 - **アプリの 401 はそのまま返します。** Station のセッション切れの 401 とは、`Ebina-Station-Error` ヘッダーの有無で区別します。アプリの応答の `ebina-` で始まるヘッダーは除くので、アプリはこの印を偽れません。
-- リダイレクトは追わず、そのまま返します。
+- 応答のステータスが 204・205・304 のときは、アプリが本文を返しても捨てて、本文を空にして返します。
+- リダイレクトは追わずに返しますが、`Location` と `Content-Location` は次の規則で書き換えます（`new URL` で解決してからアプリ名を前置きするので、`..` でアプリ名の外には出ません）。
+  - `http://127.0.0.1:<そのアプリのポート>` で始まる絶対 URL → `/<アプリ名>` + パス・クエリ・`#`
+  - `/` で始まるパス（`//` で始まるものは除く）→ `/<アプリ名>` + そのパス
+  - ほかの絶対 URL、相対パス（`b`、`../x`）はそのまま
 - `Ebina-App-Token`、ヘッダーの値、クエリはログに出しません。
 
 ### アプリ名
