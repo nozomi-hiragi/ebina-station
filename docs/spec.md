@@ -193,7 +193,7 @@ Station 組み込みのビネット（js の画面）です。操作は次のと
 | 向き | 渡さないもの | 付けるもの |
 | --- | --- | --- |
 | クライアント → アプリ | hop-by-hop（`connection`、`keep-alive`、`proxy-authenticate`、`proxy-authorization`、`te`、`trailer`、`transfer-encoding`、`upgrade`）、`Connection` に名前が挙がっているヘッダー、`host`、`content-length`、`accept-encoding`、`Ebina-` で始まるもの（大文字小文字を問わない） | `Ebina-User`、`Ebina-App-Token` |
-| アプリ → クライアント | hop-by-hop、`content-length`、`content-encoding`、`set-cookie`、`Ebina-` で始まるもの | なし |
+| アプリ → クライアント | hop-by-hop、`Connection` に名前が挙がっているヘッダー、`content-length`、`content-encoding`、`set-cookie`、`Ebina-` で始まるもの | なし |
 
 | ヘッダー | 内容 |
 | --- | --- |

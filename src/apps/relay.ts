@@ -63,15 +63,21 @@ export function buildChildHeaders(headers: EtHandlerRequest["headers"], userId: 
 
 /**
  * アプリの応答のヘッダーから、ET で返すヘッダーを作る。
- * hop-by-hop、content-length、content-encoding、set-cookie、`ebina-` で始まるものは除く。
+ * hop-by-hop、connection に名前が挙がっているもの、content-length、content-encoding、set-cookie、`ebina-` で始まるものは除く。
  * 名前や値が ET の規則に合わない、または合計が 8 KiB を超えるときは null。
  */
 export function filterResponseHeaders(headers: Headers): EtHeaders | null {
+  // connection に名前が挙がったヘッダーも hop-by-hop なので除く（リクエストの向きの buildChildHeaders と同じ）
+  const named = new Set<string>();
+  for (const item of (headers.get("connection") ?? "").split(",")) {
+    const trimmed = item.trim().toLowerCase();
+    if (trimmed !== "") named.add(trimmed);
+  }
   const result: [string, string][] = [];
   let total = 0;
   for (const [name, value] of headers) {
     const lower = name.toLowerCase();
-    if (HOP_BY_HOP.has(lower) || lower.startsWith("ebina-")) continue;
+    if (HOP_BY_HOP.has(lower) || named.has(lower) || lower.startsWith("ebina-")) continue;
     // content-encoding は fetch が本文を伸ばした後なので付け直さない
     if (lower === "content-length" || lower === "content-encoding" || lower === "set-cookie") continue;
     if (!HEADER_NAME.test(name) || !HEADER_VALUE.test(value)) return null;

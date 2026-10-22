@@ -425,3 +425,13 @@ Deno.test("relay: つながらない・時間切れ・途中で止まる応答�
     assertFalse(line.includes("QUERY-VALUE"), line);
   }
 });
+
+Deno.test("relay: 応答の connection に名前が挙がったヘッダーも除く", () => {
+  const headers = new Headers({
+    "Connection": "X-Internal, Keep-Alive",
+    "X-Internal": "secret",
+    "Keep-Alive": "timeout=5",
+    "X-Visible": "yes",
+  });
+  assertEquals(filterResponseHeaders(headers), [["x-visible", "yes"]]);
+});
