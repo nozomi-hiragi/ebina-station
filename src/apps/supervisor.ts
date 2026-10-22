@@ -1,6 +1,6 @@
 import { fromFileUrl, SEPARATOR, toFileUrl } from "@std/path";
 import { log } from "../log.ts";
-import { symlinkProblem } from "./links.ts";
+import { symlinkInChain, symlinkProblem } from "./links.ts";
 import type { AppStatus } from "./types.ts";
 
 /** runner/runner.ts が待ち受けを始めたときに標準出力へ出す 1 行 */
@@ -33,6 +33,8 @@ export interface SupervisorOptions {
   dataDir: string;
   /** entry の絶対パス */
   entry: string;
+  /** project フォルダ。渡すと、そこから appDir・dataDir までの途中のシンボリックリンクも拒む */
+  projectRoot?: string;
   /** runner/runner.ts の絶対パス。省略するとリポジトリのもの */
   runnerPath?: string;
   /** deno.json の絶対パス。省略するとリポジトリのもの */
@@ -112,7 +114,7 @@ function describeExit(status: Deno.CommandStatus): string {
  * 落ちたら間隔を延ばしながら再起動し、続けて落ちたら異常にして止める。
  */
 export class AppSupervisor {
-  readonly #options: Required<SupervisorOptions>;
+  readonly #options: Required<Omit<SupervisorOptions, "projectRoot">> & Pick<SupervisorOptions, "projectRoot">;
   #status: AppStatus = "stopped";
   #error: string | undefined;
   #logs: AppLogLine[] = [];
@@ -133,6 +135,7 @@ export class AppSupervisor {
       appDir: options.appDir,
       dataDir: options.dataDir,
       entry: options.entry,
+      projectRoot: options.projectRoot,
       runnerPath: options.runnerPath ?? DEFAULT_RUNNER_PATH,
       configPath: options.configPath ?? DEFAULT_CONFIG_PATH,
       startTimeoutMs: options.startTimeoutMs ?? 30_000,
@@ -283,6 +286,13 @@ export class AppSupervisor {
     let dataDir: string;
     let entry: string;
     try {
+      // project/apps や project/data/apps がリンクだと、project の外に権限を渡してしまう。作る前に確かめる
+      if (options.projectRoot !== undefined) {
+        for (const [dir, label] of [[options.appDir, "アプリのフォルダ"], [options.dataDir, "データフォルダ"]]) {
+          const problem = await symlinkInChain(options.projectRoot, dir, label);
+          if (problem !== null) return this.#refused(problem);
+        }
+      }
       await Deno.mkdir(options.dataDir, { recursive: true });
       // 権限を渡すフォルダに、置いたときから入っているシンボリックリンクがあると、リンクの先を権限の外から読めてしまう。
       // 走査のあとに置かれた場合に備え、起動のたびに確かめる

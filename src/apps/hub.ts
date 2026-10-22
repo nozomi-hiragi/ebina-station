@@ -96,6 +96,7 @@ export function createAppHub(deps: AppHubDeps): EmbeddedAppHub {
       appDir: loaded.appDir,
       dataDir: paths.appDataDir(name),
       entry: loaded.entry,
+      projectRoot: paths.root,
     });
   }
 

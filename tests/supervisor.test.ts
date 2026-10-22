@@ -599,3 +599,45 @@ export default { fetch: () => new Response("ok") };`;
     }
   });
 });
+
+Deno.test("supervisor: project/data/apps や project/apps がリンクなら起動せず、project の外にフォルダも作らない", async () => {
+  await withProject(async (paths) => {
+    const outside = await Deno.makeTempDir({ prefix: "ebina-outside-" });
+    try {
+      // data/apps が project の外を指す
+      await Deno.mkdir(join(paths.root, "data"), { recursive: true });
+      await Deno.symlink(outside, join(paths.root, "data", "apps"));
+      const supervisor = await supervisorFor(paths, "chain", OK_APP, { projectRoot: paths.root });
+      try {
+        await supervisor.start();
+        assertEquals(supervisor.status, "error");
+        assertStringIncludes(supervisor.error ?? "", "シンボリックリンク");
+        assertEquals(await Array.fromAsync(Deno.readDir(outside)), [], "project の外にフォルダを作った");
+      } finally {
+        await supervisor.stop();
+      }
+      await Deno.remove(join(paths.root, "data", "apps"));
+
+      // apps が project の外を指す（アプリ本体を外に置く）
+      const realApps = join(outside, "apps");
+      await Deno.rename(paths.appsDir, realApps);
+      await Deno.symlink(realApps, paths.appsDir);
+      const linked = new AppSupervisor({
+        name: "chain",
+        appDir: join(paths.appsDir, "chain"),
+        dataDir: paths.appDataDir("chain"),
+        entry: join(paths.appsDir, "chain", "main.ts"),
+        projectRoot: paths.root,
+      });
+      try {
+        await linked.start();
+        assertEquals(linked.status, "error");
+        assertStringIncludes(linked.error ?? "", "シンボリックリンク");
+      } finally {
+        await linked.stop();
+      }
+    } finally {
+      await Deno.remove(outside, { recursive: true });
+    }
+  });
+});
