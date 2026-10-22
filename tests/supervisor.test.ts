@@ -568,3 +568,34 @@ export default { fetch: () => new Response("ok") };`;
     }
   });
 });
+
+Deno.test("supervisor: 長い行を区切る位置にトークンがまたがっても、割れた形で残さない", async () => {
+  await withProject(async (paths) => {
+    const lines: string[] = [];
+    setLogSink((line) => lines.push(line));
+    // 改行のある行と、改行の来ないまま溜まる出力の両方で、トークンが 8192 文字目をまたぐようにする
+    const source = `const token = Deno.env.get("EBINA_APP_TOKEN") ?? "";
+const pad = "x".repeat(8192 - Math.floor(token.length / 2));
+console.log(pad + token + "-end-line");
+await Deno.stdout.write(new TextEncoder().encode("y".repeat(8192 - Math.floor(token.length / 2))));
+await Deno.stdout.write(new TextEncoder().encode(token + "z".repeat(9000)));
+await Deno.stdout.write(new TextEncoder().encode("-end-stream\\n"));
+export default { fetch: () => new Response("ok") };`;
+    const app = await supervisorFor(paths, "longline", source);
+    try {
+      await app.start();
+      const token = app.target()?.token;
+      assert(token !== undefined);
+      await waitFor(() => app.logs().some((line) => line.text.includes("-end-stream")), "長い出力を読み切る");
+      // 区切られた行を全部つないでも、トークンは現れない（半分ずつ残っていない）
+      const joined = app.logs().map((line) => line.text).join("");
+      assertFalse(joined.includes(token), "持っているログにトークンが割れて残っている");
+      assertStringIncludes(joined, "(token)-end-line");
+      assertStringIncludes(joined, "(token)zzz");
+      const logged = lines.map((line) => line.replace(/^.*?アプリ longline: /, "")).join("");
+      assertFalse(logged.includes(token), "Station のログにトークンが割れて残っている");
+    } finally {
+      await app.stop();
+    }
+  });
+});

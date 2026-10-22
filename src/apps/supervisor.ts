@@ -345,9 +345,9 @@ export class AppSupervisor {
     this.#status = "starting";
     this.#note(`起動しました（pid ${child.pid}、ポート ${port}）`);
 
-    const onLine = (stream: LogStream, rawText: string) => {
-      // アプリが Ebina-App-Token を出力しても、記録にもログにも残さない
-      const text = rawText.replaceAll(token, "(token)");
+    // アプリが Ebina-App-Token を出力しても、記録にもログにも残さない。長い行を区切る前に伏せる（#pump）
+    const redact = (text: string) => text.replaceAll(token, "(token)");
+    const onLine = (stream: LogStream, text: string) => {
       this.#push(stream, text);
       if (stream === "stdout" && text === READY_LINE) {
         // アプリが同じ行を出力することもあるので、行だけでは running にしない。runner に確かめてから
@@ -358,7 +358,10 @@ export class AppSupervisor {
       if (stream === "stderr") log.warn(`アプリ ${options.name}: ${text}`);
       else log.info(`アプリ ${options.name}: ${text}`);
     };
-    const pumps = [this.#pump(child.stdout, "stdout", onLine), this.#pump(child.stderr, "stderr", onLine)];
+    const pumps = [
+      this.#pump(child.stdout, "stdout", onLine, redact, token.length),
+      this.#pump(child.stderr, "stderr", onLine, redact, token.length),
+    ];
 
     let timedOut = false;
     const timer = setTimeout(() => {
@@ -428,16 +431,22 @@ export class AppSupervisor {
     return this.#stopRequested ? { kind: "stopped" } : { kind: "exited", description };
   }
 
-  /** 出力を行ごとに読む */
+  /**
+   * 出力を行ごとに読む。redact（秘密を伏せる）は区切る前の文字列に掛ける。
+   * 改行の来ないまま溜まった分を先に出すときは、末尾の secretLength - 1 文字を残し、届きかけの秘密が区切りで割れないようにする
+   */
   async #pump(
     stream: ReadableStream<Uint8Array>,
     name: LogStream,
     onLine: (stream: LogStream, text: string) => void,
+    redact: (text: string) => string = (text) => text,
+    secretLength = 0,
   ): Promise<void> {
     const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
+    const keep = Math.max(0, secretLength - 1);
     // 長すぎる行は LINE_MAX ごとに区切って出す
     const emit = (line: string) => {
-      let rest = line;
+      let rest = redact(line);
       while (rest.length > LINE_MAX) {
         onLine(name, rest.slice(0, LINE_MAX));
         rest = rest.slice(LINE_MAX);
@@ -456,8 +465,9 @@ export class AppSupervisor {
           pending = pending.slice(newline + 1);
           newline = pending.indexOf("\n");
         }
-        // 改行が来ないまま溜まった分も、上限を超えたら先に出す
-        while (pending.length > LINE_MAX) {
+        // 改行が来ないまま溜まった分も、上限を超えたら先に出す（伏せてから。末尾の keep 文字は次に回す）
+        if (pending.length > LINE_MAX + keep) pending = redact(pending);
+        while (pending.length > LINE_MAX + keep) {
           onLine(name, pending.slice(0, LINE_MAX));
           pending = pending.slice(LINE_MAX);
         }
