@@ -131,8 +131,16 @@ export function mount(el, sh) {
     prompt.replaceChildren(
       h("span", { class: "be-confirm" }, "保存していない変更があります。"),
       button("保存して移る", "保存してから移る", async () => {
-        if (await save()) go();
-        else prompt.hidden = true;
+        // 処理の間は編集を止める。二重に押されたときも、ここで抜ける
+        if (editor.readOnly) return;
+        editor.readOnly = true;
+        try {
+          // 保存できて、しかも保存の後に打ち足しがなかったときだけ移る
+          if ((await save()) && !dirty) go();
+          else prompt.hidden = true;
+        } finally {
+          editor.readOnly = false;
+        }
       }, "be-primary"),
       button("保存せずに移る", "保存せずに移る", go, "be-danger"),
       button("戻る", "移るのをやめて編集に戻る", () => {
