@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertFalse, assertNotEquals, assertStringIncludes } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { setLogSink } from "../src/log.ts";
-import { AppSupervisor, type SupervisorOptions } from "../src/apps/supervisor.ts";
+import { AppSupervisor, probeProof, type SupervisorOptions } from "../src/apps/supervisor.ts";
 import type { ProjectPaths } from "../src/paths.ts";
 import { isProcessAlive, makeProject, waitFor, writeApp } from "./fixtures/mod.ts";
 
@@ -230,7 +230,7 @@ Deno.test("supervisor: アプリが EBINA_READY を出力しても、待ち受�
   });
 });
 
-Deno.test("supervisor: 確認のヘッダーは runner が答え、アプリには届かない", async () => {
+Deno.test("supervisor: 確認のヘッダーは runner が答え（nonce への HMAC）、アプリには届かない", async () => {
   await withProject(async (paths) => {
     const supervisor = await supervisorFor(
       paths,
@@ -241,10 +241,10 @@ Deno.test("supervisor: 確認のヘッダーは runner が答え、アプリに�
       await supervisor.start();
       assertEquals(supervisor.status, "running");
       const target = supervisor.target()!;
-      const res = await fetch(`http://127.0.0.1:${target.port}/`, {
-        headers: { "Ebina-App-Token": target.token, "Ebina-Runner-Probe": "1" },
-      });
+      // 確認はトークン無しで通り、応答の HMAC はトークンを知る側だけが確かめられる
+      const res = await fetch(`http://127.0.0.1:${target.port}/`, { headers: { "Ebina-Runner-Probe": "abc" } });
       assertEquals(res.status, 204);
+      assertEquals(res.headers.get("ebina-runner-proof"), await probeProof(target.token, "abc"));
       await res.body?.cancel();
       const normal = await authorized(supervisor, "/");
       assertEquals(await normal.text(), "ok");
@@ -252,6 +252,101 @@ Deno.test("supervisor: 確認のヘッダーは runner が答え、アプリに�
       await supervisor.stop();
     }
   });
+});
+
+Deno.test("supervisor: 先にポートを取った偽物は running にならず、トークンも受け取れない", async () => {
+  await withProject(async (paths) => {
+    // 偽の runner: 起動の合図の行を出し、どんな確認にも「準備できた」と答える。届いたヘッダーを記録する
+    const fakeRunner = join(paths.root, "fake-runner.ts");
+    await Deno.writeTextFile(
+      fakeRunner,
+      `const port = Number(Deno.env.get("EBINA_PORT"));
+const dir = Deno.env.get("EBINA_DATA_DIR");
+Deno.serve({ hostname: "127.0.0.1", port, onListen: () => console.log("EBINA_READY") }, (req) => {
+  Deno.writeTextFileSync(dir + "/seen.log", JSON.stringify([...req.headers]) + "\\n", { append: true });
+  return new Response(null, { status: 204, headers: { "ebina-runner-probe": "ready", "ebina-runner-proof": "00".repeat(32) } });
+});`,
+    );
+    const supervisor = await supervisorFor(paths, "fake", OK_APP, {
+      runnerPath: fakeRunner,
+      startTimeoutMs: 1_500,
+      restartBaseMs: 10,
+    });
+    try {
+      await supervisor.start();
+      assertEquals(supervisor.status, "error", supervisor.logs().map((line) => line.text).join("\n"));
+      assertEquals(supervisor.target(), undefined);
+      const seen = await Deno.readTextFile(join(paths.appDataDir("fake"), "seen.log"));
+      assert(seen.includes("ebina-runner-probe"), "確認が届いていない");
+      assertFalse(seen.includes("ebina-app-token"), "偽物にトークンが渡った");
+    } finally {
+      await supervisor.stop();
+    }
+  });
+});
+
+Deno.test("runner: entry の読み込みが済むまでは待ち受けて 503 を返し、済むと HMAC で答える", async () => {
+  const dir = await Deno.makeTempDir({ prefix: "ebina-runner-test-" });
+  const probe = Deno.listen({ hostname: "127.0.0.1", port: 0 });
+  const port = (probe.addr as Deno.NetAddr).port;
+  probe.close();
+  const entry = join(dir, "slow.ts");
+  await Deno.writeTextFile(
+    entry,
+    `await new Promise((resolve) => setTimeout(resolve, 1500));\nexport default { fetch: () => new Response("ok") };`,
+  );
+  const runner = fromFileUrl(new URL("../runner/runner.ts", import.meta.url));
+  const token = "secret-token";
+  const child = new Deno.Command(Deno.execPath(), {
+    args: ["run", "--no-prompt", "-A", runner, `file://${entry}`],
+    clearEnv: true,
+    env: { EBINA_PORT: String(port), EBINA_APP_TOKEN: token, EBINA_DATA_DIR: dir },
+    stdin: "null",
+    stdout: "null",
+    stderr: "null",
+  }).spawn();
+  const get = async (headers: Record<string, string>) => {
+    for (let i = 0; i < 100; i++) {
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/`, { headers });
+        return res;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+    throw new Error("runner に接続できません");
+  };
+  try {
+    // import の最中: 確認にも通常のリクエストにも 503
+    const early = await get({ "ebina-runner-probe": "n1" });
+    assertEquals(early.status, 503);
+    assertEquals(early.headers.get("ebina-runner-proof"), null);
+    await early.body?.cancel();
+    const earlyNormal = await get({ "ebina-app-token": token });
+    assertEquals(earlyNormal.status, 503);
+    await earlyNormal.body?.cancel();
+    // トークンの無いリクエストは 403
+    const forbidden = await get({});
+    assertEquals(forbidden.status, 403);
+    await forbidden.body?.cancel();
+
+    // 読み込みが済んだら 204 と HMAC、通常のリクエストはアプリへ
+    let done: Response | undefined;
+    for (let i = 0; i < 100 && done?.status !== 204; i++) {
+      await done?.body?.cancel();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      done = await get({ "ebina-runner-probe": "n2" });
+    }
+    assertEquals(done?.status, 204);
+    assertEquals(done?.headers.get("ebina-runner-proof"), await probeProof(token, "n2"));
+    await done?.body?.cancel();
+    const normal = await get({ "ebina-app-token": token });
+    assertEquals(await normal.text(), "ok");
+  } finally {
+    child.kill("SIGKILL");
+    await child.status;
+    await Deno.remove(dir, { recursive: true });
+  }
 });
 
 Deno.test("supervisor: stop() は SIGTERM に応じない子を SIGKILL で止める", async () => {
@@ -655,6 +750,87 @@ Deno.test("supervisor: アプリが改行なしで標準出力に書いても、
       assertEquals(supervisor.status, "running");
       const res = await authorized(supervisor, "/");
       assertEquals(await res.text(), "ok");
+    } finally {
+      await supervisor.stop();
+    }
+  });
+});
+
+Deno.test("supervisor: killSync() はイベントループを塞いだ子も SIGKILL で止め、再起動しない", async () => {
+  await withProject(async (paths) => {
+    const supervisor = await supervisorFor(
+      paths,
+      "busy",
+      `export default { fetch: () => { for (;;) {} } };`,
+      { restartBaseMs: 10, stopTimeoutMs: 100 },
+    );
+    try {
+      await supervisor.start();
+      const pid = supervisor.pid!;
+      const target = supervisor.target()!;
+      // 塞がる呼び出しは応答が来ない。送りっぱなしにして、あとで中断する
+      const abort = new AbortController();
+      const pending = fetch(`http://127.0.0.1:${target.port}/`, {
+        headers: { "Ebina-App-Token": target.token },
+        signal: abort.signal,
+      }).catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      Deno.kill(pid, "SIGTERM"); // 塞がっているので応じない
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      assert(isProcessAlive(pid), "塞がった子が SIGTERM で終わっている");
+
+      supervisor.killSync();
+      await waitFor(() => !isProcessAlive(pid), "子が SIGKILL で止まる");
+      abort.abort();
+      await pending;
+      await supervisor.stop();
+      assertEquals(supervisor.logs().filter((line) => line.text.startsWith("起動しました")).length, 1);
+    } finally {
+      await supervisor.stop();
+    }
+  });
+});
+
+Deno.test("supervisor: beginStop() のあとに子が終わっても再起動せず、警告も出さない", async () => {
+  await withProject(async (paths) => {
+    const echo = await Deno.readTextFile(new URL("./fixtures/apps/echo/main.ts", import.meta.url));
+    const supervisor = await supervisorFor(paths, "app", echo, { restartBaseMs: 10 });
+    const warnings: string[] = [];
+    try {
+      await supervisor.start();
+      const pid = supervisor.pid!;
+      setLogSink((line) => {
+        if (line.includes("WARN") || line.includes("終了しました")) warnings.push(line);
+      });
+      supervisor.beginStop();
+      const crash = await authorized(supervisor, "/__probe/crash");
+      await crash.body?.cancel();
+      await waitFor(() => !isProcessAlive(pid), "子が終わる");
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      assertEquals(supervisor.logs().filter((line) => line.text.startsWith("起動しました")).length, 1);
+      assertEquals(supervisor.pid, undefined);
+      assertFalse(supervisor.logs().some((line) => line.text.includes("再起動します")));
+      assertEquals(warnings, []);
+      await supervisor.stop();
+      assertEquals(supervisor.status, "stopped");
+    } finally {
+      await supervisor.stop();
+    }
+  });
+});
+
+Deno.test("supervisor: データフォルダは 0700 で作り、既にあるものも 0700 に締める", async () => {
+  await withProject(async (paths) => {
+    const supervisor = await supervisorFor(paths, "app", OK_APP);
+    try {
+      await supervisor.start();
+      assertEquals((await Deno.stat(paths.appDataDir("app"))).mode! & 0o777, 0o700);
+      await supervisor.stop();
+
+      await Deno.chmod(paths.appDataDir("app"), 0o755);
+      await supervisor.start();
+      assertEquals(supervisor.status, "running");
+      assertEquals((await Deno.stat(paths.appDataDir("app"))).mode! & 0o777, 0o700);
     } finally {
       await supervisor.stop();
     }

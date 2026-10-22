@@ -37,6 +37,10 @@ export interface AppHubDeps {
 export interface EmbeddedAppHub extends AppHub {
   /** 子プロセスの最新のログ（古い順）。子プロセスを持たないアプリや、無いアプリは空 */
   logs(name: string): AppLogLine[];
+  /** 止め始めたことを知らせる。以後は子が終わっても再起動せず、reload も何もしない */
+  beginStop(): void;
+  /** 知っているすべての子プロセスに同期で SIGKILL を送る（Station を強制終了する直前用） */
+  killAllSync(): void;
 }
 
 interface AppRecord {
@@ -60,6 +64,9 @@ export function createAppHub(deps: AppHubDeps): EmbeddedAppHub {
   const { paths, states } = deps;
   let records = new Map<string, AppRecord>();
   let queue: Promise<unknown> = Promise.resolve();
+  let stopping = false;
+  /** 止まりきるまでの子の見張り（入れ替えで止めている最中のものも含む） */
+  const live = new Set<AppSupervisor>();
 
   /** start / reload / stop を 1 つずつ行う */
   function exclusive<T>(task: () => Promise<T>): Promise<T> {
@@ -90,7 +97,7 @@ export function createAppHub(deps: AppHubDeps): EmbeddedAppHub {
   }
 
   function newSupervisor(name: string, loaded: LoadedApp & { entry: string }): AppSupervisor {
-    return new AppSupervisor({
+    const supervisor = new AppSupervisor({
       ...deps.supervisor,
       name,
       appDir: loaded.appDir,
@@ -98,13 +105,16 @@ export function createAppHub(deps: AppHubDeps): EmbeddedAppHub {
       entry: loaded.entry,
       projectRoot: paths.root,
     });
+    live.add(supervisor);
+    return supervisor;
   }
 
   /** apps/ を読み直して、起動・停止を今の状態に合わせる */
   async function sync(): Promise<void> {
+    if (stopping) return;
     const scanned = await scanApps(paths.appsDir);
     const next = new Map<string, AppRecord>();
-    const stopping: AppSupervisor[] = [];
+    const retiring: AppSupervisor[] = [];
     const starting: AppSupervisor[] = [];
 
     for (const app of scanned) {
@@ -132,7 +142,7 @@ export function createAppHub(deps: AppHubDeps): EmbeddedAppHub {
         // 変わっておらず動いているものはそのままにする
         supervisor = previous.supervisor;
       } else {
-        if (previous?.supervisor !== undefined) stopping.push(previous.supervisor);
+        if (previous?.supervisor !== undefined) retiring.push(previous.supervisor);
         if (wantsChild && loaded?.entry !== undefined) {
           supervisor = newSupervisor(app.name, { ...loaded, entry: loaded.entry });
           starting.push(supervisor);
@@ -141,11 +151,11 @@ export function createAppHub(deps: AppHubDeps): EmbeddedAppHub {
       next.set(app.name, { name: app.name, loaded, error, enabled, signature, supervisor, site });
     }
     for (const [name, previous] of records) {
-      if (!next.has(name) && previous.supervisor !== undefined) stopping.push(previous.supervisor);
+      if (!next.has(name) && previous.supervisor !== undefined) retiring.push(previous.supervisor);
     }
 
     records = next;
-    await Promise.all(stopping.map((supervisor) => supervisor.stop()));
+    await Promise.all(retiring.map((supervisor) => supervisor.stop().then(() => live.delete(supervisor))));
     await Promise.all(starting.map((supervisor) => supervisor.start()));
     log.info(
       `アプリを ${next.size} 件読み込みました（子プロセス ${
@@ -194,7 +204,16 @@ export function createAppHub(deps: AppHubDeps): EmbeddedAppHub {
     stop: () =>
       exclusive(async () => {
         await Promise.all([...records.values()].map((record) => record.supervisor?.stop()));
+        live.clear();
       }),
+    beginStop: () => {
+      stopping = true;
+      for (const supervisor of live) supervisor.beginStop();
+    },
+    killAllSync: () => {
+      stopping = true;
+      for (const supervisor of live) supervisor.killSync();
+    },
     logs: (name) => records.get(name)?.supervisor?.logs() ?? [],
   };
 }

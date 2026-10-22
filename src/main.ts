@@ -16,6 +16,9 @@ const SHUTDOWN_GRACE_MS = 5000;
 /** 最初のシグナルからこの時間より後に届いたシグナルは、強制終了の求めとして扱う */
 const REPEATED_SIGNAL_MS = 1000;
 
+/** 動いている Station の子プロセスを同期で SIGKILL する関数（強制終了の直前に使う） */
+const killers = new Set<() => void>();
+
 /** 起動した Station */
 export interface RunningStation {
   /** 待ち受けているポート */
@@ -39,6 +42,8 @@ export async function startStation(paths: ProjectPaths, options: StartOptions = 
   const config = await loadStationConfig(paths.config);
   const db = openDatabase(paths.db, { root: paths.root });
   const hub = createAppHub({ paths, states: new AppStateRepo(db) });
+  const killChildren = () => hub.killAllSync();
+  killers.add(killChildren);
   let server: Deno.HttpServer<Deno.NetAddr> | undefined;
   try {
     const users = new UserRepo(db);
@@ -57,6 +62,7 @@ export async function startStation(paths: ProjectPaths, options: StartOptions = 
     }, app.fetch);
   } catch (e) {
     await hub.stop();
+    killers.delete(killChildren);
     db.close();
     throw e;
   }
@@ -65,6 +71,8 @@ export async function startStation(paths: ProjectPaths, options: StartOptions = 
   let stopping: Promise<void> | undefined;
   const stop = () => {
     stopping ??= (async () => {
+      // Ctrl-C は子にも届いて、子が終わる。片付けの途中で再起動されないよう、先に知らせる
+      hub.beginStop();
       // 長引く接続があっても、猶予を過ぎたら待たない
       let timer: ReturnType<typeof setTimeout> | undefined;
       const grace = new Promise<void>((resolve) => timer = setTimeout(resolve, SHUTDOWN_GRACE_MS));
@@ -74,6 +82,7 @@ export async function startStation(paths: ProjectPaths, options: StartOptions = 
         clearTimeout(timer);
       }
       await hub.stop();
+      killers.delete(killChildren);
       db.close();
     })();
     return stopping;
@@ -102,9 +111,11 @@ async function main(): Promise<number> {
   const onSignal = (name: string) => () => {
     if (firstSignalAt !== undefined) {
       // 続けて届いたシグナルは数えない（Ctrl-C は子にも届き、deno --watch は SIGTERM も送ってくる）。
-      // 片付けに手間取っているときに、少し間を置いてもう一度送れば抜けられる。取り残された子プロセスは自分で終わる
+      // 片付けに手間取っているときに、少し間を置いてもう一度送れば抜けられる。
+      // 抜ける前に子プロセスを SIGKILL する（イベントループを塞いだ子は親の消滅を見に来られず、取り残されるため）
       if (Date.now() - firstSignalAt < REPEATED_SIGNAL_MS) return;
       log.warn(`${name} をもう一度受け取りました。片付けを待たずに終了します`);
+      for (const kill of killers) kill();
       Deno.exit(1);
     }
     firstSignalAt = Date.now();

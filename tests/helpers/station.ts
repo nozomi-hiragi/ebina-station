@@ -153,8 +153,8 @@ export async function createTestStation(options: TestStationOptions = {}): Promi
   const users = new UserRepo(db);
   const credentials = new SqliteCredentialStore(db);
   const registrations = new RegistrationRepo(db, options.now);
-  const hub = options.hub ??
-    (options.apps === undefined ? createFakeHub() : createAppHub({ paths, states: new AppStateRepo(db) }));
+  const embedded = options.apps === undefined ? undefined : createAppHub({ paths, states: new AppStateRepo(db) });
+  const hub = options.hub ?? embedded ?? createFakeHub();
   if (options.apps !== undefined) {
     // 起動に失敗したときも、作った子プロセスと一時フォルダを残さない
     try {
@@ -177,7 +177,10 @@ export async function createTestStation(options: TestStationOptions = {}): Promi
     if (closed) return;
     closed = true;
     // 自分で作った本物の hub は、子プロセスを止めてから DB とフォルダを片付ける（止めないとリソース検査に引っかかる）
-    if (options.apps !== undefined) await hub.stop();
+    if (embedded !== undefined) {
+      embedded.beginStop();
+      await embedded.stop();
+    }
     db.close();
     await Deno.remove(root, { recursive: true });
   };

@@ -3,16 +3,20 @@
  *
  *   deno run <権限> runner/runner.ts <entry の file URL>
  *
- * entry を import し、default export の `fetch` を 127.0.0.1:EBINA_PORT で待ち受ける。
+ * 先に 127.0.0.1:EBINA_PORT で待ち受けを始め（entry の読み込みが済むまでは 503）、
+ * entry を import して、default export の `fetch` をアプリとして使う。
  * `Ebina-App-Token` が EBINA_APP_TOKEN と一致しないリクエストはアプリに渡さない。
- * 待ち受けを始めたら標準出力に 1 行 `EBINA_READY` を出す。
+ * 読み込みが済んだら標準出力に 1 行 `EBINA_READY` を出す。
  */
 import { timingSafeEqual } from "node:crypto";
 
 const READY_LINE = "EBINA_READY";
 const TOKEN_HEADER = "ebina-app-token";
-/** Station が待ち受けを確かめるときのヘッダー。runner が答え、アプリには渡さない */
+/** Station が待ち受けを確かめるときのヘッダー（値は nonce）。runner が答え、アプリには渡さない */
 const PROBE_HEADER = "ebina-runner-probe";
+/** 確認への応答のヘッダー（HMAC-SHA256(key=token, nonce) の hex） */
+const PROOF_HEADER = "ebina-runner-proof";
+const NONCE_MAX = 256;
 
 type Handler = (req: Request) => Response | Promise<Response>;
 
@@ -49,17 +53,6 @@ const port = Number(portText);
 if (!Number.isInteger(port) || port < 1 || port > 65535) fail("EBINA_PORT が正しくありません");
 if (token === undefined || token.length === 0) fail("EBINA_APP_TOKEN がありません");
 
-let loaded: unknown;
-try {
-  loaded = await import(entryUrl);
-} catch (error) {
-  fail(`entry を読み込めません: ${describe(error)}`);
-}
-const handler = resolveHandler(loaded);
-if (handler === undefined) {
-  fail("entry の default export に fetch がありません（`export default { fetch(req) { … } }` の形にしてください）");
-}
-
 // 長さをそろえてから定数時間で比べる
 const encoder = new TextEncoder();
 const expected = new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(token)));
@@ -69,18 +62,45 @@ async function tokenMatches(value: string | null): Promise<boolean> {
   return timingSafeEqual(actual, expected);
 }
 
+/** 確認の nonce に対する HMAC-SHA256(key=token) を hex で返す。Station だけが同じ値を作れる */
+const hmacKey = await crypto.subtle.importKey(
+  "raw",
+  encoder.encode(token),
+  { name: "HMAC", hash: "SHA-256" },
+  false,
+  ["sign"],
+);
+async function proofFor(nonce: string): Promise<string> {
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", hmacKey, encoder.encode(nonce)));
+  return Array.from(mac, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/** entry の読み込みが済むまでは undefined。その間は確認にも通常のリクエストにも 503 を返す */
+const state: { handler?: Handler } = {};
+
+function notReady(): Response {
+  return jsonResponse(503, "starting");
+}
+
+// entry を読み込む前に待ち受けを始める。読み込みの間にほかのプロセスがポートを取るのを防ぐ
 let server: Deno.HttpServer;
 try {
   server = Deno.serve({
     hostname: "127.0.0.1",
     port,
-    onListen: () => console.log(READY_LINE),
+    onListen: () => {},
   }, async (req) => {
+    // 確認はトークンを受け取らない。nonce への HMAC で、トークンを知る runner だと示す
+    const nonce = req.headers.get(PROBE_HEADER);
+    if (nonce !== null) {
+      if (state.handler === undefined) return notReady();
+      if (nonce.length === 0 || nonce.length > NONCE_MAX) return jsonResponse(400, "invalid_probe");
+      return new Response(null, { status: 204, headers: { [PROOF_HEADER]: await proofFor(nonce) } });
+    }
     if (!await tokenMatches(req.headers.get(TOKEN_HEADER))) return jsonResponse(403, "forbidden");
-    // 標準出力の EBINA_READY はアプリも書けるので、Station はこの応答で待ち受けを確かめる
-    if (req.headers.has(PROBE_HEADER)) return new Response(null, { status: 204, headers: { [PROBE_HEADER]: "ready" } });
+    if (state.handler === undefined) return notReady();
     try {
-      const response = await handler(req);
+      const response = await state.handler(req);
       if (!(response instanceof Response)) throw new TypeError("fetch が Response を返しませんでした");
       return response;
     } catch (error) {
@@ -92,6 +112,19 @@ try {
 } catch (error) {
   fail(`待ち受けを始められません: ${describe(error)}`);
 }
+
+let loaded: unknown;
+try {
+  loaded = await import(entryUrl);
+} catch (error) {
+  fail(`entry を読み込めません: ${describe(error)}`);
+}
+const resolved = resolveHandler(loaded);
+if (resolved === undefined) {
+  fail("entry の default export に fetch がありません（`export default { fetch(req) { … } }` の形にしてください）");
+}
+state.handler = resolved;
+console.log(READY_LINE);
 
 // Station が止めたとき（SIGTERM）は、処理中のリクエストを待ってから終わる。待ちすぎないよう上限を付ける
 function shutdown(): void {

@@ -5,8 +5,29 @@ import type { AppStatus } from "./types.ts";
 
 /** runner/runner.ts が待ち受けを始めたときに標準出力へ出す 1 行 */
 export const READY_LINE = "EBINA_READY";
-/** 待ち受けの確認に使うヘッダー（runner/runner.ts と同じ） */
+/** 待ち受けの確認に使うヘッダー。値は Station が選ぶ nonce（runner/runner.ts と同じ） */
 export const PROBE_HEADER = "ebina-runner-probe";
+/** 確認への応答のヘッダー。HMAC-SHA256(key=トークン, nonce) の hex */
+export const PROOF_HEADER = "ebina-runner-proof";
+
+/** HMAC-SHA256(key=token, nonce) を hex で返す */
+export async function probeProof(token: string, nonce: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey("raw", encoder.encode(token), { name: "HMAC", hash: "SHA-256" }, false, [
+    "sign",
+  ]);
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(nonce)));
+  return Array.from(mac, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/** 長さの違いも含めて、時間をかけずに比べる */
+function constantTimeEqual(a: string, b: string): boolean {
+  const x = new TextEncoder().encode(a);
+  const y = new TextEncoder().encode(b);
+  let diff = x.length ^ y.length;
+  for (let i = 0; i < y.length; i++) diff |= (x[i] ?? 0) ^ y[i];
+  return diff === 0;
+}
 
 const DEFAULT_RUNNER_PATH = fromFileUrl(new URL("../../runner/runner.ts", import.meta.url));
 const DEFAULT_CONFIG_PATH = fromFileUrl(new URL("../../deno.json", import.meta.url));
@@ -201,6 +222,22 @@ export class AppSupervisor {
     return this.#firstAttempt;
   }
 
+  /** 止め始めたことを知らせる。以後は子が終わっても再起動しない（止まるのを待たない） */
+  beginStop(): void {
+    this.#stopRequested = true;
+    this.#sleeper?.wake();
+  }
+
+  /** 子プロセスに同期で SIGKILL を送る。終了を待たず、再起動もしない（Station を強制終了する直前用） */
+  killSync(): void {
+    this.#stopRequested = true;
+    try {
+      this.#child?.kill("SIGKILL");
+    } catch {
+      // すでに終わっている
+    }
+  }
+
   /** 子プロセスを止める（SIGTERM、猶予のあと SIGKILL）。止まるまで待つ */
   async stop(): Promise<void> {
     this.#stopRequested = true;
@@ -293,12 +330,18 @@ export class AppSupervisor {
           if (problem !== null) return this.#refused(problem);
         }
       }
-      await Deno.mkdir(options.dataDir, { recursive: true });
+      await Deno.mkdir(options.dataDir, { recursive: true, mode: 0o700 });
       // 権限を渡すフォルダに、置いたときから入っているシンボリックリンクがあると、リンクの先を権限の外から読めてしまう。
       // 走査のあとに置かれた場合に備え、起動のたびに確かめる
       for (const [dir, label] of [[options.appDir, "アプリのフォルダ"], [options.dataDir, "データフォルダ"]]) {
         const problem = await symlinkProblem(dir, label);
         if (problem !== null) return this.#refused(problem);
+      }
+      // 既にあるデータフォルダも、ほかのユーザーから読めないよう締める（リンクでないと確かめたあと）。できなくても動作には影響しない
+      try {
+        await Deno.chmod(options.dataDir, 0o700);
+      } catch {
+        // 他人の所有など
       }
       // 権限には、リンクを解決したパスを渡す
       appDir = await Deno.realPath(options.appDir);
@@ -405,7 +448,9 @@ export class AppSupervisor {
   }
 
   /**
-   * runner が待ち受けていることを、トークン付きの確認で確かめてから running にする。
+   * runner が待ち受けていることを、nonce の確認で確かめてから running にする。
+   * 確認はトークンを送らない。runner は HMAC-SHA256(key=トークン, nonce) を返し、合ったときだけ running にする
+   * （ポートを先に取った別のプロセスには、トークンを渡さず、なりすましも通さない）。
    * 子が替わるか starting でなくなるまで（起動の時間切れで子が止められるまで）確かめ続ける
    */
   async #confirmReady(child: Deno.ChildProcess, port: number, token: string): Promise<void> {
@@ -414,13 +459,15 @@ export class AppSupervisor {
     for (;;) {
       if (this.#child !== child || this.#status !== "starting") return;
       try {
+        const nonce = randomToken();
         const res = await fetch(`http://127.0.0.1:${port}/`, {
-          headers: { "ebina-app-token": token, [PROBE_HEADER]: "1" },
+          headers: { [PROBE_HEADER]: nonce },
           client,
           signal: AbortSignal.timeout(2_000),
         });
         await res.body?.cancel();
-        if (res.status === 204 && res.headers.get(PROBE_HEADER) === "ready") {
+        const proof = res.headers.get(PROOF_HEADER);
+        if (res.status === 204 && proof !== null && constantTimeEqual(proof, await probeProof(token, nonce))) {
           if (this.#child === child && this.#status === "starting") {
             this.#status = "running";
             this.#settleFirstAttempt();
