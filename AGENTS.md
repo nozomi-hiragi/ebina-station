@@ -114,8 +114,9 @@ src/
 ├── paths.ts           # project フォルダの中のパス（EBINA_PROJECT_DIR）と、同梱アプリの置き場所 BUNDLED_APPS_DIR
 ├── log.ts             # ログ関数（setLogSink でテストでは黙らせる）
 ├── wake.ts            # WAKE サーバーの組み立て
-├── db/                # SQLite: mod（開く・移行）、schema、row、meta、users、credentials、registrations、app_states
-├── http/              # Hono: app（CORS・ログ・WAKE へ渡す）、register（登録 API）
+├── db/                # SQLite: mod（開く・移行）、schema、row、meta、app_states
+├── accounts/          # ユーザー・パスキー・登録: mod（createAccounts）、users、credentials、registrations、register_http（登録 API）
+├── http/              # Hono: app（CORS・ログ・WAKE へ渡す）、errors（BadRequest）
 ├── et/                # ET: handler（認証の確認と URL の振り分け）、entrance（入口のビネット）、respond（応答の小物）
 ├── apps/              # 埋め込みアプリ: names、manifest、links（シンボリックリンクの検査）、registry（同梱と project の走査）、supervisor、relay、static、hub、types
 └── cli/               # deno task user: main、qr
@@ -127,7 +128,8 @@ tests/
 docs/                  # 仕様
 ```
 
-- ET と中継の境界は `src/apps/types.ts` の `AppHub`。`et/handler.ts` は `AppHub` だけを知り、`apps/hub.ts`（`createAppHub`）が実装する
+- ET と中継の境界は `src/apps/types.ts` の `AppHub`。`et/handler.ts` は `AppHub` だけを知り、`apps/hub.ts`（`createAppHub`）が実装する。ET は `accounts.checkSession` だけを使う
+- `accounts/` の外からは `accounts/mod.ts` だけを import する
 - 同梱アプリ（リポジトリの `apps/`）は、同名なら `project/apps/` が勝つ。同梱のアプリにも、シンボリックリンクの検査と子プロセスの権限を同じく掛ける。`createAppHub` は `bundledAppsDir` を渡したときだけ同梱を走査する（`startStation` は既定で `BUNDLED_APPS_DIR`、`bundledAppsDir: null` で無効）。テストでは `createTestStation({ bundled: true })` で同梱を使い、省略すれば使わない
 - 同梱アプリの画面（`panoplie/`）の js は 1 画面 1 ファイルで、DOM API だけで作る。`innerHTML` にユーザーの値を入れない
 - 起動の組み立ては `src/main.ts` の `startStation`。`tests/helpers/station.ts` の `createTestStation` も同じ順で組み立てる。組み立てを変えたら両方を直す

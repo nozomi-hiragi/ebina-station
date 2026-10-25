@@ -6,23 +6,16 @@ import type { RegistrationResponseJSON } from "@simplewebauthn/server";
 import { convertCOSEtoPKCS } from "@simplewebauthn/server/helpers";
 import type { WakeCredential } from "@wake-protocol/server";
 import type { StationConfig } from "../config.ts";
-import { CredentialExistsError, type SqliteCredentialStore } from "../db/credentials.ts";
-import type { RegistrationRepo } from "../db/registrations.ts";
-import { UserNotFoundError } from "../db/users.ts";
+import { BadRequest } from "../http/errors.ts";
 import { log } from "../log.ts";
+import { CredentialExistsError, type SqliteCredentialStore } from "./credentials.ts";
+import type { RegistrationRepo } from "./registrations.ts";
+import { UserNotFoundError } from "./users.ts";
 
 export interface RegisterDeps {
   config: StationConfig;
   credentials: SqliteCredentialStore;
   registrations: RegistrationRepo;
-}
-
-/** リクエストの形が正しくないとき。メッセージはそのままクライアントに返す */
-export class BadRequest extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "BadRequest";
-  }
 }
 
 /** P-256 公開鍵の SPKI DER のうち、点（0x04||x||y）より前の固定部分 */

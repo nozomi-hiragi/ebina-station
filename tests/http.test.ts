@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertFalse, assertStringIncludes } from "@std/assert";
 import type { WakeServer } from "@wake-protocol/server";
 import { addUser } from "../src/cli/main.ts";
-import { REGISTRATION_TTL_MS } from "../src/db/registrations.ts";
+import { REGISTRATION_TTL_MS } from "../src/accounts/registrations.ts";
 import { createHttpApp } from "../src/http/app.ts";
 import { b64url, type CreationOptions, SoftAuthenticator } from "./helpers/authenticator.ts";
 import { captureLogs, createTestStation, TEST_ORIGIN, type TestStation } from "./helpers/station.ts";

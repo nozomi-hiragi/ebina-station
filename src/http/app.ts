@@ -2,17 +2,15 @@ import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import type { WakeServer } from "@wake-protocol/server";
+import type { Accounts } from "../accounts/mod.ts";
 import type { StationConfig } from "../config.ts";
-import type { SqliteCredentialStore } from "../db/credentials.ts";
-import type { RegistrationRepo } from "../db/registrations.ts";
 import { log } from "../log.ts";
-import { BadRequest, createRegisterRoutes } from "./register.ts";
+import { BadRequest } from "./errors.ts";
 
 export interface HttpAppDeps {
   config: StationConfig;
   wake: WakeServer;
-  credentials: SqliteCredentialStore;
-  registrations: RegistrationRepo;
+  accounts: Accounts;
 }
 
 /** 登録の API が受ける本文の上限（本物は 2 KiB ほど） */
@@ -68,7 +66,7 @@ export function createHttpApp(deps: HttpAppDeps): Hono {
       onError: (c) => c.json({ error: "リクエストが大きすぎます" }, 413),
     }),
   );
-  app.route("/ebina/register", createRegisterRoutes(deps));
+  app.route("/ebina/register", deps.accounts.registerRoutes());
 
   return app;
 }

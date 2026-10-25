@@ -1,5 +1,5 @@
 import type { DatabaseSync, StatementSync } from "node:sqlite";
-import { type Row, rowNumber, rowString } from "./row.ts";
+import { type Row, rowNumber, rowString } from "../db/row.ts";
 
 export interface User {
   id: string;

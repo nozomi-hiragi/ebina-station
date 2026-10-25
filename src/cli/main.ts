@@ -1,17 +1,17 @@
 import { parseArgs } from "node:util";
 import type { DatabaseSync } from "node:sqlite";
-import { ConfigError, loadStationConfig, type StationConfig } from "../config.ts";
-import { SqliteCredentialStore } from "../db/credentials.ts";
-import { DatabaseNotFoundError, inTransaction, openDatabase } from "../db/mod.ts";
-import { RegistrationRepo } from "../db/registrations.ts";
 import {
+  type Accounts,
+  createAccounts,
+  type IssuedToken,
   type User,
   UserExistsError,
   UserNotFoundError,
-  UserRepo,
   validateUserId,
   validateUserName,
-} from "../db/users.ts";
+} from "../accounts/mod.ts";
+import { ConfigError, loadStationConfig, type StationConfig } from "../config.ts";
+import { DatabaseNotFoundError, openDatabase } from "../db/mod.ts";
 import { projectPaths } from "../paths.ts";
 import { renderQr } from "./qr.ts";
 
@@ -55,8 +55,16 @@ export function registrationUrl(config: StationConfig, token: string, code?: str
   return code === undefined ? base : `${base}&code=${code}`;
 }
 
-function issue(ctx: CliContext, user: User, withCode: boolean): IssuedRegistration {
-  const { token, code, expiresAt } = new RegistrationRepo(ctx.db, ctx.now).issue(user.id);
+function accountsFor(ctx: CliContext): Accounts {
+  return createAccounts({ db: ctx.db, config: ctx.config, now: ctx.now });
+}
+
+function withUrl(
+  ctx: CliContext,
+  { user, issued }: { user: User; issued: IssuedToken },
+  withCode: boolean,
+): IssuedRegistration {
+  const { token, code, expiresAt } = issued;
   return { user, token, code, expiresAt, url: registrationUrl(ctx.config, token, withCode ? code : undefined) };
 }
 
@@ -67,24 +75,21 @@ export function addUser(
   name: string,
   options: { withCode?: boolean } = {},
 ): IssuedRegistration {
-  return inTransaction(ctx.db, () => issue(ctx, new UserRepo(ctx.db).create(id, name), options.withCode === true));
+  return withUrl(ctx, accountsFor(ctx).createUser(id, name), options.withCode === true);
 }
 
 /** 既存のユーザーに登録トークンを発行し直す。ユーザーがいなければ UserNotFoundError */
 export function reissueToken(ctx: CliContext, id: string, options: { withCode?: boolean } = {}): IssuedRegistration {
-  const user = new UserRepo(ctx.db).get(id);
-  if (!user) throw new UserNotFoundError(id);
-  return issue(ctx, user, options.withCode === true);
+  return withUrl(ctx, accountsFor(ctx).reissueToken(id), options.withCode === true);
 }
 
 export function listUsers(db: DatabaseSync): { user: User; passkeys: number }[] {
-  const credentials = new SqliteCredentialStore(db);
-  return new UserRepo(db).list().map((user) => ({ user, passkeys: credentials.listByUser(user.id).length }));
+  return createAccounts({ db }).listUsers();
 }
 
 /** ユーザーを消す（パスキーと登録トークンも消える）。消したら true */
 export function removeUser(db: DatabaseSync, id: string): boolean {
-  return new UserRepo(db).remove(id);
+  return createAccounts({ db }).removeUser(id);
 }
 
 /** 入出力。テストでは差し替える */
@@ -275,16 +280,17 @@ async function runRemove(args: readonly string[], env: CliEnv): Promise<number> 
   const [id] = parsed.positionals;
   checkUserInput(id);
   return await withDatabase(env, async (db) => {
-    const user = new UserRepo(db).get(id);
+    const accounts = createAccounts({ db });
+    const user = accounts.getUser(id);
     if (!user) throw new UserNotFoundError(id);
     if (!parsed.flags.yes) {
-      const passkeys = new SqliteCredentialStore(db).listByUser(id).length;
+      const passkeys = accounts.listUsers().find((r) => r.user.id === id)?.passkeys ?? 0;
       const ok = await env.confirm(
         `ユーザー ${user.id}（${user.name}）を消します。パスキー ${passkeys} 件と登録トークンも消えます。よろしいですか?`,
       );
       if (!ok) throw new CliFailure("中止しました（確認なしで消すには --yes を付けます）");
     }
-    removeUser(db, id);
+    accounts.removeUser(id);
     env.out(`ユーザー ${user.id}（${user.name}）を消しました。`);
     env.out("動いている Station では、このユーザーのログインは次のリクエストから使えなくなります。");
     return 0;

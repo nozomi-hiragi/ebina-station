@@ -1,6 +1,6 @@
 import { assertEquals, assertInstanceOf, assertThrows } from "@std/assert";
 import { openDatabase } from "../src/db/mod.ts";
-import { UserExistsError, UserRepo, validateUserId, validateUserName } from "../src/db/users.ts";
+import { UserExistsError, UserRepo, validateUserId, validateUserName } from "../src/accounts/users.ts";
 
 function withUsers(fn: (users: UserRepo) => void): void {
   const db = openDatabase(":memory:");

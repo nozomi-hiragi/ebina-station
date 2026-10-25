@@ -1,9 +1,8 @@
 import type { EtHandler, EtHandlerResponse } from "@wake-protocol/server";
+import type { Accounts } from "../accounts/mod.ts";
 import type { AppHub } from "../apps/types.ts";
 import { isValidAppName } from "../apps/names.ts";
 import type { StationConfig } from "../config.ts";
-import type { SqliteCredentialStore } from "../db/credentials.ts";
-import type { UserRepo } from "../db/users.ts";
 import { log } from "../log.ts";
 import { buildEntrance } from "./entrance.ts";
 import { etError, etJson, etUnauthorized } from "./respond.ts";
@@ -74,14 +73,13 @@ export function resolveEtTarget(url: string): EtTarget {
 
 export interface EtHandlerDeps {
   config: StationConfig;
-  users: UserRepo;
-  credentials: SqliteCredentialStore;
+  accounts: Pick<Accounts, "checkSession">;
   hub: AppHub;
 }
 
 /** ET の処理。ログイン中のユーザーとパスキーが DB に残っているかを毎回確かめてから振り分ける */
 export function createEtHandler(deps: EtHandlerDeps): EtHandler {
-  const { config, users, credentials, hub } = deps;
+  const { config, accounts, hub } = deps;
   const notFound = (): EtHandlerResponse => etError(404, "not_found");
   const methodNotAllowed = (): EtHandlerResponse => {
     const res = etError(405, "method_not_allowed");
@@ -96,8 +94,8 @@ export function createEtHandler(deps: EtHandlerDeps): EtHandler {
 
   return async (req, auth) => {
     // CLI で消されたユーザー・パスキーのセッションは Station のメモリに残るため、ここで止める
-    const user = users.get(auth.userId);
-    if (!user || !credentials.isActive(auth.credentialId, auth.userId)) {
+    const user = accounts.checkSession(auth);
+    if (!user) {
       return etUnauthorized();
     }
 

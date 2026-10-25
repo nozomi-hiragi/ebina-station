@@ -1,9 +1,7 @@
+import { createAccounts } from "./accounts/mod.ts";
 import { ConfigError, loadStationConfig } from "./config.ts";
 import { AppStateRepo } from "./db/app_states.ts";
-import { SqliteCredentialStore } from "./db/credentials.ts";
 import { openDatabase } from "./db/mod.ts";
-import { RegistrationRepo } from "./db/registrations.ts";
-import { UserRepo } from "./db/users.ts";
 import { createAppHub } from "./apps/hub.ts";
 import { createEtHandler } from "./et/handler.ts";
 import { createHttpApp } from "./http/app.ts";
@@ -82,12 +80,10 @@ export async function startStation(paths: ProjectPaths, options: StartOptions = 
   signal?.addEventListener("abort", onAbort, { once: true });
   try {
     if (signal?.aborted) throw new StartAborted();
-    const users = new UserRepo(db);
-    const credentials = new SqliteCredentialStore(db);
-    const registrations = new RegistrationRepo(db);
-    const etHandler = createEtHandler({ config, users, credentials, hub });
-    const wake = createStationWake({ config, db, credentials, etHandler });
-    const app = createHttpApp({ config, wake, credentials, registrations });
+    const accounts = createAccounts({ db, config });
+    const etHandler = createEtHandler({ config, accounts, hub });
+    const wake = createStationWake({ config, db, credentials: accounts.wakeCredentials, etHandler });
+    const app = createHttpApp({ config, wake, accounts });
 
     // 先に待ち受ける。ポートが使用中なら、アプリの子プロセスを起動する前に失敗させる。
     // 起動しきっていないアプリへのリクエストは、最初の走査が済むまでも、子が起動中の間も 503（app_unavailable）になる

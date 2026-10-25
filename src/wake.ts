@@ -14,7 +14,7 @@ export interface StationWakeDeps {
   config: StationConfig;
   /** WAKE の secret を保存する DB（無ければ作る） */
   db: DatabaseSync;
-  /** パスキーの保存先（SQLite） */
+  /** パスキーの保存先（SQLite。通常は Accounts の wakeCredentials を渡す） */
   credentials: CredentialStore;
   etHandler: EtHandler;
   /**

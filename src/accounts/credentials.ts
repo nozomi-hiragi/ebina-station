@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 import type { CredentialStore, WakeCredential } from "@wake-protocol/server";
-import { type Row, rowBool, rowBytes, rowNumber, rowOptionalString, rowString } from "./row.ts";
+import { type Row, rowBool, rowBytes, rowNumber, rowOptionalString, rowString } from "../db/row.ts";
 import { UserNotFoundError } from "./users.ts";
 
 export class CredentialExistsError extends Error {
