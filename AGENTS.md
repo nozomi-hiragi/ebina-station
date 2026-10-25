@@ -129,7 +129,7 @@ docs/                  # 仕様
 ```
 
 - ET と中継の境界は `src/apps/types.ts` の `AppHub`。`et/handler.ts` は `AppHub` だけを知り、`apps/hub.ts`（`createAppHub`）が実装する。ET は `accounts.checkSession` だけを使う
-- `accounts/` の外からは `accounts/mod.ts` だけを import する
+- `src/` の中で `accounts/` の外からは `accounts/mod.ts` だけを import する。テスト（`tests/`）は、中のファイル（users・credentials・registrations など）を直接 import して確かめてよい
 - 同梱アプリ（リポジトリの `apps/`）は、同名なら `project/apps/` が勝つ。同梱のアプリにも、シンボリックリンクの検査と子プロセスの権限を同じく掛ける。`createAppHub` は `bundledAppsDir` を渡したときだけ同梱を走査する（`startStation` は既定で `BUNDLED_APPS_DIR`、`bundledAppsDir: null` で無効）。テストでは `createTestStation({ bundled: true })` で同梱を使い、省略すれば使わない
 - 同梱アプリの画面（`panoplie/`）の js は 1 画面 1 ファイルで、DOM API だけで作る。`innerHTML` にユーザーの値を入れない
 - 起動の組み立ては `src/main.ts` の `startStation`。`tests/helpers/station.ts` の `createTestStation` も同じ順で組み立てる。組み立てを変えたら両方を直す
