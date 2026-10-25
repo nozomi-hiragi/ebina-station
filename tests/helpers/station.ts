@@ -4,13 +4,14 @@ import { WakeClient } from "@wake-protocol/client";
 import type { EtHandlerRequest, EtHandlerResponse, WakeServer } from "@wake-protocol/server";
 import { createAppHub } from "../../src/apps/hub.ts";
 import { type AppHub, type AppInfo } from "../../src/apps/types.ts";
+import { type Accounts, createAccounts } from "../../src/accounts/mod.ts";
+import { SqliteCredentialStore } from "../../src/accounts/credentials.ts";
+import { RegistrationRepo } from "../../src/accounts/registrations.ts";
+import { UserRepo } from "../../src/accounts/users.ts";
 import { addUser, type IssuedRegistration } from "../../src/cli/main.ts";
 import { parseStationConfig, type StationConfig } from "../../src/config.ts";
 import { AppStateRepo } from "../../src/db/app_states.ts";
-import { SqliteCredentialStore } from "../../src/db/credentials.ts";
 import { openDatabase } from "../../src/db/mod.ts";
-import { RegistrationRepo } from "../../src/db/registrations.ts";
-import { UserRepo } from "../../src/db/users.ts";
 import { etJson } from "../../src/et/respond.ts";
 import { createEtHandler } from "../../src/et/handler.ts";
 import { createHttpApp } from "../../src/http/app.ts";
@@ -103,6 +104,7 @@ export interface TestStation extends AsyncDisposable {
   paths: ProjectPaths;
   config: StationConfig;
   db: DatabaseSync;
+  accounts: Accounts;
   users: UserRepo;
   credentials: SqliteCredentialStore;
   registrations: RegistrationRepo;
@@ -159,6 +161,7 @@ export async function createTestStation(options: TestStationOptions = {}): Promi
   const config = parseStationConfig(configJson);
 
   const db = openDatabase(paths.db, { root: paths.root });
+  const accounts = createAccounts({ db, config, now: options.now });
   const users = new UserRepo(db);
   const credentials = new SqliteCredentialStore(db);
   const registrations = new RegistrationRepo(db, options.now);
@@ -172,9 +175,9 @@ export async function createTestStation(options: TestStationOptions = {}): Promi
     })
     : undefined;
   const hub = options.hub ?? embedded ?? createFakeHub();
-  const etHandler = createEtHandler({ config, users, credentials, hub });
-  const wake = createStationWake({ config, db, credentials, etHandler });
-  const app = createHttpApp({ config, wake, credentials, registrations });
+  const etHandler = createEtHandler({ config, accounts, hub });
+  const wake = createStationWake({ config, db, credentials: accounts.wakeCredentials, etHandler });
+  const app = createHttpApp({ config, wake, accounts });
 
   // main.ts の startStation と同じ順（WAKE と HTTP の組み立てのあとにアプリを起動する）
   if (embedded !== undefined) {
@@ -208,6 +211,7 @@ export async function createTestStation(options: TestStationOptions = {}): Promi
     paths,
     config,
     db,
+    accounts,
     users,
     credentials,
     registrations,

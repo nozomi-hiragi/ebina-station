@@ -2,10 +2,10 @@ import { assert, assertEquals, assertMatch, assertRejects, assertStringIncludes,
 import { join } from "@std/path";
 import { addUser, type CliEnv, listUsers, registrationUrl, reissueToken, removeUser, runCli } from "../src/cli/main.ts";
 import { renderQr } from "../src/cli/qr.ts";
-import { SqliteCredentialStore } from "../src/db/credentials.ts";
+import { SqliteCredentialStore } from "../src/accounts/credentials.ts";
 import { openDatabase } from "../src/db/mod.ts";
-import { RegistrationRepo } from "../src/db/registrations.ts";
-import { UserExistsError, UserNotFoundError, UserRepo } from "../src/db/users.ts";
+import { RegistrationRepo } from "../src/accounts/registrations.ts";
+import { UserExistsError, UserNotFoundError, UserRepo } from "../src/accounts/users.ts";
 import { projectPaths } from "../src/paths.ts";
 import { SoftAuthenticator } from "./helpers/authenticator.ts";
 import {

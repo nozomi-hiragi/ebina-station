@@ -4,8 +4,8 @@ import { MemoryCredentialStore } from "@wake-protocol/server";
 import type { WakeCredential } from "@wake-protocol/server";
 import { Buffer } from "node:buffer";
 import { openDatabase } from "../src/db/mod.ts";
-import { UserRepo } from "../src/db/users.ts";
-import { CredentialExistsError, SqliteCredentialStore } from "../src/db/credentials.ts";
+import { UserRepo } from "../src/accounts/users.ts";
+import { CredentialExistsError, SqliteCredentialStore } from "../src/accounts/credentials.ts";
 
 function credential(id: number, userId: string, extra: Partial<WakeCredential> = {}): WakeCredential {
   return {

@@ -1,8 +1,8 @@
 import { Buffer } from "node:buffer";
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import type { DatabaseSync, StatementSync } from "node:sqlite";
-import { inTransaction } from "./mod.ts";
-import { type Row, rowNumber, rowOptionalString, rowString } from "./row.ts";
+import { inTransaction } from "../db/mod.ts";
+import { type Row, rowNumber, rowOptionalString, rowString } from "../db/row.ts";
 import { type User, UserNotFoundError } from "./users.ts";
 
 /** 登録トークンの有効期間 */

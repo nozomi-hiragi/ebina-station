@@ -1,8 +1,8 @@
 import { assert, assertEquals, assertMatch, assertNotEquals, assertThrows } from "@std/assert";
 import { createHash } from "node:crypto";
 import { openDatabase } from "../src/db/mod.ts";
-import { MAX_CODE_ATTEMPTS, REGISTRATION_TTL_MS, RegistrationRepo } from "../src/db/registrations.ts";
-import { UserNotFoundError, UserRepo } from "../src/db/users.ts";
+import { MAX_CODE_ATTEMPTS, REGISTRATION_TTL_MS, RegistrationRepo } from "../src/accounts/registrations.ts";
+import { UserNotFoundError, UserRepo } from "../src/accounts/users.ts";
 
 /** 時計を進められるテスト用の環境 */
 function setup() {
